@@ -1,4 +1,4 @@
-name: empsn
+name: ten
 channels:
   - pytorch
   - anaconda

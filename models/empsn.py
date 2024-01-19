@@ -91,6 +91,18 @@ class EMPSN(nn.Module):
 
         # read out
         x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}
+
+        # create one dummy node with all features equal to zero for each graph and each rank
+        batch_size = graph.y.shape[0]
+        x = {
+            dim: torch.cat((feature, torch.zeros(batch_size, feature.shape[1])), dim=0)
+            for dim, feature in x.items()
+        }
+        x_batch = {
+            dim: torch.cat((indices, torch.tensor(range(batch_size))))
+            for dim, indices in x_batch.items()
+        }
+
         x = {dim: global_add_pool(x[dim], x_batch[dim]) for dim, feature in x.items()}
         state = torch.cat(tuple([feature for dim, feature in x.items()]), dim=1)
         out = self.post_pool(state)

@@ -1,0 +1,25 @@
+name: empsn
+channels:
+  - pytorch
+  - anaconda
+  - conda-forge
+  - defaults
+dependencies:
+  - matplotlib=3.7.2
+  - networkx=3.1
+  - pandas=1.4.2
+  - pillow=9.4.0
+  - pip=23.2.1
+  - python=3.10
+  - pytorch=2.1.0
+  - rdkit
+  - requests=2.31.0
+  - scikit-learn=1.0.2
+  - scipy=1.7.3
+  - tqdm=4.66.1
+  - wandb=0.15.12
+  - pip:
+      - gudhi==3.8.0
+      - numpy==1.22.4
+      - torch-geometric==2.4.0
+      - torch-scatter==2.1.2

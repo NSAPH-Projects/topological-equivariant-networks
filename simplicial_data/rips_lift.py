@@ -1,18 +1,22 @@
+from collections import defaultdict
+from itertools import combinations
+from typing import Dict, FrozenSet, Set, Tuple
+
 import gudhi
 import torch
-from itertools import combinations
-from torch import tensor, Tensor
-from torch_geometric.data import Data
-from collections import defaultdict
-from typing import Tuple, Dict, Set, FrozenSet
 from gudhi.simplex_tree import SimplexTree
+from torch import Tensor, tensor
+from torch_geometric.data import Data
 
 
-def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool=True) -> Tuple[Dict[int, Tensor], Dict[str, Tensor], Dict[str, Tensor]]:
+def rips_lift(
+    graph: Data, dim: int, dis: float, fc_nodes: bool = True
+) -> Tuple[Dict[int, Tensor], Dict[str, Tensor], Dict[str, Tensor]]:
     """
-    Generates simplicial complex based on Rips complex generated from point cloud or geometric graph. Returns a dictionary
-    for the simplice and their features (x_dict), a dictionary for the different adjacencies (adj) and a dictionary with
-    the different E(n) invariant geometric information as described in the paper.
+    Generates simplicial complex based on Rips complex generated from point cloud or geometric
+    graph. Returns a dictionary for the simplice and their features (x_dict), a dictionary for the
+    different adjacencies (adj) and a dictionary with the different E(n) invariant geometric
+    information as described in the paper.
     """
 
     # create simplicial complex
@@ -47,8 +51,8 @@ def generate_simplices(simplex_tree: SimplexTree) -> Dict[int, Set[FrozenSet]]:
 
 def generate_indices(simplex_tree) -> Dict[int, Dict[FrozenSet, int]]:
     """
-    Generates a dictionary which assigns to each simplex a unique index used for reference when finding the different
-    adjacency types and invariants.
+    Generates a dictionary which assigns to each simplex a unique index used for reference when
+    finding the different adjacency types and invariants.
     """
     index_phonebook = dict()
     counter = defaultdict(int)
@@ -61,26 +65,28 @@ def generate_indices(simplex_tree) -> Dict[int, Dict[FrozenSet, int]]:
     return index_phonebook, counter
 
 
-def generate_adjacencies_and_invariants(index_phonebook: Dict, simplex_tree: SimplexTree, pos: Tensor) -> Tuple[Dict[str, Tensor], Dict[str, Tensor]]:
+def generate_adjacencies_and_invariants(
+    index_phonebook: Dict, simplex_tree: SimplexTree, pos: Tensor
+) -> Tuple[Dict[str, Tensor], Dict[str, Tensor]]:
     """todo: add"""
     adj = defaultdict(list)
     inv = defaultdict(list)
 
     for simplex, _ in simplex_tree.get_simplices():
         # get index
-        dim = len(simplex)-1
+        dim = len(simplex) - 1
         simplex_index = index_phonebook[frozenset(simplex)]
 
         for boundary, _ in simplex_tree.get_boundaries(simplex):
             boundary_index = index_phonebook[frozenset(boundary)]
             # save adjacency
-            adj[f'{dim-1}_{dim}'].append(tensor([boundary_index, simplex_index]))
+            adj[f"{dim-1}_{dim}"].append(tensor([boundary_index, simplex_index]))
 
             # calculate the boundary invariants and save
             shared = [vertex for vertex in simplex if vertex in boundary]
             b = [vertex for vertex in simplex if vertex not in shared]
 
-            inv[f'{dim-1}_{dim}'].append(tensor([p for p in shared] + [b[0]]))
+            inv[f"{dim-1}_{dim}"].append(tensor([p for p in shared] + [b[0]]))
 
         for coface, _ in simplex_tree.get_cofaces(simplex, 1):
             coface_boundaries = simplex_tree.get_boundaries(coface)
@@ -90,13 +96,15 @@ def generate_adjacencies_and_invariants(index_phonebook: Dict, simplex_tree: Sim
                 if frozenset(coface_boundary) != frozenset(simplex):
                     coface_boundary_index = index_phonebook[frozenset(coface_boundary)]
                     # save adjacency
-                    adj[f'{dim}_{dim}'].append(tensor([coface_boundary_index, simplex_index]))
+                    adj[f"{dim}_{dim}"].append(tensor([coface_boundary_index, simplex_index]))
 
                     # calculate the upper adjacent invariants and save
                     shared = [vertex for vertex in simplex if vertex in coface_boundary]
-                    a, b = [vertex for vertex in simplex if vertex not in shared], [vertex for vertex in coface_boundary if vertex not in shared]
+                    a, b = [vertex for vertex in simplex if vertex not in shared], [
+                        vertex for vertex in coface_boundary if vertex not in shared
+                    ]
 
-                    inv[f'{dim}_{dim}'].append(tensor([p for p in shared] + [a[0], b[0]]))
+                    inv[f"{dim}_{dim}"].append(tensor([p for p in shared] + [a[0], b[0]]))
 
     for k, v in adj.items():
         adj[k] = torch.stack(v, dim=1)
@@ -108,7 +116,7 @@ def generate_adjacencies_and_invariants(index_phonebook: Dict, simplex_tree: Sim
 
 
 def generate_features(index_phonebook, simplex_tree, counter) -> Dict[int, Tensor]:
-    x_dict = {dim: torch.zeros(size=(counter[dim], dim+1)) for dim in range(len(counter))}
+    x_dict = {dim: torch.zeros(size=(counter[dim], dim + 1)) for dim in range(len(counter))}
 
     for simplex, _ in simplex_tree.get_simplices():
         dim = len(simplex) - 1

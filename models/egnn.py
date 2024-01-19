@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
-from torch_geometric.data import Data
 from torch import Tensor
+from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
+
 from models.utils import MessageLayer, UpdateLayer
 
 
@@ -14,14 +15,10 @@ class EGNN(nn.Module):
         self.feature_embedding = nn.Linear(num_input, num_hidden)
         self.layers = nn.ModuleList([EGNNLayer(num_hidden, 1) for _ in range(num_layers)])
         self.pre_pool = nn.Sequential(
-            nn.Linear(num_hidden, num_hidden),
-            nn.SiLU(),
-            nn.Linear(num_hidden, num_hidden)
+            nn.Linear(num_hidden, num_hidden), nn.SiLU(), nn.Linear(num_hidden, num_hidden)
         )
         self.post_pool = nn.Sequential(
-            nn.Linear(num_hidden, num_hidden),
-            nn.SiLU(),
-            nn.Linear(num_hidden, num_out)
+            nn.Linear(num_hidden, num_hidden), nn.SiLU(), nn.Linear(num_hidden, num_out)
         )
 
     def forward(self, graph: Data) -> Tensor:
@@ -45,7 +42,7 @@ class EGNN(nn.Module):
         return out
 
     def __str__(self):
-        return f"EGNN"
+        return "EGNN"
 
 
 class EGNNLayer(nn.Module):

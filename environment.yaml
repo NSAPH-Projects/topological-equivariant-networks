@@ -4,21 +4,20 @@ channels:
   - anaconda
   - conda-forge
   - defaults
+  - pyg
 dependencies:
+  - gudhi=3.8.0
   - matplotlib=3.7.2
   - networkx=3.1
+  - numpy=1.22.4
   - pandas=1.4.2
   - pip=23.2.1
+  - pyg::pyg
   - python=3.10
   - pytorch=2.1.0
+  - pyg::pytorch-scatter
   - rdkit
   - scipy=1.7.3
   - seaborn
   - tqdm=4.66.1
   - wandb=0.15.12
-  - pip:
-      - gudhi==3.8.0
-      - jupyter
-      - numpy==1.22.4
-      - torch-geometric==2.4.0
-      - torch-scatter==2.1.2

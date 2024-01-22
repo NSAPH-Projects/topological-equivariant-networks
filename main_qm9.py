@@ -12,6 +12,7 @@ from utils import get_loaders, get_model, set_seed
 def main(args):
     # # Generate model
     model = get_model(args).to(args.device)
+    model = torch.compile(model)
     # Setup wandb
     wandb.init(project=f"QM9-{args.target_name}")
     wandb.config.update(vars(args))

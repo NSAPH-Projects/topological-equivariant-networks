@@ -36,5 +36,6 @@ REPO_DIR=$(basename "$REPO_URL" .git)
 cd "$REPO_DIR"
 git pull
 pip install -e '.[all]'
+cd ..
 
 echo "Installation completed."

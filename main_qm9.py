@@ -12,7 +12,8 @@ from utils import get_loaders, get_model, set_seed
 def main(args):
     # # Generate model
     model = get_model(args).to(args.device)
-    model = torch.compile(model)
+    if args.compile:
+        model = torch.compile(model)
     # Setup wandb
     wandb.init(project=f"QM9-{args.target_name}")
     wandb.config.update(vars(args))
@@ -93,6 +94,9 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, default=0, help="num workers")
 
     # Model parameters
+    parser.add_argument(
+        "--compile", type=bool, default=False, help="if the model should be compiled"
+    )
     parser.add_argument("--model_name", type=str, default="empsn", help="model")
     parser.add_argument("--max_com", type=str, default="1_2", help="model type")  # e.g. 1_2
     parser.add_argument("--num_hidden", type=int, default=77, help="hidden features")
@@ -110,6 +114,9 @@ if __name__ == "__main__":
     parser.add_argument("--target_name", type=str, default="H", help="regression task")
     parser.add_argument("--dim", type=int, default=2, help="ASC dimension")
     parser.add_argument("--dis", type=float, default=4.0, help="radius Rips complex")
+    parser.add_argument(
+        "--subsample", type=float, default=1, help="fraction of the dataset to be used"
+    )
     parser.add_argument("--seed", type=int, default=42, help="random seed")
 
     parsed_args = parser.parse_args()

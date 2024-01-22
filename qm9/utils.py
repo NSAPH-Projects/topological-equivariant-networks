@@ -1,3 +1,4 @@
+import random
 from argparse import Namespace
 from typing import Dict, Tuple
 
@@ -35,10 +36,18 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str,
     return graph
 
 
+def get_subsampler(fraction: float):
+    if fraction == 1:
+        return None
+    else:
+        return lambda _: bool(random.random() < fraction)
+
+
 def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    data_root = f"./datasets/QM9_delta_{args.dis}_dim_{args.dim}"
+    data_root = f"./datasets/QM9_delta_{args.dis}_dim_{args.dim}_subsample_{args.subsample}"
+    subsampler = get_subsampler(args.subsample)
     transform = SimplicialTransform(dim=args.dim, dis=args.dis)
-    dataset = QM9(root=data_root, pre_transform=transform)
+    dataset = QM9(root=data_root, pre_filter=subsampler, pre_transform=transform)
     dataset = dataset.shuffle()
 
     # filter relevant index and update units to eV
@@ -80,7 +89,11 @@ def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataL
     ]
 
     # train/val/test split
-    n_train, n_test = 100000, 110000
+    if args.subsample == 1:
+        n_train, n_test = 100000, 110000
+    else:
+        n_train = int(len(dataset) * 0.75)
+        n_test = n_train + int(len(dataset) * 0.075)
     train_dataset = dataset[:n_train]
     test_dataset = dataset[n_train:n_test]
     val_dataset = dataset[n_test:]

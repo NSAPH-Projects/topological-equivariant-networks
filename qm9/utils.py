@@ -1,6 +1,6 @@
 import random
 from argparse import Namespace
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -36,7 +36,44 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str,
     return graph
 
 
-def get_subsampler(fraction: float):
+def get_subsampler(fraction: float) -> Optional[callable]:
+    """
+    Get a subsampling function for PyTorch datasets.
+
+    This function returns a subsampler lambda function that can be used as the
+    pre_filter argument in PyTorch datasets. It randomly retains a specified fraction
+    of the input dataset. If the fraction is set to 1, it returns None, indicating
+    that no subsampling is to be applied.
+
+    Parameters
+    ----------
+    fraction : float
+        The fraction of the dataset to retain. This should be a float between 0 and 1.
+        If set to 1, the function returns None.
+
+    Returns
+    -------
+    Optional[callable]
+        A lambda function that takes a single argument and returns a boolean value.
+        This function can be used as a pre_filter in PyTorch datasets to subsample
+        the data. If `fraction` is 1, returns None.
+
+    Examples
+    --------
+    >>> subsampler = get_subsampler(0.5)
+    >>> isinstance(subsampler, callable)
+    True
+    >>> get_subsampler(1) is None
+    True
+
+    Notes
+    -----
+    The subsampling is done randomly based on the specified fraction. Each element
+    in the dataset has an independent chance of `fraction` to be retained. This
+    function does not guarantee that exactly `fraction` of the dataset is retained
+    due to the random nature of the process.
+
+    """
     if fraction == 1:
         return None
     else:

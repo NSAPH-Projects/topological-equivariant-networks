@@ -1,10 +1,12 @@
 from typing import Any
 
+import numpy as np
 import torch
+from toponetx.classes import CombinatorialComplex
 from torch_geometric.data import Data
 from torch_geometric.transforms import BaseTransform
 
-from simplicial_data.rips_lift import rips_lift
+from simplicial_data.utils import map_to_tensors, sparse_to_dense
 
 
 class SimplicialComplexData(Data):
@@ -54,9 +56,9 @@ class SimplicialTransform(BaseTransform):
     The adjacency types (adj) are saved as properties, e.g. object.adj_1_2 gives the edge index from
     1-simplices to 2-simplices."""
 
-    def __init__(self, dim=2, dis=3):
+    def __init__(self, lifter_fct: callable, dim: int = 2):
+        self.lift = lifter_fct
         self.dim = dim
-        self.dis = dis
 
     def __call__(self, graph: Data) -> SimplicialComplexData:
         if not torch.is_tensor(graph.x):
@@ -65,7 +67,7 @@ class SimplicialTransform(BaseTransform):
         assert torch.is_tensor(graph.pos) and torch.is_tensor(graph.x)
 
         # get relevant dictionaries using the Rips complex based on the geometric graph/point cloud
-        x_dict, adj_dict, inv_dict = rips_lift(graph, self.dim, self.dis)
+        x_dict, adj_dict, inv_dict = self.get_relevant_dicts(graph)
 
         sim_com_data = SimplicialComplexData()
         sim_com_data = sim_com_data.from_dict(graph.to_dict())
@@ -85,17 +87,83 @@ class SimplicialTransform(BaseTransform):
 
         return sim_com_data
 
+    def get_relevant_dicts(self, graph):
+        # compute simplexes
+        simplexes = self.lift(graph)
+
+        # compute ranks for each simplex
+        simplex_dict = {rank: [] for rank in range(self.dim + 1)}
+        for simplex in simplexes:
+            simplex_dict[len(simplex) - 1].append(simplex)
+
+        # create x_dict
+        x_dict = map_to_tensors(simplex_dict)
+
+        # create the combinatorial complex
+        cc = CombinatorialComplex()
+        for rank, simplexes in simplex_dict.items():
+            for simplex in simplexes:
+                cc.add_cell(simplex, rank=rank)
+
+        # compute adjancencies and incidences
+        adj = dict()
+        for i in range(self.dim):
+            for j in range(i, self.dim + 1):
+                if i != j:
+                    matrix = cc.incidence_matrix(rank=i, to_rank=j)
+                else:
+                    matrix = cc.adjacency_matrix(rank=i, via_rank=i + 1)
+
+                if np.array_equal(matrix, np.zeros(1)):
+                    matrix = torch.zeros(2, 0).long()
+                else:
+                    matrix = sparse_to_dense(matrix)
+
+                adj[f"{i}_{j}"] = matrix
+
+        # for each adjacency/incidence, store the nodes to be used for computing invariant geometric features
+        inv = dict()
+        for i in range(self.dim):
+            inv[f"{i}_{i}"] = []
+            inv[f"{i}_{i+1}"] = []
+
+        for i in range(self.dim):
+            for j in [i, i + 1]:
+                neighbors = adj[f"{i}_{j}"]
+                for connection in neighbors.t():
+                    idx_a, idx_b = connection[0], connection[1]
+                    simplex_a = simplex_dict[i][idx_a]
+                    simplex_b = simplex_dict[j][idx_b]
+                    shared = [node for node in simplex_a if node in simplex_b]
+                    only_in_a = [node for node in simplex_a if node not in shared]
+                    only_in_b = [node for node in simplex_b if node not in shared]
+                    inv_nodes = shared + only_in_b + only_in_a
+                    inv[f"{i}_{j}"].append(torch.tensor(inv_nodes))
+
+        for k, v in inv.items():
+            if len(v) == 0:
+                i, j = k.split("_")
+                num_nodes = min(int(i), int(j)) + 2
+                inv[k] = torch.zeros(num_nodes, 0).long()
+            else:
+                inv[k] = torch.stack(v, dim=1)
+
+        return x_dict, adj, inv
+
 
 if __name__ == "__main__":
+    import functools
     import random
 
     from torch_geometric.datasets import QM9
 
-    data = QM9("../datasets/QM9")
+    from simplicial_data.lifts import rips_lift
 
-    transform_2 = SimplicialTransform(dim=2, dis=2.0)
-    transform_3 = SimplicialTransform(dim=2, dis=3.0)
-    transform_4 = SimplicialTransform(dim=2, dis=4.0)
+    data = QM9("../datasets/QM9")
+    dim = 2
+    transform_2 = SimplicialTransform(functools.partial(rips_lift, dim=dim, dis=2.0), dim=dim)
+    transform_3 = SimplicialTransform(functools.partial(rips_lift, dim=dim, dis=3.0), dim=dim)
+    transform_4 = SimplicialTransform(functools.partial(rips_lift, dim=dim, dis=4.0), dim=dim)
 
     random_graph = random.randint(0, len(data) - 1)
 

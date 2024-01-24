@@ -6,7 +6,6 @@ import torch
 from torch_geometric.datasets import QM9
 
 from legacy.simplicial_data.rips_lift import rips_lift as old_rips_lift
-from qm9.utils import get_subsampler
 from simplicial_data.lifts import rips_lift as new_rips_lift
 from simplicial_data.utils import SimplicialTransform as NewTransform
 

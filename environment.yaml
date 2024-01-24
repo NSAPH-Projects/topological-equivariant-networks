@@ -13,6 +13,7 @@ dependencies:
   - pandas=1.4.2
   - pip=23.2.1
   - pyg::pyg
+  - pytest=7.4.4
   - python=3.10
   - pytorch=2.1.0
   - pyg::pytorch-scatter

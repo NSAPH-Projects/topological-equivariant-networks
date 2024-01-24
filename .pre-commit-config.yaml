@@ -7,3 +7,4 @@ repos:
         language: system
         types: [python]
         stages: [commit]
+        pass_filenames: False

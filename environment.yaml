@@ -12,6 +12,7 @@ dependencies:
   - numpy=1.22.4
   - pandas=1.4.2
   - pip=23.2.1
+  - conda-forge::pre-commit=3.6.0
   - pyg::pyg
   - pytest=7.4.4
   - python=3.10

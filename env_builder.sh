@@ -38,4 +38,7 @@ git pull
 pip install -e '.[all]'
 cd ..
 
+# Install pre-commit hooks
+pre-commit install
+
 echo "Installation completed."

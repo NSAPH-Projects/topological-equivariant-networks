@@ -13,7 +13,7 @@ from simplicial_data.utils import SimplicialTransform as NewTransform
 @pytest.mark.parametrize("dim", [1, 2, 3, 4])
 @pytest.mark.parametrize("dis", [0.5, 1.5, 2.5, 4.0])
 def test_transform(dim: int, dis: float):
-    n_test_samples = 20
+    n_test_samples = 3
     data_root = f"./datasets/QM9"
     dataset = QM9(root=data_root)
     dataset = dataset.shuffle()

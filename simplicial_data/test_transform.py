@@ -1,5 +1,11 @@
+"""
+Verifies consistency of old vs. new Rips lift transformations on graphs.
+
+Utilizes the QM9 dataset for graph inputs and compares outputs from legacy and
+current versions of the Rips lift.
+"""
+
 import functools
-import warnings
 
 import pytest
 import torch
@@ -13,8 +19,22 @@ from simplicial_data.utils import SimplicialTransform as NewTransform
 @pytest.mark.parametrize("dim", [1, 2, 3, 4])
 @pytest.mark.parametrize("dis", [0.5, 1.5, 2.5, 4.0])
 def test_transform(dim: int, dis: float):
+    """
+    Test consistency of simplicial transformations between old and new Rips lift implementations.
+
+    Parameters
+    ----------
+    dim : int
+        Dimensionality of the simplicial complex.
+    dis : float
+        Maximum edge length for simplices in the Rips complex.
+
+    Assertions
+    ----------
+    Asserts equivalence of simplicial complexes from both old and new implementations.
+    """
     n_test_samples = 3
-    data_root = f"./datasets/QM9"
+    data_root = "./datasets/QM9"
     dataset = QM9(root=data_root)
     dataset = dataset.shuffle()
     for graph in dataset[:n_test_samples]:
@@ -40,7 +60,22 @@ def test_transform(dim: int, dis: float):
                 ), f"sorted(old_inv[{i}_{j}]) != new_inv[{i}_{j}]"
 
 
-def sort_tensor_columns_and_get_indices(tensor):
+def sort_tensor_columns_and_get_indices(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Sort a 2D tensor by its second, then first row, returning sorted tensor and indices.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        A 2D tensor to sort.
+
+    Returns
+    -------
+    torch.Tensor
+        The tensor sorted by columns.
+    torch.Tensor
+        Indices reflecting the final column sorting order.
+    """
     # Sort by the second row (preserve original indices)
     _, indices_second_row = torch.sort(tensor[1])
     sorted_tensor = tensor[:, indices_second_row]

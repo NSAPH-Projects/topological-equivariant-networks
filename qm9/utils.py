@@ -83,7 +83,7 @@ def get_subsampler(fraction: float) -> Optional[callable]:
 
 
 def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    data_root = f"./datasets/QM9_delta_{args.dis}_dim_{args.dim}_subsample_{args.subsample}_debug_2"
+    data_root = f"./datasets/QM9_delta_{args.dis}_dim_{args.dim}_subsample_{args.subsample}"
     subsampler = get_subsampler(args.subsample)
     rips_lift = functools.partial(lifts.rips_lift, dim=args.dim, dis=args.dis)
     transform = SimplicialTransform(lifter_fct=rips_lift, dim=args.dim)

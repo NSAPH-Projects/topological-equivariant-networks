@@ -3,7 +3,7 @@ from itertools import combinations
 import gudhi
 
 
-def clique_lift(graph, dim, dis) -> list[list[int]]:
+def clique_lift(graph) -> list[list[int]]:
     raise NotImplementedError
 
 

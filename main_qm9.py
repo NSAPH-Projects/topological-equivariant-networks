@@ -1,5 +1,6 @@
 import argparse
 import copy
+import time
 
 import torch
 from tqdm import tqdm
@@ -31,7 +32,7 @@ def main(args):
     best_val_mae, best_model = float("inf"), None
 
     for _ in tqdm(range(args.epochs)):
-        epoch_mae_train, epoch_mae_val = 0, 0
+        epoch_start_time, epoch_mae_train, epoch_mae_val = time.time(), 0, 0
 
         model.train()
         for _, batch in enumerate(train_loader):
@@ -65,7 +66,16 @@ def main(args):
 
         scheduler.step()
 
-        wandb.log({"Train MAE": epoch_mae_train, "Validation MAE": epoch_mae_val})
+        epoch_end_time = time.time()  # End timing the epoch
+        epoch_duration = epoch_end_time - epoch_start_time  # Calculate the duration
+
+        wandb.log(
+            {
+                "Train MAE": epoch_mae_train,
+                "Validation MAE": epoch_mae_val,
+                "Epoch Duration": epoch_duration,
+            }
+        )
 
     test_mae = 0
     best_model.eval()

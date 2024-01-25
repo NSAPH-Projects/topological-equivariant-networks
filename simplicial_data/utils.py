@@ -90,7 +90,8 @@ class SimplicialTransform(BaseTransform):
         # compute ranks for each simplex
         simplex_dict = {rank: [] for rank in range(self.dim + 1)}
         for simplex in simplexes:
-            simplex_dict[len(simplex) - 1].append(simplex)
+            if len(simplex) <= self.dim + 1:
+                simplex_dict[len(simplex) - 1].append(simplex)
 
         # create x_dict
         x_dict = map_to_tensors(simplex_dict)

@@ -1,12 +1,12 @@
 """Module for constructing topological structures from graphs."""
 
-
 from itertools import combinations
 
 import gudhi
+from torch_geometric.data import Data
 
 
-def clique_lift(graph) -> list[list[int]]:
+def clique_lift(graph: Data) -> list[list[int]]:
     """
     Construct a clique complex from a graph. Not yet implemented.
 
@@ -27,7 +27,7 @@ def clique_lift(graph) -> list[list[int]]:
     raise NotImplementedError
 
 
-def rips_lift(graph, dim, dis, fc_nodes: bool = True) -> list[list[int]]:
+def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> list[list[int]]:
     """
     Construct a Rips complex from a graph and returns its simplices.
 

@@ -102,13 +102,15 @@ class SimplicialTransform(BaseTransform):
                 cc.add_cell(simplex, rank=rank)
 
         # compute adjancencies and incidences
-        adj = dict()
-        for i in range(self.dim):
+        adj, idx_to_cell = dict(), dict()
+        for i in range(self.dim + 1):
             for j in range(i, self.dim + 1):
                 if i != j:
                     matrix = cc.incidence_matrix(rank=i, to_rank=j)
+
                 else:
-                    matrix = cc.adjacency_matrix(rank=i, via_rank=i + 1)
+                    index, matrix = cc.adjacency_matrix(rank=i, via_rank=i + 1, index=True)
+                    idx_to_cell[i] = {v: sorted(k) for k, v in index.items()}
 
                 if np.array_equal(matrix, np.zeros(1)):
                     matrix = torch.zeros(2, 0).long()
@@ -128,8 +130,8 @@ class SimplicialTransform(BaseTransform):
                 neighbors = adj[f"{i}_{j}"]
                 for connection in neighbors.t():
                     idx_a, idx_b = connection[0], connection[1]
-                    simplex_a = simplex_dict[i][idx_a]
-                    simplex_b = simplex_dict[j][idx_b]
+                    simplex_a = idx_to_cell[i][idx_a.item()]
+                    simplex_b = idx_to_cell[j][idx_b.item()]
                     shared = [node for node in simplex_a if node in simplex_b]
                     only_in_a = [node for node in simplex_a if node not in shared]
                     only_in_b = [node for node in simplex_b if node not in shared]

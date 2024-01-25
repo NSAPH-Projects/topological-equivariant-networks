@@ -39,10 +39,20 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str,
 
 
 def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    if args.lift_type == "rips":
+        lifter_fct = functools.partial(lifts.rips_lift, dim=args.dim, dis=args.dis)
+        lift_args_str = f"_dis_{args.dis}"
+    elif args.lift_type == "clique":
+        lifter_fct = lifts.clique_lift
+        lift_args_str = ""
+
+    # define data_root
     num_samples_suffix = "" if args.num_samples is None else f"_num_samples_{args.num_samples}"
-    data_root = f"./datasets/QM9_delta_{args.dis}_dim_{args.dim}{num_samples_suffix}"
-    rips_lift = functools.partial(lifts.rips_lift, dim=args.dim, dis=args.dis)
-    transform = SimplicialTransform(lifter_fct=rips_lift, dim=args.dim)
+    data_root = f"./datasets/QM9_{args.target_name}_dim_{args.dim}"
+    data_root += f"_{args.lift_type}{lift_args_str}{num_samples_suffix}"
+
+    # load, subsample and transform the dataset
+    transform = SimplicialTransform(lifter_fct=lifter_fct, dim=args.dim)
     dataset = QM9(root=data_root)
     dataset = dataset.shuffle()
     dataset = dataset[: args.num_samples]

@@ -3,28 +3,46 @@
 from itertools import combinations
 
 import gudhi
+import networkx as nx
+import torch_geometric.utils as pyg_utils
 from torch_geometric.data import Data
 
 
-def clique_lift(graph: Data) -> list[list[int]]:
+def clique_lift(graph_data) -> list[list[int]]:
     """
-    Construct a clique complex from a graph. Not yet implemented.
+    Construct a clique complex from a graph represented as a torch_geometric.data.Data object.
 
     Parameters
     ----------
-    graph : object
-        The graph from which to construct the clique complex.
+    graph_data : torch_geometric.data.Data
+        The graph from which to construct the clique complex, represented as a
+        torch_geometric.data.Data object.
 
     Returns
     -------
     list[list[int]]
         Simplices of the clique complex.
-
-    Raises
-    ------
-    NotImplementedError
     """
-    raise NotImplementedError
+    # Convert torch_geometric.data.Data to networkx graph
+    G = pyg_utils.to_networkx(graph_data, to_undirected=True)
+
+    simplices = []
+
+    # Find all maximal cliques in the graph
+    maximal_cliques = list(nx.find_cliques(G))
+
+    # Generate all subsets of each maximal clique to include all cliques
+    for clique in maximal_cliques:
+        for i in range(1, len(clique) + 1):
+            for subset in combinations(clique, i):
+                simplices.append(list(subset))
+
+    # Remove duplicates by converting each simplex to a tuple (for hashing),
+    # making a set (to remove duplicates), and then back to a list
+    simplices = list({tuple(sorted(simplex)) for simplex in simplices})
+    simplices = [list(simplex) for simplex in simplices]
+
+    return simplices
 
 
 def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> list[list[int]]:

@@ -28,16 +28,6 @@ echo "Creating environment 'ten'"
 conda env create -f environment.yaml
 conda activate ten
 
-# Install TopoNetX
-echo "Installing 'TopoNetX'"
-REPO_URL="https://github.com/pyt-team/TopoNetX"
-git clone "$REPO_URL"
-REPO_DIR=$(basename "$REPO_URL" .git)
-cd "$REPO_DIR"
-git pull
-pip install -e '.[all]'
-cd ..
-
 # Install pre-commit hooks
 pre-commit install
 

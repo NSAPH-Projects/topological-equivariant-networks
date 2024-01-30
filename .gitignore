@@ -164,3 +164,6 @@ datasets/
 
 # Weights and Biases
 wandb/
+
+# TopoNetX
+TopoNetX/

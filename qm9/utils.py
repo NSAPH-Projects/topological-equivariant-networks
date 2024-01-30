@@ -1,5 +1,7 @@
+import functools
+import random
 from argparse import Namespace
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -8,7 +10,8 @@ from torch_geometric.datasets import QM9
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
-from simplicial_data.simplicial_data import SimplicialTransform
+import simplicial_data.lifts as lifts
+from simplicial_data.utils import SimplicialTransform
 
 
 def calc_mean_mad(loader: DataLoader) -> Tuple[Tensor, Tensor]:
@@ -36,10 +39,14 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str,
 
 
 def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    data_root = f"./datasets/QM9_delta_{args.dis}_dim_{args.dim}"
-    transform = SimplicialTransform(dim=args.dim, dis=args.dis)
-    dataset = QM9(root=data_root, pre_transform=transform)
+    num_samples_suffix = "" if args.num_samples is None else f"_num_samples_{args.num_samples}"
+    data_root = f"./datasets/QM9_delta_{args.dis}_dim_{args.dim}{num_samples_suffix}"
+    rips_lift = functools.partial(lifts.rips_lift, dim=args.dim, dis=args.dis)
+    transform = SimplicialTransform(lifter_fct=rips_lift, dim=args.dim)
+    dataset = QM9(root=data_root)
     dataset = dataset.shuffle()
+    dataset = dataset[: args.num_samples]
+    dataset = [transform(sample) for sample in tqdm(dataset)]
 
     # filter relevant index and update units to eV
     qm9_to_ev = {
@@ -80,7 +87,11 @@ def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataL
     ]
 
     # train/val/test split
-    n_train, n_test = 100000, 110000
+    if args.num_samples is None:
+        n_train, n_test = 100000, 110000
+    else:
+        n_train = int(len(dataset) * 0.75)
+        n_test = n_train + int(len(dataset) * 0.075)
     train_dataset = dataset[:n_train]
     test_dataset = dataset[n_train:n_test]
     val_dataset = dataset[n_test:]

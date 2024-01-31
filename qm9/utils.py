@@ -47,6 +47,8 @@ def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataL
         lifter_fct = lifts.clique_lift
     elif args.lift_type == "functional_group":
         lifter_fct = lifts.functional_group_lift
+    elif args.lift_type == "ring":
+        lifter_fct = lifts.ring_lift
 
     # define data_root
     num_samples_suffix = "" if args.num_samples is None else f"_num_samples_{args.num_samples}"

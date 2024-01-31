@@ -95,6 +95,39 @@ def functional_group_lift(graph: Data) -> list[list[int]]:
     return simplexes
 
 
+def ring_lift(graph: Data) -> list[list[int]]:
+    """
+    Identify minimal cycles in a graph.
+
+    This function finds all cycles in a given graph and then filters out those that contain simpler
+    cycles within themselves. It returns minimal cycles, which are those that do not encompass any
+    smaller cycle. The minimal cycle length is 3.
+
+    Parameters
+    ----------
+    graph : torch.Tensor
+        The input graph represented as a PyTorch tensor.
+
+    Returns
+    -------
+    List[List[int]]
+        A list of minimal cycles, each cycle is represented as a list of node indices.
+    """
+    # Convert to networkx graph
+    G = pyg_utils.to_networkx(graph)
+
+    # Compute all cycles (using a set with sorting removes duplicates)
+    cycles = {tuple(sorted(cycle)) for cycle in nx.simple_cycles(G) if len(cycle) >= 3}
+
+    # Filter out cycles that contain simpler cycles within themselves
+    minimal_cycles = []
+    for cycle in cycles:
+        if not any(set(cycle) > set(other_cycle) for other_cycle in cycles if cycle != other_cycle):
+            minimal_cycles.append(list(cycle))
+
+    return minimal_cycles
+
+
 def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> list[list[int]]:
     """
     Construct a Rips complex from a graph and returns its simplices.

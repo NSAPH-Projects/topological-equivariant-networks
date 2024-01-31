@@ -99,10 +99,18 @@ class SimplicialTransform(BaseTransform):
         x_dict = map_to_tensors(simplex_dict)
 
         # create the combinatorial complex
+        # first add higher-order cells
         cc = CombinatorialComplex()
         for rank, simplexes in simplex_dict.items():
-            for simplex in simplexes:
-                cc.add_cell(simplex, rank=rank)
+            if rank > 0:
+                cc.add_cells_from(simplexes, ranks=rank)
+
+        # then remove the artificially created 0-rank cells
+        zero_rank_cells = [cell for cell in cc.cells if len(cell) == 1]
+        cc.remove_cells(zero_rank_cells)
+
+        # finally add the organic 0-rank cells
+        cc.add_cells_from(simplex_dict[0], ranks=0)
 
         # compute adjancencies and incidences
         adj, idx_to_cell = dict(), dict()

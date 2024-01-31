@@ -95,6 +95,41 @@ def functional_group_lift(graph: Data) -> list[list[int]]:
     return simplexes
 
 
+def identity_lift(graph: Data) -> list[list[int]]:
+    """
+    Identify nodes and edges in a graph.
+
+    This function returns the nodes and edges of the given graph. Each node
+    is represented as a singleton list containing its index, and each edge is
+    represented as a list of two node indices.
+
+    Parameters
+    ----------
+    graph : Data
+        The input graph represented as a PyTorch Geometric Data object.
+
+    Returns
+    -------
+    List[List[int]]
+        A list of graph elements, where each element is a node (singleton list)
+        or an edge (list of two node indices).
+
+    Notes
+    -----
+    The function directly works with the PyTorch Geometric Data object. Nodes are
+    inferred from the edge_index attribute, and edges are directly extracted from
+    it.
+    """
+    # Create nodes
+    nodes = [[node] for node in range(graph.x.size(0))]
+
+    # Create edges
+    edges = graph.edge_index.t().tolist()
+
+    # Combine nodes and edges
+    return nodes + edges
+
+
 def ring_lift(graph: Data) -> list[list[int]]:
     """
     Identify minimal cycles in a graph.

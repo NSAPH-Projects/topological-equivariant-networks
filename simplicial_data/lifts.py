@@ -5,7 +5,10 @@ from itertools import combinations
 import gudhi
 import networkx as nx
 import torch_geometric.utils as pyg_utils
+from rdkit import Chem
 from torch_geometric.data import Data
+
+from simplicial_data.ifg import identify_functional_groups
 
 
 def clique_lift(graph_data) -> list[list[int]]:
@@ -43,6 +46,53 @@ def clique_lift(graph_data) -> list[list[int]]:
     simplices = [list(simplex) for simplex in simplices]
 
     return simplices
+
+
+def functional_group_lift(graph: Data) -> list[list[int]]:
+    """
+    Identify functional groups within a molecule and returns them as lists of atom indices.
+
+    This function first checks if the input `graph` contains a SMILES attribute. If present, it
+    converts the SMILES string into an RDKit molecule object and then identifies functional groups
+    within this molecule. Each functional group is represented as a list of atom indices. If the
+    input does not contain a valid SMILES attribute, the function raises an AttributeError. If the
+    molecule cannot be processed, it returns an empty list.
+
+    Parameters
+    ----------
+    graph : torch_geometric.data.Data
+        A data structure containing a SMILES representation of the molecule.
+
+    Returns
+    -------
+    List[List[int]]
+        A list of lists, where each inner list contains the atom indices of a functional group in
+        the molecule.
+
+    Raises
+    ------
+    AttributeError
+        If the input `graph` does not have a valid SMILES attribute or if the SMILES string cannot
+        be converted into an RDKit molecule.
+
+    Examples
+    --------
+    >>> graph = Data(smiles='CC(=O)OC1=CC=CC=C1C(=O)O')
+    >>> functional_group_lift(graph)
+    [[1, 2, 3], [8, 9, 10, 11, 12, 13, 14]]
+    """
+    if not hasattr(graph, "smiles"):
+        raise AttributeError(
+            "The given graph does not have a SMILES attribute! You are either not "
+            "using the QM9 dataset or you haven't preprocessed the dataset using rdkit!"
+        )
+    try:
+        molecule = Chem.MolFromSmiles(graph.smiles)
+        functional_groups = identify_functional_groups(molecule)
+        simplexes = [list(fg.atomIds) for fg in functional_groups]
+    except AttributeError:
+        simplexes = []
+    return simplexes
 
 
 def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> list[list[int]]:

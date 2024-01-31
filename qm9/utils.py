@@ -39,12 +39,14 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str,
 
 
 def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    lift_args_str = ""
     if args.lift_type == "rips":
         lifter_fct = functools.partial(lifts.rips_lift, dim=args.dim, dis=args.dis)
         lift_args_str = f"_dis_{args.dis}"
     elif args.lift_type == "clique":
         lifter_fct = lifts.clique_lift
-        lift_args_str = ""
+    elif args.lift_type == "functional_group":
+        lifter_fct = lifts.functional_group_lift
 
     # define data_root
     num_samples_suffix = "" if args.num_samples is None else f"_num_samples_{args.num_samples}"

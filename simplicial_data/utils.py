@@ -1,3 +1,5 @@
+from typing import Union
+
 import numpy as np
 import torch
 from toponetx.classes import CombinatorialComplex
@@ -53,8 +55,11 @@ class SimplicialTransform(BaseTransform):
     The adjacency types (adj) are saved as properties, e.g. object.adj_1_2 gives the edge index from
     1-simplices to 2-simplices."""
 
-    def __init__(self, lifter_fct: callable, dim: int = 2):
-        self.lift = lifter_fct
+    def __init__(self, lifters: Union[list[callable], callable], dim: int = 2):
+        if isinstance(lifters, list):
+            self.lifters = lifters
+        else:
+            self.lifters = [lifters]
         self.dim = dim
 
     def __call__(self, graph: Data) -> SimplicialComplexData:
@@ -86,7 +91,7 @@ class SimplicialTransform(BaseTransform):
 
     def get_relevant_dicts(self, graph):
         # compute simplexes
-        simplexes = process_lift_output(self.lift(graph))
+        simplexes = self.lift(graph)
 
         # compute ranks for each simplex
         simplex_dict = {rank: [] for rank in range(self.dim + 1)}
@@ -157,6 +162,27 @@ class SimplicialTransform(BaseTransform):
                 inv[k] = torch.stack(v, dim=1)
 
         return x_dict, adj, inv
+
+    def lift(self, graph: Data) -> list[list[int]]:
+        """
+        Apply lifters to a data point and combine their outputs.
+
+        Parameters
+        ----------
+        graph: Data
+            The data point to which the lifters are applied.
+
+        Returns
+        -------
+        list[list[int]]
+            The combined and processed output from all lifters.
+        """
+        combined_output = []
+        for lifter in self.lifters:
+            lifter_output = lifter(graph)
+            combined_output.extend(lifter_output)
+
+        return process_lift_output(combined_output)
 
 
 def process_lift_output(lift_output: list[list[int]]) -> list[list[int]]:

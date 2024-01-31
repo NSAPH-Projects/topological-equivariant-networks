@@ -1,5 +1,6 @@
 """Module for constructing topological structures from graphs."""
 
+from functools import partial
 from itertools import combinations
 
 import gudhi
@@ -210,3 +211,40 @@ def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> list[
         simplexes.append(simplex)
 
     return simplexes
+
+
+lifter_registry = {
+    "clique": clique_lift,
+    "functional_group": functional_group_lift,
+    "identity": identity_lift,
+    "ring": ring_lift,
+    "rips": rips_lift,
+}
+
+
+def get_lifters(args) -> list[callable]:
+    """
+    Construct a list of lifter functions based on provided arguments.
+
+    This function iterates through a list of lifter names specified in the input arguments. For each
+    lifter, it either retrieves the corresponding function from a registry or creates a partial
+    function with additional arguments for specific lifters like 'rips'.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed command line arguments. It should contain 'lifters', a list of lifter names, and
+        additional arguments like 'dim' and 'dis' for specific lifters.
+
+    Returns
+    -------
+    List[Callable]
+        A list of callable lifter functions, ready to be applied to data.
+    """
+    lifters = []
+    for lifter in args.lifters:
+        if lifter == "rips":
+            lifters.append(partial(rips_lift, dim=args.dim, dis=args.dis))
+        else:
+            lifters.append(lifter_registry[lifter])
+    return lifters

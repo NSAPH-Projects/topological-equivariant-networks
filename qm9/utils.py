@@ -1,4 +1,6 @@
 import functools
+import hashlib
+import json
 import random
 from argparse import Namespace
 from typing import Dict, Optional, Tuple
@@ -10,7 +12,7 @@ from torch_geometric.datasets import QM9
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
-import simplicial_data.lifts as lifts
+from simplicial_data.lifts import get_lifters
 from simplicial_data.utils import SimplicialTransform
 
 
@@ -39,26 +41,15 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str,
 
 
 def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    lift_args_str = ""
-    if args.lift_type == "rips":
-        lifter_fct = functools.partial(lifts.rips_lift, dim=args.dim, dis=args.dis)
-        lift_args_str = f"_dis_{args.dis}"
-    elif args.lift_type == "clique":
-        lifter_fct = lifts.clique_lift
-    elif args.lift_type == "functional_group":
-        lifter_fct = lifts.functional_group_lift
-    elif args.lift_type == "ring":
-        lifter_fct = lifts.ring_lift
-    elif args.lift_type == "identity":
-        lifter_fct = lifts.identity_lift
-
     # define data_root
-    num_samples_suffix = "" if args.num_samples is None else f"_num_samples_{args.num_samples}"
-    data_root = f"./datasets/QM9_{args.target_name}_dim_{args.dim}"
-    data_root += f"_{args.lift_type}{lift_args_str}{num_samples_suffix}"
+    data_root = "./datasets/QM9_"
+    data_root += generate_dataset_dir_name(
+        args, ["num_samples", "target_name", "lifters", "dim", "dis"]
+    )
 
     # load, subsample and transform the dataset
-    transform = SimplicialTransform(lifter_fct=lifter_fct, dim=args.dim)
+    lifters = get_lifters(args)
+    transform = SimplicialTransform(lifters=lifters, dim=args.dim)
     dataset = QM9(root=data_root)
     dataset = dataset.shuffle()
     dataset = dataset[: args.num_samples]
@@ -137,3 +128,33 @@ def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataL
     )
 
     return train_loader, val_loader, test_loader
+
+
+def generate_dataset_dir_name(args, relevant_args) -> str:
+    """
+    Generate a directory name based on a subset of script arguments.
+
+    Parameters:
+    args (dict): A dictionary of all script arguments.
+    relevant_args (list): A list of argument names that are relevant to dataset generation.
+
+    Returns:
+    str: A hash-based directory name representing the relevant arguments.
+    """
+    # Convert Namespace to a dictionary
+    args_dict = vars(args)
+
+    # Filter the arguments, keeping only the relevant ones
+    filtered_args = {key: args_dict[key] for key in relevant_args if key in args_dict}
+
+    # Convert relevant arguments to a JSON string for consistent ordering
+    args_str = json.dumps(filtered_args, sort_keys=True)
+
+    # Create a hash of the relevant arguments string
+    hash_obj = hashlib.sha256(args_str.encode())
+    hash_hex = hash_obj.hexdigest()
+
+    # Optional: truncate the hash for a shorter name
+    short_hash = hash_hex[:16]  # First 16 characters
+
+    return short_hash

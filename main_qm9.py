@@ -112,7 +112,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_hidden", type=int, default=77, help="hidden features")
     parser.add_argument("--num_layers", type=int, default=7, help="number of layers")
     parser.add_argument("--act_fn", type=str, default="silu", help="activation function")
-    parser.add_argument("--lift_type", type=str, default="rips", help="lift type")
+    parser.add_argument("--lifters", nargs="+", help="list of lifters to apply", required=True)
 
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")

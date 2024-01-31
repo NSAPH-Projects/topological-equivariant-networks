@@ -12,29 +12,31 @@ class SimplicialComplexData(Data):
     """
 
     def __inc__(self, key: str, value: any, *args, **kwargs) -> any:
+        num_nodes = getattr(self, "x_0").size(0)
+        # num_nodes = self.num_nodes
         if "adj" in key:
             i, j = key[4], key[6]
             return torch.tensor(
                 [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
             )
         elif key == "inv_0_0":
-            return torch.tensor([[getattr(self, "x_0").size(0)], [getattr(self, "x_0").size(0)]])
+            return torch.tensor([[num_nodes], [num_nodes]])
         elif key == "inv_0_1":
-            return torch.tensor([[getattr(self, "x_0").size(0)], [getattr(self, "x_0").size(0)]])
+            return torch.tensor([[num_nodes], [num_nodes]])
         elif key == "inv_1_1":
             return torch.tensor(
                 [
-                    [getattr(self, "x_0").size(0)],
-                    [getattr(self, "x_0").size(0)],
-                    [getattr(self, "x_0").size(0)],
+                    [num_nodes],
+                    [num_nodes],
+                    [num_nodes],
                 ]
             )
         elif key == "inv_1_2":
             return torch.tensor(
                 [
-                    [getattr(self, "x_0").size(0)],
-                    [getattr(self, "x_0").size(0)],
-                    [getattr(self, "x_0").size(0)],
+                    [num_nodes],
+                    [num_nodes],
+                    [num_nodes],
                 ]
             )
         else:

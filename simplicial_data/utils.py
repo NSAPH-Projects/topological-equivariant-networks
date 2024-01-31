@@ -86,7 +86,7 @@ class SimplicialTransform(BaseTransform):
 
     def get_relevant_dicts(self, graph):
         # compute simplexes
-        simplexes = self.lift(graph)
+        simplexes = process_lift_output(self.lift(graph))
 
         # compute ranks for each simplex
         simplex_dict = {rank: [] for rank in range(self.dim + 1)}
@@ -157,6 +157,43 @@ class SimplicialTransform(BaseTransform):
                 inv[k] = torch.stack(v, dim=1)
 
         return x_dict, adj, inv
+
+
+def process_lift_output(lift_output: list[list[int]]) -> list[list[int]]:
+    """
+    Process the output of a *_lift function.
+
+    This function sorts each inner list, removes duplicate inner lists, and then
+    sorts the outer list. It is designed to work with the output of any *_lift
+    function that returns a list of lists of integers.
+
+    Parameters
+    ----------
+    lift_output : list[list[int]]
+        The output from a *_lift function, which is a list of lists of integers.
+
+    Returns
+    -------
+    list[list[int]]
+        The processed list, with each inner list sorted, duplicates removed, and
+        the outer list sorted.
+
+    Examples
+    --------
+    >>> lift_output = [[3, 2], [1], [2, 3], [1, 2], [1]]
+    >>> process_lift_output(lift_output)
+    [[1], [1, 2], [2, 3]]
+    """
+    # Sort each inner list
+    sorted_inner_lists = [sorted(inner_list) for inner_list in lift_output]
+
+    # Remove duplicates by converting the list of lists into a set of tuples
+    unique_inner_lists = set(tuple(inner_list) for inner_list in sorted_inner_lists)
+
+    # Sort the outer list and convert tuples back to lists
+    sorted_outer_list = sorted(list(inner_list) for inner_list in unique_inner_lists)
+
+    return sorted_outer_list
 
 
 def map_to_tensors(input_dict):

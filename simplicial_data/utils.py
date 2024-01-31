@@ -13,7 +13,6 @@ class SimplicialComplexData(Data):
 
     def __inc__(self, key: str, value: any, *args, **kwargs) -> any:
         num_nodes = getattr(self, "x_0").size(0)
-        # num_nodes = self.num_nodes
         if "adj" in key:
             i, j = key[4], key[6]
             return torch.tensor(

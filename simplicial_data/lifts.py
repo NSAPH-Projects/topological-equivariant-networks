@@ -150,7 +150,7 @@ def ring_lift(graph: Data) -> set[frozenset[int]]:
     minimal_cycles = set()
     for cycle in cycles:
         if not any(cycle > other_cycle for other_cycle in cycles if cycle != other_cycle):
-            minimal_cycles.add(list(cycle))
+            minimal_cycles.add(cycle)
 
     return minimal_cycles
 

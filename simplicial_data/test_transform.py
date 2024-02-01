@@ -18,7 +18,7 @@ from simplicial_data.utils import SimplicialTransform as NewTransform
 
 @pytest.mark.parametrize("dim", [1, 2, 3, 4])
 @pytest.mark.parametrize("dis", [0.5, 1.5, 2.5, 4.0])
-def test_transform(dim: int, dis: float):
+def test_rips_transform(dim: int, dis: float):
     """
     Test consistency of simplicial transformations between old and new Rips lift implementations.
 
@@ -34,7 +34,7 @@ def test_transform(dim: int, dis: float):
     Asserts equivalence of simplicial complexes from both old and new implementations.
     """
     n_test_samples = 3
-    data_root = "./datasets/QM9"
+    data_root = "./datasets/QM9_test"
     dataset = QM9(root=data_root)
     dataset = dataset.shuffle()
     for graph in dataset[:n_test_samples]:

@@ -1,4 +1,6 @@
 import functools
+import hashlib
+import json
 import random
 from argparse import Namespace
 from typing import Dict, Optional, Tuple
@@ -10,7 +12,7 @@ from torch_geometric.datasets import QM9
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
-import simplicial_data.lifts as lifts
+from simplicial_data.lifts import get_lifters
 from simplicial_data.utils import SimplicialTransform
 
 
@@ -39,10 +41,15 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str,
 
 
 def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    num_samples_suffix = "" if args.num_samples is None else f"_num_samples_{args.num_samples}"
-    data_root = f"./datasets/QM9_delta_{args.dis}_dim_{args.dim}{num_samples_suffix}"
-    rips_lift = functools.partial(lifts.rips_lift, dim=args.dim, dis=args.dis)
-    transform = SimplicialTransform(lifter_fct=rips_lift, dim=args.dim)
+    # define data_root
+    data_root = "./datasets/QM9_"
+    data_root += generate_dataset_dir_name(
+        args, ["num_samples", "target_name", "lifters", "dim", "dis"]
+    )
+
+    # load, subsample and transform the dataset
+    lifters = get_lifters(args)
+    transform = SimplicialTransform(lifters=lifters, dim=args.dim)
     dataset = QM9(root=data_root)
     dataset = dataset.shuffle()
     dataset = dataset[: args.num_samples]
@@ -121,3 +128,33 @@ def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataL
     )
 
     return train_loader, val_loader, test_loader
+
+
+def generate_dataset_dir_name(args, relevant_args) -> str:
+    """
+    Generate a directory name based on a subset of script arguments.
+
+    Parameters:
+    args (dict): A dictionary of all script arguments.
+    relevant_args (list): A list of argument names that are relevant to dataset generation.
+
+    Returns:
+    str: A hash-based directory name representing the relevant arguments.
+    """
+    # Convert Namespace to a dictionary
+    args_dict = vars(args)
+
+    # Filter the arguments, keeping only the relevant ones
+    filtered_args = {key: args_dict[key] for key in relevant_args if key in args_dict}
+
+    # Convert relevant arguments to a JSON string for consistent ordering
+    args_str = json.dumps(filtered_args, sort_keys=True)
+
+    # Create a hash of the relevant arguments string
+    hash_obj = hashlib.sha256(args_str.encode())
+    hash_hex = hash_obj.hexdigest()
+
+    # Optional: truncate the hash for a shorter name
+    short_hash = hash_hex[:16]  # First 16 characters
+
+    return short_hash

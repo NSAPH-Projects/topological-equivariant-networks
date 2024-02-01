@@ -77,6 +77,7 @@ def generate_adjacencies_and_invariants(
             d[f"{i}_{i+1}"] = []
 
     for simplex, _ in simplex_tree.get_simplices():
+        simplex = sorted(simplex)
         # get index
         dim = len(simplex) - 1
         simplex_index = index_phonebook[frozenset(simplex)]

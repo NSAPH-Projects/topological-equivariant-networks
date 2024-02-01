@@ -1,3 +1,5 @@
+from typing import Union
+
 import numpy as np
 import torch
 from toponetx.classes import CombinatorialComplex
@@ -12,29 +14,30 @@ class SimplicialComplexData(Data):
     """
 
     def __inc__(self, key: str, value: any, *args, **kwargs) -> any:
+        num_nodes = getattr(self, "x_0").size(0)
         if "adj" in key:
             i, j = key[4], key[6]
             return torch.tensor(
                 [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
             )
         elif key == "inv_0_0":
-            return torch.tensor([[getattr(self, "x_0").size(0)], [getattr(self, "x_0").size(0)]])
+            return torch.tensor([[num_nodes], [num_nodes]])
         elif key == "inv_0_1":
-            return torch.tensor([[getattr(self, "x_0").size(0)], [getattr(self, "x_0").size(0)]])
+            return torch.tensor([[num_nodes], [num_nodes]])
         elif key == "inv_1_1":
             return torch.tensor(
                 [
-                    [getattr(self, "x_0").size(0)],
-                    [getattr(self, "x_0").size(0)],
-                    [getattr(self, "x_0").size(0)],
+                    [num_nodes],
+                    [num_nodes],
+                    [num_nodes],
                 ]
             )
         elif key == "inv_1_2":
             return torch.tensor(
                 [
-                    [getattr(self, "x_0").size(0)],
-                    [getattr(self, "x_0").size(0)],
-                    [getattr(self, "x_0").size(0)],
+                    [num_nodes],
+                    [num_nodes],
+                    [num_nodes],
                 ]
             )
         else:
@@ -52,8 +55,11 @@ class SimplicialTransform(BaseTransform):
     The adjacency types (adj) are saved as properties, e.g. object.adj_1_2 gives the edge index from
     1-simplices to 2-simplices."""
 
-    def __init__(self, lifter_fct: callable, dim: int = 2):
-        self.lift = lifter_fct
+    def __init__(self, lifters: Union[list[callable], callable], dim: int = 2):
+        if isinstance(lifters, list):
+            self.lifters = lifters
+        else:
+            self.lifters = [lifters]
         self.dim = dim
 
     def __call__(self, graph: Data) -> SimplicialComplexData:
@@ -90,25 +96,36 @@ class SimplicialTransform(BaseTransform):
         # compute ranks for each simplex
         simplex_dict = {rank: [] for rank in range(self.dim + 1)}
         for simplex in simplexes:
-            simplex_dict[len(simplex) - 1].append(simplex)
+            if len(simplex) <= self.dim + 1:
+                simplex_dict[len(simplex) - 1].append(simplex)
 
         # create x_dict
         x_dict = map_to_tensors(simplex_dict)
 
         # create the combinatorial complex
+        # first add higher-order cells
         cc = CombinatorialComplex()
         for rank, simplexes in simplex_dict.items():
-            for simplex in simplexes:
-                cc.add_cell(simplex, rank=rank)
+            if rank > 0:
+                cc.add_cells_from(simplexes, ranks=rank)
+
+        # then remove the artificially created 0-rank cells
+        zero_rank_cells = [cell for cell in cc.cells if len(cell) == 1]
+        cc.remove_cells(zero_rank_cells)
+
+        # finally add the organic 0-rank cells
+        cc.add_cells_from(simplex_dict[0], ranks=0)
 
         # compute adjancencies and incidences
-        adj = dict()
-        for i in range(self.dim):
+        adj, idx_to_cell = dict(), dict()
+        for i in range(self.dim + 1):
             for j in range(i, self.dim + 1):
                 if i != j:
                     matrix = cc.incidence_matrix(rank=i, to_rank=j)
+
                 else:
-                    matrix = cc.adjacency_matrix(rank=i, via_rank=i + 1)
+                    index, matrix = cc.adjacency_matrix(rank=i, via_rank=i + 1, index=True)
+                    idx_to_cell[i] = {v: sorted(k) for k, v in index.items()}
 
                 if np.array_equal(matrix, np.zeros(1)):
                     matrix = torch.zeros(2, 0).long()
@@ -128,8 +145,8 @@ class SimplicialTransform(BaseTransform):
                 neighbors = adj[f"{i}_{j}"]
                 for connection in neighbors.t():
                     idx_a, idx_b = connection[0], connection[1]
-                    simplex_a = simplex_dict[i][idx_a]
-                    simplex_b = simplex_dict[j][idx_b]
+                    simplex_a = idx_to_cell[i][idx_a.item()]
+                    simplex_b = idx_to_cell[j][idx_b.item()]
                     shared = [node for node in simplex_a if node in simplex_b]
                     only_in_a = [node for node in simplex_a if node not in shared]
                     only_in_b = [node for node in simplex_b if node not in shared]
@@ -145,6 +162,64 @@ class SimplicialTransform(BaseTransform):
                 inv[k] = torch.stack(v, dim=1)
 
         return x_dict, adj, inv
+
+    def lift(self, graph: Data) -> list[list[int]]:
+        """
+        Apply lifters to a data point and combine their outputs.
+
+        Parameters
+        ----------
+        graph: Data
+            The data point to which the lifters are applied.
+
+        Returns
+        -------
+        list[list[int]]
+            The combined and processed output from all lifters.
+        """
+        combined_output = []
+        for lifter in self.lifters:
+            lifter_output = lifter(graph)
+            combined_output.extend(lifter_output)
+
+        return process_lift_output(combined_output)
+
+
+def process_lift_output(lift_output: list[list[int]]) -> list[list[int]]:
+    """
+    Process the output of a *_lift function.
+
+    This function sorts each inner list, removes duplicate inner lists, and then
+    sorts the outer list. It is designed to work with the output of any *_lift
+    function that returns a list of lists of integers.
+
+    Parameters
+    ----------
+    lift_output : list[list[int]]
+        The output from a *_lift function, which is a list of lists of integers.
+
+    Returns
+    -------
+    list[list[int]]
+        The processed list, with each inner list sorted, duplicates removed, and
+        the outer list sorted.
+
+    Examples
+    --------
+    >>> lift_output = [[3, 2], [1], [2, 3], [1, 2], [1]]
+    >>> process_lift_output(lift_output)
+    [[1], [1, 2], [2, 3]]
+    """
+    # Sort each inner list
+    sorted_inner_lists = [sorted(inner_list) for inner_list in lift_output]
+
+    # Remove duplicates by converting the list of lists into a set of tuples
+    unique_inner_lists = set(tuple(inner_list) for inner_list in sorted_inner_lists)
+
+    # Sort the outer list and convert tuples back to lists
+    sorted_outer_list = sorted(list(inner_list) for inner_list in unique_inner_lists)
+
+    return sorted_outer_list
 
 
 def map_to_tensors(input_dict):

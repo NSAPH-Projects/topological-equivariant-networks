@@ -1,4 +1,3 @@
-from collections import defaultdict
 from itertools import combinations
 from typing import Dict, FrozenSet, Set, Tuple
 
@@ -31,8 +30,8 @@ def rips_lift(
             simplex_tree.insert(edge)
 
     # generate dictionaries
-    index_phonebook, counter = generate_indices(simplex_tree)
-    adj, inv = generate_adjacencies_and_invariants(index_phonebook, simplex_tree, pos)
+    index_phonebook, counter = generate_indices(simplex_tree, dim)
+    adj, inv = generate_adjacencies_and_invariants(index_phonebook, simplex_tree, pos, dim)
     x_dict = generate_features(index_phonebook, simplex_tree, counter)
 
     return x_dict, adj, inv
@@ -49,13 +48,13 @@ def generate_simplices(simplex_tree: SimplexTree) -> Dict[int, Set[FrozenSet]]:
     return sim
 
 
-def generate_indices(simplex_tree) -> Dict[int, Dict[FrozenSet, int]]:
+def generate_indices(simplex_tree, max_dim: int) -> Dict[int, Dict[FrozenSet, int]]:
     """
     Generates a dictionary which assigns to each simplex a unique index used for reference when
     finding the different adjacency types and invariants.
     """
     index_phonebook = dict()
-    counter = defaultdict(int)
+    counter = {i: 0 for i in range(max_dim + 1)}
 
     for simplex, _ in simplex_tree.get_simplices():
         dim = len(simplex) - 1
@@ -66,11 +65,16 @@ def generate_indices(simplex_tree) -> Dict[int, Dict[FrozenSet, int]]:
 
 
 def generate_adjacencies_and_invariants(
-    index_phonebook: Dict, simplex_tree: SimplexTree, pos: Tensor
+    index_phonebook: Dict, simplex_tree: SimplexTree, pos: Tensor, max_dim: int
 ) -> Tuple[Dict[str, Tensor], Dict[str, Tensor]]:
     """todo: add"""
-    adj = defaultdict(list)
-    inv = defaultdict(list)
+
+    # Initialize the dictionaries
+    adj, inv = dict(), dict()
+    for i in range(max_dim):
+        for d in [adj, inv]:
+            d[f"{i}_{i}"] = []
+            d[f"{i}_{i+1}"] = []
 
     for simplex, _ in simplex_tree.get_simplices():
         # get index
@@ -107,10 +111,18 @@ def generate_adjacencies_and_invariants(
                     inv[f"{dim}_{dim}"].append(tensor([p for p in shared] + [a[0], b[0]]))
 
     for k, v in adj.items():
-        adj[k] = torch.stack(v, dim=1)
+        if len(v) == 0:
+            adj[k] = torch.zeros(2, 0).long()
+        else:
+            adj[k] = torch.stack(v, dim=1)
 
     for k, v in inv.items():
-        inv[k] = torch.stack(v, dim=1)
+        if len(v) == 0:
+            i, j = k.split("_")
+            num_nodes = min(int(i), int(j)) + 2
+            inv[k] = torch.zeros(num_nodes, 0).long()
+        else:
+            inv[k] = torch.stack(v, dim=1)
 
     return adj, inv
 

@@ -69,13 +69,16 @@ class SimplicialTransform(BaseTransform):
         assert torch.is_tensor(graph.pos) and torch.is_tensor(graph.x)
 
         # get relevant dictionaries using the Rips complex based on the geometric graph/point cloud
-        x_dict, adj_dict, inv_dict = self.get_relevant_dicts(graph)
+        x_dict, mem_dict, adj_dict, inv_dict = self.get_relevant_dicts(graph)
 
         sim_com_data = SimplicialComplexData()
         sim_com_data = sim_com_data.from_dict(graph.to_dict())
 
         for k, v in x_dict.items():
             sim_com_data[f"x_{k}"] = v
+
+        for k, v in mem_dict.items():
+            sim_com_data[f"mem_{k}"] = v
 
         for k, v in adj_dict.items():
             sim_com_data[f"adj_{k}"] = v
@@ -94,13 +97,13 @@ class SimplicialTransform(BaseTransform):
         simplexes = self.lift(graph)
 
         # compute ranks for each simplex
-        simplex_dict = {rank: [] for rank in range(self.dim + 1)}
-        for simplex in simplexes:
+        simplex_dict = {rank: {} for rank in range(self.dim + 1)}
+        for simplex, memberships in simplexes.items():
             if len(simplex) <= self.dim + 1:
-                simplex_dict[len(simplex) - 1].append(simplex)
+                simplex_dict[len(simplex) - 1][simplex] = memberships
 
         # create x_dict
-        x_dict = map_to_tensors(simplex_dict)
+        x_dict, mem_dict = map_to_tensors(simplex_dict, len(self.lifters))
 
         # create the combinatorial complex
         # first add higher-order cells
@@ -161,78 +164,80 @@ class SimplicialTransform(BaseTransform):
             else:
                 inv[k] = torch.stack(v, dim=1)
 
-        return x_dict, adj, inv
+        return x_dict, mem_dict, adj, inv
 
-    def lift(self, graph: Data) -> list[list[int]]:
+    def lift(self, graph: Data) -> dict[frozenset[int], list[bool]]:
         """
-        Apply lifters to a data point and combine their outputs.
+        Apply lifters to a data point, process their outputs, and track contributions.
+
+        This method applies each registered lifter to the given graph, processes the output to
+        ensure uniqueness, and tracks which lifters contributed to each resulting cell. A cell is
+        considered contributed by a lifter if it appears in the lifter's processed output.
 
         Parameters
         ----------
-        graph: Data
-            The data point to which the lifters are applied.
+        graph : Data
+            The input graph to which the lifters are applied. It should be an instance of a Data
+            class or similar structure containing graph data.
 
         Returns
         -------
-        list[list[int]]
-            The combined and processed output from all lifters.
+        dict[frozenset[int], list[bool]]
+            A dictionary mapping each unique cell (a list of integers representing a cell) to a list
+            of booleans. Each boolean value indicates whether the corresponding lifter (by index)
+            contributed to the creation of that cell. The length of the boolean list for each cell
+            equals the total number of lifters, with True indicating contribution and False
+            indicating no contribution. The keys of the dictionary are ordered according to the
+            sorting order they would have if they were cast to lists and internally sorted.
+
+        Examples
+        --------
+        Assuming `self.lifters` contains two lifters and the graph is such that both lifters
+        contribute to the cell [1, 2], and only the first lifter contributes to the cell [2, 3], the
+        method might return: {
+            [1, 2]: [True, True], [2, 3]: [True, False]
+        }
+
+        Notes
+        -----
+        The keys of the dictionary are reordered according to the sorting order they would have if
+        they were cast to lists and internally sorted. This sorting must happen here as the keys of
+        this dictionary determine the ordering of rows/columns in all of x_dict, mem_dict, adj and
+        inv in get_relevant_dicts(), which is the only caller of this function.
         """
-        combined_output = []
-        for lifter in self.lifters:
+        cell_lifter_map = {}
+        for lifter_idx, lifter in enumerate(self.lifters):
             lifter_output = lifter(graph)
-            combined_output.extend(lifter_output)
+            for cell in lifter_output:
+                if cell not in cell_lifter_map:
+                    cell_lifter_map[cell] = [False] * len(self.lifters)
+                cell_lifter_map[cell][lifter_idx] = True
 
-        return process_lift_output(combined_output)
+        # Reorder the dictionary keys numerically
+        sorted_cells = sorted(sorted(list(cell)) for cell in cell_lifter_map.keys())
+        cell_lifter_map = {
+            frozenset(cell): cell_lifter_map[frozenset(cell)] for cell in sorted_cells
+        }
 
-
-def process_lift_output(lift_output: list[list[int]]) -> list[list[int]]:
-    """
-    Process the output of a *_lift function.
-
-    This function sorts each inner list, removes duplicate inner lists, and then
-    sorts the outer list. It is designed to work with the output of any *_lift
-    function that returns a list of lists of integers.
-
-    Parameters
-    ----------
-    lift_output : list[list[int]]
-        The output from a *_lift function, which is a list of lists of integers.
-
-    Returns
-    -------
-    list[list[int]]
-        The processed list, with each inner list sorted, duplicates removed, and
-        the outer list sorted.
-
-    Examples
-    --------
-    >>> lift_output = [[3, 2], [1], [2, 3], [1, 2], [1]]
-    >>> process_lift_output(lift_output)
-    [[1], [1, 2], [2, 3]]
-    """
-    # Sort each inner list
-    sorted_inner_lists = [sorted(inner_list) for inner_list in lift_output]
-
-    # Remove duplicates by converting the list of lists into a set of tuples
-    unique_inner_lists = set(tuple(inner_list) for inner_list in sorted_inner_lists)
-
-    # Sort the outer list and convert tuples back to lists
-    sorted_outer_list = sorted(list(inner_list) for inner_list in unique_inner_lists)
-
-    return sorted_outer_list
+        return cell_lifter_map
 
 
-def map_to_tensors(input_dict):
-    output_dict = {}
-    for key, value in input_dict.items():
-        if value:
-            tensor = torch.tensor(value, dtype=torch.float32)
+def map_to_tensors(
+    input_dict: dict[int, dict[frozenset[int], list[bool]]], num_lifters: int
+) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor]]:
+    x_dict, mem_dict = {}, {}
+    for rank, cell_lifter_map in input_dict.items():
+        if cell_lifter_map:
+            x = torch.tensor([sorted(cell) for cell in cell_lifter_map.keys()], dtype=torch.float32)
+            mem = torch.tensor(list(cell_lifter_map.values()), dtype=torch.bool)
         else:
             # For empty lists, create tensors with the specified size
-            # The size is (0, key + 1) based on your example
-            tensor = torch.empty((0, key + 1), dtype=torch.float32)
-        output_dict[key] = tensor
-    return output_dict
+            # The size is (0, rank + 1) based on your example
+            x = torch.empty((0, rank + 1), dtype=torch.float32)
+            mem = torch.empty((0, num_lifters), dtype=torch.bool)
+        x_dict[rank] = x
+        mem_dict[rank] = mem
+    return x_dict, mem_dict
 
 
 def sparse_to_dense(sparse_matrix):

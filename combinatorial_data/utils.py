@@ -55,11 +55,12 @@ class CombinatorialComplexTransform(BaseTransform):
     The adjacency types (adj) are saved as properties, e.g. object.adj_1_2 gives the edge index from
     1-complexes to 2-complexes."""
 
-    def __init__(self, lifters: Union[list[callable], callable], dim: int = 2):
+    def __init__(self, lifters: Union[list[callable], callable], ranker: callable, dim: int = 2):
         if isinstance(lifters, list):
             self.lifters = lifters
         else:
             self.lifters = [lifters]
+        self.rank = ranker
         self.dim = dim
 
     def __call__(self, graph: Data) -> CombinatorialComplexData:
@@ -99,9 +100,9 @@ class CombinatorialComplexTransform(BaseTransform):
         # compute ranks for each cell
         cell_dict = {rank: {} for rank in range(self.dim + 1)}
         for cell, memberships in cells.items():
-            # cellrank(cell, memberships)
-            if len(cell) <= self.dim + 1:
-                cell_dict[len(cell) - 1][cell] = memberships
+            cell_rank = self.rank(cell, memberships)
+            if cell_rank <= self.dim:
+                cell_dict[cell_rank][cell] = memberships
 
         # create x_dict
         x_dict, mem_dict = map_to_tensors(cell_dict, len(self.lifters))

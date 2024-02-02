@@ -13,6 +13,7 @@ from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
 from combinatorial_data.lifts import get_lifters
+from combinatorial_data.ranker import get_ranker
 from combinatorial_data.utils import CombinatorialComplexTransform
 
 
@@ -49,7 +50,8 @@ def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataL
 
     # load, subsample and transform the dataset
     lifters = get_lifters(args)
-    transform = CombinatorialComplexTransform(lifters=lifters, dim=args.dim)
+    ranker = get_ranker(args.lifters)
+    transform = CombinatorialComplexTransform(lifters=lifters, ranker=ranker, dim=args.dim)
     dataset = QM9(root=data_root)
     dataset = dataset.shuffle()
     dataset = dataset[: args.num_samples]

@@ -12,6 +12,7 @@ import torch
 from torch_geometric.datasets import QM9
 
 from combinatorial_data.lifts import rips_lift as new_rips_lift
+from combinatorial_data.ranker import get_ranker
 from combinatorial_data.utils import CombinatorialComplexTransform as NewTransform
 from legacy.simplicial_data.rips_lift import rips_lift as old_rips_lift
 
@@ -41,7 +42,8 @@ def test_rips_transform(dim: int, dis: float):
         old_x_dict, old_adj, old_inv = old_rips_lift(graph, dim=dim, dis=dis)
 
         fixed_rips_lift = functools.partial(new_rips_lift, dim=dim, dis=dis)
-        simplicial_transform = NewTransform(fixed_rips_lift, dim)
+        ranker = get_ranker("rips")
+        simplicial_transform = NewTransform(fixed_rips_lift, ranker, dim)
         new_x_dict, _, new_adj, new_inv = simplicial_transform.get_relevant_dicts(graph)
 
         # Check if x_dict are the same

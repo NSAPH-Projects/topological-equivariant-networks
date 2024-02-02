@@ -12,7 +12,7 @@ from torch_geometric.data import Data
 from simplicial_data.ifg import identify_functional_groups
 
 
-def clique_lift(graph_data) -> list[list[int]]:
+def clique_lift(graph_data) -> set[frozenset[int]]:
     """
     Construct a clique complex from a graph represented as a torch_geometric.data.Data object.
 
@@ -24,32 +24,26 @@ def clique_lift(graph_data) -> list[list[int]]:
 
     Returns
     -------
-    list[list[int]]
+    set[frozenset[int]]
         Simplices of the clique complex.
     """
     # Convert torch_geometric.data.Data to networkx graph
     G = pyg_utils.to_networkx(graph_data, to_undirected=True)
 
-    simplices = []
+    simplices = set()
 
     # Find all maximal cliques in the graph
-    maximal_cliques = list(nx.find_cliques(G))
+    maximal_cliques = nx.find_cliques(G)
 
     # Generate all subsets of each maximal clique to include all cliques
     for clique in maximal_cliques:
         for i in range(1, len(clique) + 1):
-            for subset in combinations(clique, i):
-                simplices.append(list(subset))
-
-    # Remove duplicates by converting each simplex to a tuple (for hashing),
-    # making a set (to remove duplicates), and then back to a list
-    simplices = list({tuple(sorted(simplex)) for simplex in simplices})
-    simplices = [list(simplex) for simplex in simplices]
+            simplices.update(frozenset(subset) for subset in combinations(clique, i))
 
     return simplices
 
 
-def functional_group_lift(graph: Data) -> list[list[int]]:
+def functional_group_lift(graph: Data) -> set[frozenset[int]]:
     """
     Identify functional groups within a molecule and returns them as lists of atom indices.
 
@@ -66,8 +60,8 @@ def functional_group_lift(graph: Data) -> list[list[int]]:
 
     Returns
     -------
-    List[List[int]]
-        A list of lists, where each inner list contains the atom indices of a functional group in
+    set[frozenset[int]]
+        A set of frozensets, where each frozenset contains the atom indices of a functional group in
         the molecule.
 
     Raises
@@ -90,19 +84,17 @@ def functional_group_lift(graph: Data) -> list[list[int]]:
     try:
         molecule = Chem.MolFromSmiles(graph.smiles)
         functional_groups = identify_functional_groups(molecule)
-        simplexes = [list(fg.atomIds) for fg in functional_groups]
+        return {frozenset(fg.atomIds) for fg in functional_groups}
     except AttributeError:
-        simplexes = []
-    return simplexes
+        return set()
 
 
-def identity_lift(graph: Data) -> list[list[int]]:
+def identity_lift(graph: Data) -> set[frozenset[int]]:
     """
     Identify nodes and edges in a graph.
 
-    This function returns the nodes and edges of the given graph. Each node
-    is represented as a singleton list containing its index, and each edge is
-    represented as a list of two node indices.
+    This function returns the nodes and edges of the given graph. Each node is represented as a
+    singleton list containing its index, and each edge is represented as a list of two node indices.
 
     Parameters
     ----------
@@ -111,27 +103,26 @@ def identity_lift(graph: Data) -> list[list[int]]:
 
     Returns
     -------
-    List[List[int]]
-        A list of graph elements, where each element is a node (singleton list)
-        or an edge (list of two node indices).
+    set[frozenset[int]]
+        A set of graph elements, where each element is a node (singleton frozenset) or an edge
+        (frozenset of two node indices).
 
     Notes
     -----
-    The function directly works with the PyTorch Geometric Data object. Nodes are
-    inferred from the edge_index attribute, and edges are directly extracted from
-    it.
+    The function directly works with the PyTorch Geometric Data object. Nodes are inferred from the
+    edge_index attribute, and edges are directly extracted from it.
     """
     # Create nodes
-    nodes = [[node] for node in range(graph.x.size(0))]
+    nodes = {frozenset([node]) for node in range(graph.x.size(0))}
 
     # Create edges
-    edges = graph.edge_index.t().tolist()
+    edges = {frozenset(edge) for edge in graph.edge_index.t().tolist()}
 
     # Combine nodes and edges
-    return nodes + edges
+    return nodes.union(edges)
 
 
-def ring_lift(graph: Data) -> list[list[int]]:
+def ring_lift(graph: Data) -> set[frozenset[int]]:
     """
     Identify minimal cycles in a graph.
 
@@ -146,25 +137,25 @@ def ring_lift(graph: Data) -> list[list[int]]:
 
     Returns
     -------
-    List[List[int]]
-        A list of minimal cycles, each cycle is represented as a list of node indices.
+    set[frozenset[int]]
+        A set of minimal cycles, each cycle is represented as a frozenset of node indices.
     """
     # Convert to networkx graph
     G = pyg_utils.to_networkx(graph)
 
     # Compute all cycles (using a set with sorting removes duplicates)
-    cycles = {tuple(sorted(cycle)) for cycle in nx.simple_cycles(G) if len(cycle) >= 3}
+    cycles = {frozenset(cycle) for cycle in nx.simple_cycles(G) if len(cycle) >= 3}
 
     # Filter out cycles that contain simpler cycles within themselves
-    minimal_cycles = []
+    minimal_cycles = set()
     for cycle in cycles:
-        if not any(set(cycle) > set(other_cycle) for other_cycle in cycles if cycle != other_cycle):
-            minimal_cycles.append(list(cycle))
+        if not any(cycle > other_cycle for other_cycle in cycles if cycle != other_cycle):
+            minimal_cycles.add(cycle)
 
     return minimal_cycles
 
 
-def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> list[list[int]]:
+def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[frozenset[int]]:
     """
     Construct a Rips complex from a graph and returns its simplices.
 
@@ -182,9 +173,9 @@ def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> list[
 
     Returns
     -------
-    list[list[int]]
-        A list of lists, where each sublist represents a simplex in the Rips
-        complex. Each simplex is a list of vertex indices.
+    set[frozenset[int]]
+        A set of frozensets, where each frozenset represents a simplex in the Rips
+        complex. Each simplex is a frozenset of vertex indices.
 
     Notes
     -----
@@ -205,10 +196,9 @@ def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> list[
         for edge in combinations(nodes, 2):
             simplex_tree.insert(edge)
 
-    # convert simplicial complex to list of lists
-    simplexes = []
-    for simplex, _ in simplex_tree.get_simplices():
-        simplexes.append(simplex)
+    # convert simplicial complex to set of frozensets
+    simplexes = set()
+    simplexes.update(frozenset(simplex) for simplex, _ in simplex_tree.get_simplices())
 
     return simplexes
 

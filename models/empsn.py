@@ -16,9 +16,17 @@ class EMPSN(nn.Module):
     """
 
     def __init__(
-        self, num_input: int, num_hidden: int, num_out: int, num_layers: int, max_com: str
+        self,
+        num_input: int,
+        num_hidden: int,
+        num_out: int,
+        num_layers: int,
+        max_com: str,
+        initial_features: str,
     ) -> None:
         super().__init__()
+
+        self.initial_features = initial_features
 
         # compute adjacencies
         adjacencies = []
@@ -59,16 +67,7 @@ class EMPSN(nn.Module):
         device = graph.pos.device
         x_ind = {str(i): getattr(graph, f"x_{i}").long() for i in range(self.max_dim + 1)}
 
-        # compute initial features
-        x = {
-            str(i): torch.sum(
-                torch.stack([graph.x[x_ind[str(i)][:, k]] for k in range(i + 1)], dim=2), 2
-            )
-            / (i + 1)
-            for i in range(self.max_dim + 1)
-        }
-
-        x_batch = {str(i): getattr(graph, f"x_{i}_batch") for i in range(self.max_dim + 1)}
+        mem = {i: getattr(graph, f"mem_{i}") for i in range(self.max_dim + 1)}
 
         adj = {
             adj_type: getattr(graph, f"adj_{adj_type}")
@@ -81,6 +80,30 @@ class EMPSN(nn.Module):
             for adj_type in self.adjacencies
             if hasattr(graph, f"inv_{adj_type}")
         }
+
+        # compute initial features
+        node_features = {
+            str(i): torch.sum(
+                torch.stack([graph.x[x_ind[str(i)][:, k]] for k in range(i + 1)], dim=2), 2
+            )
+            / (i + 1)
+            for i in range(self.max_dim + 1)
+        }
+
+        mem_features = {str(i): mem[i].float() for i in range(self.max_dim + 1)}
+
+        if self.initial_features == "node":
+            x = node_features
+        elif self.initial_features == "mem":
+            x = mem_features
+        elif self.initial_features == "both":
+            # concatenate
+            x = {
+                str(i): torch.cat([node_features[str(i)], mem_features[str(i)]], dim=1)
+                for i in range(self.max_dim + 1)
+            }
+
+        x_batch = {str(i): getattr(graph, f"x_{i}_batch") for i in range(self.max_dim + 1)}
 
         # embed features and E(n) invariant information
         x = {dim: self.feature_embedding(feature) for dim, feature in x.items()}

@@ -42,7 +42,7 @@ def test_rips_transform(dim: int, dis: float):
 
         fixed_rips_lift = functools.partial(new_rips_lift, dim=dim, dis=dis)
         simplicial_transform = NewTransform(fixed_rips_lift, dim)
-        new_x_dict, new_adj, new_inv = simplicial_transform.get_relevant_dicts(graph)
+        new_x_dict, _, new_adj, new_inv = simplicial_transform.get_relevant_dicts(graph)
 
         # Check if x_dict are the same
         for i in range(dim + 1):

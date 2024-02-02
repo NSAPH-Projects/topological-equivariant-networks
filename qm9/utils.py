@@ -12,8 +12,8 @@ from torch_geometric.datasets import QM9
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
-from simplicial_data.lifts import get_lifters
-from simplicial_data.utils import CombinatorialComplexTransform
+from combinatorial_data.lifts import get_lifters
+from combinatorial_data.utils import CombinatorialComplexTransform
 
 
 def calc_mean_mad(loader: DataLoader) -> Tuple[Tensor, Tensor]:

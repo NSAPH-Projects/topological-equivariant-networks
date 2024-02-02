@@ -258,7 +258,7 @@ if __name__ == "__main__":
 
     from torch_geometric.datasets import QM9
 
-    from simplicial_data.lifts import rips_lift
+    from combinatorial_data.lifts import rips_lift
 
     data = QM9("../datasets/QM9")
     dim = 2

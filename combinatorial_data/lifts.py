@@ -9,7 +9,7 @@ import torch_geometric.utils as pyg_utils
 from rdkit import Chem
 from torch_geometric.data import Data
 
-from simplicial_data.ifg import identify_functional_groups
+from combinatorial_data.ifg import identify_functional_groups
 
 
 def clique_lift(graph_data) -> set[frozenset[int]]:
@@ -233,6 +233,7 @@ def get_lifters(args) -> list[callable]:
     """
     lifters = []
     for lifter in args.lifters:
+        lifter = lifter.split(":")[0]
         if lifter == "rips":
             lifters.append(partial(rips_lift, dim=args.dim, dis=args.dis))
         else:

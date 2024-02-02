@@ -7,9 +7,9 @@ from torch_geometric.data import Data
 from torch_geometric.transforms import BaseTransform
 
 
-class SimplicialComplexData(Data):
+class CombinatorialComplexData(Data):
     """
-    Abstract simplicial complex class that generalises the pytorch geometric graph (Data).
+    Abstract combinatorial complex class that generalises the pytorch geometric graph (Data).
     Adjacency tensors are stacked in the same fashion as the standard edge_index.
     """
 
@@ -50,10 +50,10 @@ class SimplicialComplexData(Data):
             return 0
 
 
-class SimplicialTransform(BaseTransform):
+class CombinatorialComplexTransform(BaseTransform):
     """Todo: add
     The adjacency types (adj) are saved as properties, e.g. object.adj_1_2 gives the edge index from
-    1-simplices to 2-simplices."""
+    1-complexes to 2-complexes."""
 
     def __init__(self, lifters: Union[list[callable], callable], dim: int = 2):
         if isinstance(lifters, list):
@@ -62,7 +62,7 @@ class SimplicialTransform(BaseTransform):
             self.lifters = [lifters]
         self.dim = dim
 
-    def __call__(self, graph: Data) -> SimplicialComplexData:
+    def __call__(self, graph: Data) -> CombinatorialComplexData:
         if not torch.is_tensor(graph.x):
             graph.x = torch.nn.functional.one_hot(graph.z, torch.max(graph.z) + 1)
 
@@ -71,53 +71,54 @@ class SimplicialTransform(BaseTransform):
         # get relevant dictionaries using the Rips complex based on the geometric graph/point cloud
         x_dict, mem_dict, adj_dict, inv_dict = self.get_relevant_dicts(graph)
 
-        sim_com_data = SimplicialComplexData()
-        sim_com_data = sim_com_data.from_dict(graph.to_dict())
+        com_com_data = CombinatorialComplexData()
+        com_com_data = com_com_data.from_dict(graph.to_dict())
 
         for k, v in x_dict.items():
-            sim_com_data[f"x_{k}"] = v
+            com_com_data[f"x_{k}"] = v
 
         for k, v in mem_dict.items():
-            sim_com_data[f"mem_{k}"] = v
+            com_com_data[f"mem_{k}"] = v
 
         for k, v in adj_dict.items():
-            sim_com_data[f"adj_{k}"] = v
+            com_com_data[f"adj_{k}"] = v
 
         for k, v in inv_dict.items():
-            sim_com_data[f"inv_{k}"] = v
+            com_com_data[f"inv_{k}"] = v
 
         for att in ["edge_attr", "edge_index"]:
-            if hasattr(sim_com_data, att):
-                sim_com_data.pop(att)
+            if hasattr(com_com_data, att):
+                com_com_data.pop(att)
 
-        return sim_com_data
+        return com_com_data
 
     def get_relevant_dicts(self, graph):
-        # compute simplexes
-        simplexes = self.lift(graph)
+        # compute cells
+        cells = self.lift(graph)
 
-        # compute ranks for each simplex
-        simplex_dict = {rank: {} for rank in range(self.dim + 1)}
-        for simplex, memberships in simplexes.items():
-            if len(simplex) <= self.dim + 1:
-                simplex_dict[len(simplex) - 1][simplex] = memberships
+        # compute ranks for each cell
+        cell_dict = {rank: {} for rank in range(self.dim + 1)}
+        for cell, memberships in cells.items():
+            # cellrank(cell, memberships)
+            if len(cell) <= self.dim + 1:
+                cell_dict[len(cell) - 1][cell] = memberships
 
         # create x_dict
-        x_dict, mem_dict = map_to_tensors(simplex_dict, len(self.lifters))
+        x_dict, mem_dict = map_to_tensors(cell_dict, len(self.lifters))
 
         # create the combinatorial complex
         # first add higher-order cells
         cc = CombinatorialComplex()
-        for rank, simplexes in simplex_dict.items():
+        for rank, cells in cell_dict.items():
             if rank > 0:
-                cc.add_cells_from(simplexes, ranks=rank)
+                cc.add_cells_from(cells, ranks=rank)
 
         # then remove the artificially created 0-rank cells
         zero_rank_cells = [cell for cell in cc.cells if len(cell) == 1]
         cc.remove_cells(zero_rank_cells)
 
         # finally add the organic 0-rank cells
-        cc.add_cells_from(simplex_dict[0], ranks=0)
+        cc.add_cells_from(cell_dict[0], ranks=0)
 
         # compute adjancencies and incidences
         adj, idx_to_cell = dict(), dict()
@@ -148,11 +149,11 @@ class SimplicialTransform(BaseTransform):
                 neighbors = adj[f"{i}_{j}"]
                 for connection in neighbors.t():
                     idx_a, idx_b = connection[0], connection[1]
-                    simplex_a = idx_to_cell[i][idx_a.item()]
-                    simplex_b = idx_to_cell[j][idx_b.item()]
-                    shared = [node for node in simplex_a if node in simplex_b]
-                    only_in_a = [node for node in simplex_a if node not in shared]
-                    only_in_b = [node for node in simplex_b if node not in shared]
+                    cell_a = idx_to_cell[i][idx_a.item()]
+                    cell_b = idx_to_cell[j][idx_b.item()]
+                    shared = [node for node in cell_a if node in cell_b]
+                    only_in_a = [node for node in cell_a if node not in shared]
+                    only_in_b = [node for node in cell_b if node not in shared]
                     inv_nodes = shared + only_in_b + only_in_a
                     inv[f"{i}_{j}"].append(torch.tensor(inv_nodes))
 
@@ -261,18 +262,24 @@ if __name__ == "__main__":
 
     data = QM9("../datasets/QM9")
     dim = 2
-    transform_2 = SimplicialTransform(functools.partial(rips_lift, dim=dim, dis=2.0), dim=dim)
-    transform_3 = SimplicialTransform(functools.partial(rips_lift, dim=dim, dis=3.0), dim=dim)
-    transform_4 = SimplicialTransform(functools.partial(rips_lift, dim=dim, dis=4.0), dim=dim)
+    transform_2 = CombinatorialComplexTransform(
+        functools.partial(rips_lift, dim=dim, dis=2.0), dim=dim
+    )
+    transform_3 = CombinatorialComplexTransform(
+        functools.partial(rips_lift, dim=dim, dis=3.0), dim=dim
+    )
+    transform_4 = CombinatorialComplexTransform(
+        functools.partial(rips_lift, dim=dim, dis=4.0), dim=dim
+    )
 
     random_graph = random.randint(0, len(data) - 1)
 
-    # transform data[0] to simplicial complex
-    sim_2 = transform_2(data[random_graph])
-    sim_3 = transform_3(data[random_graph])
-    sim_4 = transform_4(data[random_graph])
+    # transform data[0] to combinatorial complex
+    com_2 = transform_2(data[random_graph])
+    com_3 = transform_3(data[random_graph])
+    com_4 = transform_4(data[random_graph])
 
     print(f"Original Graph: {data[random_graph]}")
-    print(f"Simplicial Complex (delta = 2.0): {sim_2}")
-    print(f"Simplicial Complex (delta = 3.0): {sim_3}")
-    print(f"Simplicial Complex (delta = 4.0): {sim_4}")
+    print(f"Combinatorial Complex (delta = 2.0): {com_2}")
+    print(f"Combinatorial Complex (delta = 3.0): {com_3}")
+    print(f"Combinatorial Complex (delta = 4.0): {com_4}")

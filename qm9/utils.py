@@ -107,27 +107,15 @@ def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataL
 
     # dataloaders
     follow = [f"x_{i}" for i in range(args.dim + 1)] + ["x"]
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        shuffle=True,
-        follow_batch=follow,
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        shuffle=False,
-        follow_batch=follow,
-    )
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        shuffle=False,
-        follow_batch=follow,
-    )
+    dataloader_kwargs = {
+        "batch_size": args.batch_size,
+        "num_workers": args.num_workers,
+        "shuffle": True,
+        "follow_batch": follow,
+    }
+    train_loader = DataLoader(train_dataset, **dataloader_kwargs)
+    val_loader = DataLoader(val_dataset, **dataloader_kwargs)
+    test_loader = DataLoader(test_dataset, **dataloader_kwargs)
 
     return train_loader, val_loader, test_loader
 

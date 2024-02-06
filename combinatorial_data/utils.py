@@ -156,15 +156,13 @@ class CombinatorialComplexTransform(BaseTransform):
                     only_in_a = [node for node in cell_a if node not in shared]
                     only_in_b = [node for node in cell_b if node not in shared]
                     inv_nodes = shared + only_in_b + only_in_a
-                    inv[f"{i}_{j}"].append(torch.tensor(inv_nodes))
+                    inv[f"{i}_{j}"].append(inv_nodes)
 
         for k, v in inv.items():
             if len(v) == 0:
-                i, j = k.split("_")
-                num_nodes = min(int(i), int(j)) + 2
-                inv[k] = torch.zeros(num_nodes, 0).long()
+                inv[k] = torch.zeros(0, 0).long()
             else:
-                inv[k] = torch.stack(v, dim=1)
+                inv[k] = torch.tensor(pad_lists_to_same_length(v, -1)).t()
 
         return x_dict, mem_dict, adj, inv
 
@@ -230,7 +228,9 @@ def map_to_tensors(
     x_dict, mem_dict = {}, {}
     for rank, cell_lifter_map in input_dict.items():
         if cell_lifter_map:
-            x = torch.tensor([sorted(cell) for cell in cell_lifter_map.keys()], dtype=torch.float32)
+            sorted_cells = [sorted(cell) for cell in cell_lifter_map.keys()]
+            padded_cells = pad_lists_to_same_length(sorted_cells, -1)
+            x = torch.tensor(padded_cells, dtype=torch.float32)
             mem = torch.tensor(list(cell_lifter_map.values()), dtype=torch.bool)
         else:
             # For empty lists, create tensors with the specified size
@@ -240,6 +240,35 @@ def map_to_tensors(
         x_dict[rank] = x
         mem_dict[rank] = mem
     return x_dict, mem_dict
+
+
+def pad_lists_to_same_length(
+    list_of_lists: list[list[int]], pad_value: int = -1
+) -> list[list[int]]:
+    """
+    Pad a list of lists of integers to the same length with a specified value.
+
+    Parameters
+    ----------
+    list_of_lists : list[list[int]]
+        List of lists of integers to be padded.
+    pad_value : int, optional
+        Value to use for padding, default is -1.
+
+    Returns
+    -------
+    list[list[int]]
+        List of lists of integers padded to the same length.
+    """
+    # Find the maximum length among all lists
+    max_length = max(len(inner_list) for inner_list in list_of_lists)
+
+    # Pad each list to match the maximum length
+    padded_list = [
+        inner_list + [pad_value] * (max_length - len(inner_list)) for inner_list in list_of_lists
+    ]
+
+    return padded_list
 
 
 def sparse_to_dense(sparse_matrix):

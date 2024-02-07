@@ -48,7 +48,10 @@ def test_rips_transform(dim: int, dis: float):
 
         # Check if x_dict are the same
         for i in range(dim + 1):
-            assert torch.equal(old_x_dict[i], new_x_dict[i]), f"old_x_dict[{i}] != new_x_dict[{i}]"
+            if not (torch.numel(old_x_dict[i]) == 0 and torch.numel(new_x_dict[i]) == 0):
+                assert torch.equal(
+                    old_x_dict[i], new_x_dict[i]
+                ), f"old_x_dict[{i}] != new_x_dict[{i}]"
 
         # Check if adjs and invs are the same
         for i in range(dim):

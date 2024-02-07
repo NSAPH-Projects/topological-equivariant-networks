@@ -240,9 +240,8 @@ def map_to_tensors(
             x = torch.tensor(padded_cells, dtype=torch.float32)
             mem = torch.tensor(list(cell_lifter_map.values()), dtype=torch.bool)
         else:
-            # For empty lists, create tensors with the specified size
-            # The size is (0, rank + 1) based on your example
-            x = torch.empty((0, rank + 1), dtype=torch.float32)
+            # For empty lists, create empty tensors
+            x = torch.empty((0, 0), dtype=torch.float32)
             mem = torch.empty((0, num_lifters), dtype=torch.bool)
         x_dict[rank] = x
         mem_dict[rank] = mem

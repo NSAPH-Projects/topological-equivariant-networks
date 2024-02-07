@@ -46,22 +46,27 @@ def get_ranker(lifter_args: list[str]) -> callable:
         """
         Determine the rank of a cell based on its memberships and predefined logics.
 
-        If a cell is a member of multiple lifters, then its final rank will be the
-        minimum among the ranks assigned to it by each lifter.
+        If a cell is a member of multiple lifters, then its final rank will be the minimum among the
+        ranks assigned to it by each lifter.
 
         Parameters
         ----------
         cell : frozenset[int]
             The cell to be ranked, assumed to be a collection or group of items.
         memberships : list[bool]
-            A list indicating membership of the cell in various groups, corresponding
-            to the `lifter_args` with which the ranker was created.
+            A list indicating membership of the cell in various groups, corresponding to the
+            `lifter_args` with which the ranker was created.
 
         Returns
         -------
         int
-            The rank of the cell, determined as the minimum rank among the groups
-            to which the cell belongs, with 'c' indicating rank based on cardinality.
+            The rank of the cell, determined as the minimum rank among the groups to which the cell
+            belongs, with 'c' indicating rank based on cardinality.
+
+        Notes
+        -----
+        The minimum is returned to avoid a situation where a singleton cell gets a nonzero rank,
+        which is not allowed in TopoNetX.
         """
         ranks = []
         for idx, is_member in enumerate(memberships):

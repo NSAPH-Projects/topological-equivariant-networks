@@ -57,7 +57,7 @@ def test_rips_transform(dim: int, dis: float):
         for i in range(dim):
             for j in [i, i + 1]:
                 sorted_old_adj, idc = sort_tensor_columns_and_get_indices(old_adj[f"{i}_{j}"])
-                if not (torch.numel(sorted_old_adj) == 0 and torch.numel(new_adj[f"{i}_{j}"])) == 0:
+                if not (torch.numel(sorted_old_adj) == 0 and torch.numel(new_adj[f"{i}_{j}"]) == 0):
                     assert torch.equal(
                         sorted_old_adj, new_adj[f"{i}_{j}"]
                     ), f"sorted(old_adj[{i}_{j}]) != new_adj[{i}_{j}]"

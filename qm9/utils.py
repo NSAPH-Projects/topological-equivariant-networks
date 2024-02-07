@@ -1,9 +1,6 @@
-import functools
 import hashlib
 import json
-import random
 from argparse import Namespace
-from typing import Dict, Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -17,7 +14,7 @@ from combinatorial_data.ranker import get_ranker
 from combinatorial_data.utils import CombinatorialComplexTransform, CustomCollater
 
 
-def calc_mean_mad(loader: DataLoader) -> Tuple[Tensor, Tensor]:
+def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
     """Return mean and mean average deviation of target in loader."""
     values = [graph.y for graph in loader.dataset]
     mean = sum(values) / len(values)
@@ -25,7 +22,7 @@ def calc_mean_mad(loader: DataLoader) -> Tuple[Tensor, Tensor]:
     return mean, mad
 
 
-def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str, float]) -> Data:
+def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: dict[str, float]) -> Data:
     graph.y = graph.y[0, index]
     one_hot = graph.x[:, :5]  # only get one_hot for cormorant
     # change unit of targets
@@ -41,7 +38,7 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str,
     return graph
 
 
-def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
     # define data_root
     data_root = "./datasets/QM9_"
     data_root += generate_dataset_dir_name(

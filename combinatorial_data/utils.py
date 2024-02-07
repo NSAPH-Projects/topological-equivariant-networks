@@ -146,7 +146,7 @@ class CombinatorialComplexTransform(BaseTransform):
 
                 adj[f"{i}_{j}"] = matrix
 
-        # for each adjacency/incidence, store the nodes to be used for computing invariant geometric features
+        # for each adjacency/incidence, store the nodes to be used for computing geometric features
         inv = dict()
         for i in range(self.dim):
             inv[f"{i}_{i}"] = []

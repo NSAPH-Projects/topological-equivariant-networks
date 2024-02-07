@@ -7,14 +7,14 @@ from typing import Dict, Optional, Tuple
 
 import torch
 from torch import Tensor
+from torch.utils.data import DataLoader
 from torch_geometric.data import Data
 from torch_geometric.datasets import QM9
-from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
 from combinatorial_data.lifts import get_lifters
 from combinatorial_data.ranker import get_ranker
-from combinatorial_data.utils import CombinatorialComplexTransform
+from combinatorial_data.utils import CombinatorialComplexTransform, CustomCollater
 
 
 def calc_mean_mad(loader: DataLoader) -> Tuple[Tensor, Tensor]:
@@ -106,16 +106,27 @@ def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataL
     val_dataset = dataset[n_test:]
 
     # dataloaders
-    follow = [f"x_{i}" for i in range(args.dim + 1)] + ["x"]
+    follow_batch = [f"x_{i}" for i in range(args.dim + 1)] + ["x"]
     dataloader_kwargs = {
         "batch_size": args.batch_size,
         "num_workers": args.num_workers,
         "shuffle": True,
-        "follow_batch": follow,
     }
-    train_loader = DataLoader(train_dataset, **dataloader_kwargs)
-    val_loader = DataLoader(val_dataset, **dataloader_kwargs)
-    test_loader = DataLoader(test_dataset, **dataloader_kwargs)
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        collate_fn=CustomCollater(train_dataset, follow_batch=follow_batch),
+        **dataloader_kwargs,
+    )
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset,
+        collate_fn=CustomCollater(val_dataset, follow_batch=follow_batch),
+        **dataloader_kwargs,
+    )
+    test_loader = torch.utils.data.DataLoader(
+        test_dataset,
+        collate_fn=CustomCollater(test_dataset, follow_batch=follow_batch),
+        **dataloader_kwargs,
+    )
 
     return train_loader, val_loader, test_loader
 

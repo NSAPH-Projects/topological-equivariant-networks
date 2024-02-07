@@ -4,7 +4,14 @@ import numpy as np
 import torch
 from toponetx.classes import CombinatorialComplex
 from torch_geometric.data import Data
+from torch_geometric.loader.dataloader import Collater
 from torch_geometric.transforms import BaseTransform
+
+
+class CustomCollater(Collater):
+    def __call__(self, batch: list[any]) -> any:
+        collated_batch = super().__call__(batch)
+        return collated_batch
 
 
 class CombinatorialComplexData(Data):

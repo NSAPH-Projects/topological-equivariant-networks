@@ -93,7 +93,7 @@ def compute_invariants_3d(feat_ind, pos, adj, inv_ind, device):
         / 2
     ).unsqueeze(1)
 
-    area = {k: v.to(feat_ind["0"].device) for k, v in area.items()}
+    area = {k: v.to(device) for k, v in area.items()}
 
     inv = {
         "0_0": torch.linalg.norm(pos[adj["0_0"][0]] - pos[adj["0_0"][1]], dim=1).unsqueeze(1),
@@ -124,7 +124,7 @@ def compute_invariants_3d(feat_ind, pos, adj, inv_ind, device):
         area_send, area_rec = area_send[send], area_rec[rec]
         inv[k] = torch.cat((v, area_send, area_rec), dim=1)
 
-    inv["1_1"] = torch.cat((inv["1_1"], angle["1_1"].to(feat_ind["0"].device)), dim=1)
-    inv["1_2"] = torch.cat((inv["1_2"], angle["1_2"].to(feat_ind["0"].device)), dim=1)
+    inv["1_1"] = torch.cat((inv["1_1"], angle["1_1"].to(device)), dim=1)
+    inv["1_2"] = torch.cat((inv["1_2"], angle["1_2"].to(device)), dim=1)
 
     return inv

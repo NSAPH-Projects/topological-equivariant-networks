@@ -1,17 +1,82 @@
+import re
 from typing import Union
 
 import numpy as np
 import torch
 from toponetx.classes import CombinatorialComplex
-from torch_geometric.data import Data
+from torch_geometric.data import Batch, Data
 from torch_geometric.loader.dataloader import Collater
 from torch_geometric.transforms import BaseTransform
 
 
 class CustomCollater(Collater):
-    def __call__(self, batch: list[any]) -> any:
+
+    def __call__(self, batch: list[Data]) -> Batch:
+        """
+        Perform custom collation by pre-collating to pad tensors, using the superclass collation
+        logic, and then post-collating to append zeros.
+
+        Parameters
+        ----------
+        batch : list[Data]
+            A list of Data objects to be collated.
+
+        Returns
+        -------
+        Batch
+            The collated list of Data objects, after pre-collation and post-collation adjustments.
+        """
+        # Apply pre-collate logic
+        batch = self.precollate(batch)
+
+        # Use the original collation logic
         collated_batch = super().__call__(batch)
+
         return collated_batch
+
+    def precollate(self, batch: list[Data]) -> list[Data]:
+        """
+        Pre-collate logic to pad tensors within each sample based on naming patterns.
+
+        In particular, tensors that are named f'x_{i}' for some integer i are padded to have the
+        same number of columns, and tensors that are named f'inv_{i}_{j}' for some integers i, j are
+        padded to have the same number of rows. The variable number of columns/rows can arise if
+        cells with the same rank may consist of a variable number of nodes. The padding value is -1
+        which results in lookups to the last row of the feature matrix, which is overridden in
+        postcollate() to be all zeros.
+
+        Parameters
+        ----------
+        batch : list[Data]
+            A list of Data objects to be pre-collated.
+
+        Returns
+        -------
+        list[Data]
+            The batch with tensors padded according to their naming patterns.
+        """
+        max_cols = {}
+        max_rows = {}
+
+        for data in batch:
+            for attr_name in data.keys():
+                if re.match(r"x_\d+", attr_name):
+                    tensor = getattr(data, attr_name)
+                    max_cols[attr_name] = max(max_cols.get(attr_name, 0), tensor.size(1))
+                elif re.match(r"inv_\d+_\d+", attr_name):
+                    tensor = getattr(data, attr_name)
+                    max_rows[attr_name] = max(max_rows.get(attr_name, 0), tensor.size(0))
+
+        for data in batch:
+            for attr_name in data.keys():
+                if attr_name in max_cols:
+                    tensor = getattr(data, attr_name)
+                    setattr(data, attr_name, pad_tensor(tensor, max_cols[attr_name], 1))
+                elif attr_name in max_rows:
+                    tensor = getattr(data, attr_name)
+                    setattr(data, attr_name, pad_tensor(tensor, max_rows[attr_name], 0))
+
+        return batch
 
 
 class CombinatorialComplexData(Data):
@@ -27,26 +92,8 @@ class CombinatorialComplexData(Data):
             return torch.tensor(
                 [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
             )
-        elif key == "inv_0_0":
-            return torch.tensor([[num_nodes], [num_nodes]])
-        elif key == "inv_0_1":
-            return torch.tensor([[num_nodes], [num_nodes]])
-        elif key == "inv_1_1":
-            return torch.tensor(
-                [
-                    [num_nodes],
-                    [num_nodes],
-                    [num_nodes],
-                ]
-            )
-        elif key == "inv_1_2":
-            return torch.tensor(
-                [
-                    [num_nodes],
-                    [num_nodes],
-                    [num_nodes],
-                ]
-            )
+        elif "inv" in key:
+            return num_nodes
         else:
             return super().__inc__(key, value, *args, **kwargs)
 
@@ -167,9 +214,9 @@ class CombinatorialComplexTransform(BaseTransform):
 
         for k, v in inv.items():
             if len(v) == 0:
-                inv[k] = torch.zeros(0, 0).long()
+                inv[k] = torch.zeros(0, 0, dtype=torch.float32)
             else:
-                inv[k] = torch.tensor(pad_lists_to_same_length(v, -1)).t()
+                inv[k] = torch.tensor(pad_lists_to_same_length(v), dtype=torch.float32).t()
 
         return x_dict, mem_dict, adj, inv
 
@@ -236,7 +283,7 @@ def map_to_tensors(
     for rank, cell_lifter_map in input_dict.items():
         if cell_lifter_map:
             sorted_cells = [sorted(cell) for cell in cell_lifter_map.keys()]
-            padded_cells = pad_lists_to_same_length(sorted_cells, -1)
+            padded_cells = pad_lists_to_same_length(sorted_cells)
             x = torch.tensor(padded_cells, dtype=torch.float32)
             mem = torch.tensor(list(cell_lifter_map.values()), dtype=torch.bool)
         else:
@@ -249,7 +296,7 @@ def map_to_tensors(
 
 
 def pad_lists_to_same_length(
-    list_of_lists: list[list[int]], pad_value: int = -1
+    list_of_lists: list[list[int]], pad_value: float = torch.nan
 ) -> list[list[int]]:
     """
     Pad a list of lists of integers to the same length with a specified value.
@@ -258,8 +305,8 @@ def pad_lists_to_same_length(
     ----------
     list_of_lists : list[list[int]]
         List of lists of integers to be padded.
-    pad_value : int, optional
-        Value to use for padding, default is -1.
+    pad_value : float, optional
+        Value to use for padding, default is torch.nan.
 
     Returns
     -------
@@ -275,6 +322,54 @@ def pad_lists_to_same_length(
     ]
 
     return padded_list
+
+
+def pad_tensor(
+    tensor: torch.Tensor, max_size: int, dim: int, pad_value: float = torch.nan
+) -> torch.Tensor:
+    """
+    Pad a 2D tensor to the specified size along a given dimension with a pad value.
+
+    Empty tensors are handled as a special case.
+
+    Parameters
+    ----------
+    tensor : torch.Tensor
+        The tensor to be padded.
+    max_size : int
+        The maximum size to pad the tensor to.
+    dim : int
+        The dimension along which to pad.
+    pad_value : float, optional
+        The value to use for padding, by default torch.nan.
+
+    Returns
+    -------
+    torch.Tensor
+        The padded tensor.
+
+    Raises
+    ------
+    ValueError
+        If the input tensor is not 2D.
+    """
+
+    # Assert that the input tensor is 2D
+    if tensor.dim() != 2:
+        raise ValueError("Input tensor must be 2D.")
+
+    # Check if the tensor is empty
+    if torch.numel(tensor) == 0:
+        # Return an empty tensor of shape (max_size, 0) or (0, max_size)
+        # depending on the padding dimension
+        if dim == 0:
+            return torch.empty((max_size, 0), dtype=tensor.dtype)
+        else:  # dim == 1
+            return torch.empty((0, max_size), dtype=tensor.dtype)
+
+    pad_sizes = [0] * (2 * len(tensor.size()))  # Pad size must be even, for each dim.
+    pad_sizes[(1 - dim) * 2 + 1] = max_size - tensor.size(dim)  # Only pad at the end
+    return torch.nn.functional.pad(tensor, pad=pad_sizes, value=pad_value)
 
 
 def sparse_to_dense(sparse_matrix):

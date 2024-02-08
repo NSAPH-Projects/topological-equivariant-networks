@@ -90,7 +90,9 @@ class EMPSN(nn.Module):
             num_cells = x_ind[str(i)].shape[0]
             for k in range(max_cardinality):
                 # Initialize a zeros tensor
-                node_fts = torch.zeros((num_cells, graph.x.shape[1]), dtype=graph.x.dtype)
+                node_fts = torch.zeros(
+                    (num_cells, graph.x.shape[1]), dtype=graph.x.dtype, device=device
+                )
 
                 # Compute the valid node indices and _their_ indices
                 node_idc = x_ind[str(i)][:, k]

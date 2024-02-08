@@ -13,8 +13,8 @@ class CustomCollater(Collater):
 
     def __call__(self, batch: list[Data]) -> Batch:
         """
-        Perform custom collation by pre-collating to pad tensors, using the superclass collation
-        logic, and then post-collating to append zeros.
+        Perform custom collation by pre-collating to pad tensors and using the superclass collation
+        logic.
 
         Parameters
         ----------
@@ -24,7 +24,7 @@ class CustomCollater(Collater):
         Returns
         -------
         Batch
-            The collated list of Data objects, after pre-collation and post-collation adjustments.
+            The collated list of Data objects, after pre-collation.
         """
         # Apply pre-collate logic
         batch = self.precollate(batch)

@@ -20,6 +20,7 @@ class TEN(nn.Module):
         num_out: int,
         num_layers: int,
         max_dim: int,
+        adjacencies: list[str],
         initial_features: str,
         compute_invariants: callable = compute_invariants,
     ) -> None:
@@ -28,15 +29,7 @@ class TEN(nn.Module):
         self.initial_features = initial_features
         self.compute_invariants = compute_invariants
         self.num_inv_fts_map = self.compute_invariants.num_features_map
-        # compute adjacencies
-        adjacencies = []
         self.max_dim = max_dim
-
-        for i in range(self.max_dim + 1):
-            adjacencies.append(f"{i}_{i}")
-            if i < self.max_dim:
-                adjacencies.append(f"{i}_{i+1}")
-
         self.adjacencies = adjacencies
 
         # layers
@@ -44,7 +37,7 @@ class TEN(nn.Module):
 
         self.layers = nn.ModuleList(
             [
-                EMPSNLayer(adjacencies, self.max_dim, num_hidden, self.num_inv_fts_map)
+                EMPSNLayer(self.adjacencies, self.max_dim, num_hidden, self.num_inv_fts_map)
                 for _ in range(num_layers)
             ]
         )

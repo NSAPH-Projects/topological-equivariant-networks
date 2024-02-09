@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import torch
 import torch.nn as nn
 from torch_scatter import scatter_add
@@ -135,3 +137,121 @@ def compute_invariants_3d(feat_ind, pos, adj, inv_ind, device):
     inv["1_2"] = torch.cat((inv["1_2"], angle["1_2"].to(device)), dim=1)
 
     return inv
+
+
+compute_invariants_3d.num_features_map = {
+    "0_0": 3,
+    "0_1": 3,
+    "1_1": 6,
+    "1_2": 6,
+}
+
+
+def compute_invariants(
+    feat_ind: dict[str, torch.FloatTensor],
+    pos: torch.FloatTensor,
+    adj: dict[str, torch.LongTensor],
+    inv_ind: dict[str, torch.FloatTensor],
+    device: torch.device,
+):
+    """
+    Compute geometric invariants between pairs of cells specified in `adj`.
+
+    This function calculates the Euclidean distance between the centroids of cell pairs. The
+    centroids are computed only once per rank and memoized to improve efficiency. The distances
+    serve as geometric invariants that characterize the spatial relationships between cells of
+    different ranks.
+
+    Parameters
+    ----------
+    feat_ind : dict
+        A dictionary mapping cell ranks to tensors of shape (num_cells, max_cardinality) containing
+        indices of nodes for each cell. It is used to identify the cells for which centroids should
+        be computed.
+    pos : torch.FloatTensor
+        A 2D tensor of shape (num_nodes, num_dimensions) containing the positions of each node.
+    adj : dict
+        A dictionary where each key is a string in the format 'sender_rank_receiver_rank' indicating
+        the ranks of cell pairs, and each value is a tensor of shape (2, num_cell_pairs) containing
+        indices for sender and receiver cells.
+    inv_ind : Any
+        Currently unused. Placeholder for future use.
+    device : Any
+        Currently unused. Placeholder for potential device specification in future updates.
+
+    Returns
+    -------
+    dict
+        A dictionary where each key corresponds to a key in `adj` and each value is a tensor of
+        Euclidean distances between the centroids of the sender-receiver cell pairs specified by the
+        corresponding value in `adj`.
+
+    Notes
+    -----
+    The `inv_ind` and `device` parameters are included for compatibility with a previous function
+    interface and might be used in future versions of this function as it evolves. The computation
+    of cell centroids is memoized based on cell rank to avoid redundant calculations, enhancing
+    performance especially for large datasets with many cells. The current implementation focuses on
+    Euclidean distances but may be extended to include other types of geometric invariants.
+    """
+    new_features = {}
+    mean_cell_positions = {}
+    for rank_pair, cell_pairs in adj.items():
+        # Compute mean cell positions memoized
+        sender_rank, receiver_rank = rank_pair.split("_")
+        for rank in [sender_rank, receiver_rank]:
+            if rank not in mean_cell_positions:
+                mean_cell_positions[rank] = compute_centroids(feat_ind[rank], pos)
+        # Compute mean distances
+        indexed_sender_centroids = mean_cell_positions[sender_rank][cell_pairs[0]]
+        indexed_receiver_centroids = mean_cell_positions[receiver_rank][cell_pairs[1]]
+        differences = indexed_sender_centroids - indexed_receiver_centroids
+        distances = torch.sqrt((differences**2)).sum(dim=1, keepdim=True)
+
+        new_features[rank_pair] = distances
+
+    return new_features
+
+
+compute_invariants.num_features_map = defaultdict(lambda: 1)
+
+
+def compute_centroids(cells: torch.FloatTensor, features: torch.FloatTensor) -> torch.FloatTensor:
+    """
+    Compute the centroids of cells based on their constituent nodes' features.
+
+    This function calculates the mean feature vector (centroid) for each cell defined by `cells`,
+    using the provided `features` for each node. It handles cells with varying numbers of nodes,
+    including those with missing values (NaNs), by treating them as absent nodes.
+
+    Parameters
+    ----------
+    cells : torch.FloatTensor
+        A 2D tensor of shape (num_cells, max_cell_size) containing indices of nodes for each cell.
+        Indices may include NaNs to indicate absent nodes in cells with fewer nodes than
+        `max_cell_size`.
+    features : torch.FloatTensor
+        A 2D tensor of shape (num_nodes, num_features) containing feature vectors for each node.
+
+    Returns
+    -------
+    torch.FloatTensor
+        A 2D tensor of shape (num_cells, num_features) containing the computed centroids for each
+        cell.
+
+    Notes
+    -----
+    The function creates an intermediate tensor, `features_padded`, which is a copy of `features`
+    with an additional row of zeros at the end. This increases the memory footprint, as it
+    temporarily duplicates the `features` tensor. The purpose of this padding is to safely handle -1
+    indices resulting from NaNs in `cells`, allowing vectorized operations without explicit NaN
+    checks.
+    """
+    zeros_row = torch.zeros(1, features.shape[1], device=features.device)
+    features_padded = torch.cat([features, zeros_row], dim=0)
+    cells_int = cells.nan_to_num(-1).to(torch.int64)
+    nodes_features = features_padded[cells_int]
+    sum_features = torch.sum(nodes_features, dim=1)
+    cell_cardinalities = torch.sum(cells_int != -1, dim=1, keepdim=True)
+    centroids = sum_features / cell_cardinalities
+    return centroids

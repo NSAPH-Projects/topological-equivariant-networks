@@ -7,7 +7,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 from torch_scatter import scatter_add
 
-from models.utils import compute_invariants_3d
+from models.utils import compute_centroids, compute_invariants
 
 
 class EMPSN(nn.Module):
@@ -23,11 +23,13 @@ class EMPSN(nn.Module):
         num_layers: int,
         max_com: str,
         initial_features: str,
+        compute_invariants: callable = compute_invariants,
     ) -> None:
         super().__init__()
 
         self.initial_features = initial_features
-
+        self.compute_invariants = compute_invariants
+        self.num_inv_fts_map = self.compute_invariants.num_features_map
         # compute adjacencies
         adjacencies = []
         max_dim = int(max_com[2])  # max_com = 1_2 --> max_dim = 2
@@ -47,7 +49,10 @@ class EMPSN(nn.Module):
         self.feature_embedding = nn.Linear(num_input, num_hidden)
 
         self.layers = nn.ModuleList(
-            [EMPSNLayer(adjacencies, self.max_dim, num_hidden) for _ in range(num_layers)]
+            [
+                EMPSNLayer(adjacencies, self.max_dim, num_hidden, self.num_inv_fts_map)
+                for _ in range(num_layers)
+            ]
         )
 
         self.pre_pool = nn.ModuleDict()
@@ -84,29 +89,7 @@ class EMPSN(nn.Module):
         # compute initial features
         node_features = {}
         for i in range(self.max_dim + 1):
-            member_node_fts = []
-            cell_cardinalities = torch.sum(~torch.isnan(x_ind[str(i)]), dim=1)
-            max_cardinality = x_ind[str(i)].shape[1]
-            num_cells = x_ind[str(i)].shape[0]
-            for k in range(max_cardinality):
-                # Initialize a zeros tensor
-                node_fts = torch.zeros(
-                    (num_cells, graph.x.shape[1]), dtype=graph.x.dtype, device=device
-                )
-
-                # Compute the valid node indices and _their_ indices
-                node_idc = x_ind[str(i)][:, k]
-                idx_is_not_nan = ~torch.isnan(node_idc)
-                valid_node_idc = node_idc[idx_is_not_nan]
-
-                # Overwrite the zeros tensor with node features for cells that have that node
-                node_fts[idx_is_not_nan] = graph.x[valid_node_idc.long()]
-                member_node_fts.append(node_fts)
-
-            # For each cell, compute the mean of its node features
-            node_features[str(i)] = torch.sum(
-                torch.stack(member_node_fts, dim=2), dim=2
-            ) / cell_cardinalities.view(-1, 1)
+            node_features[str(i)] = compute_centroids(x_ind[str(i)], graph.x)
 
         mem_features = {str(i): mem[i].float() for i in range(self.max_dim + 1)}
 
@@ -125,7 +108,7 @@ class EMPSN(nn.Module):
 
         # embed features and E(n) invariant information
         x = {dim: self.feature_embedding(feature) for dim, feature in x.items()}
-        inv = compute_invariants_3d(x_ind, graph.pos, adj, inv_ind, device)
+        inv = self.compute_invariants(x_ind, graph.pos, adj, inv_ind, device)
 
         # message passing
         for layer in self.layers:
@@ -166,19 +149,23 @@ class EMPSNLayer(nn.Module):
     passing this state through an MLP as found in the update dict.
     """
 
-    def __init__(self, adjacencies: List[str], max_dim: int, num_hidden: int) -> None:
+    def __init__(
+        self,
+        adjacencies: List[str],
+        max_dim: int,
+        num_hidden: int,
+        num_features_map: dict[str, int],
+    ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
+        self.num_features_map = num_features_map
 
-        dict_temp = {
-            "0_0": 3,
-            "0_1": 3,
-            "1_1": 6,
-            "1_2": 6,
-        }
         # messages
         self.message_passing = nn.ModuleDict(
-            {adj: SimplicialEGNNLayer(num_hidden, dict_temp[adj]) for adj in adjacencies}
+            {
+                adj: SimplicialEGNNLayer(num_hidden, self.num_features_map[adj])
+                for adj in adjacencies
+            }
         )
 
         # updates

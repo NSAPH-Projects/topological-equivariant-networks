@@ -53,7 +53,7 @@ def get_model(args: Namespace) -> nn.Module:
             num_hidden=args.num_hidden,
             num_out=num_out,
             num_layers=args.num_layers,
-            max_com=args.max_com,
+            max_dim=args.dim,
             initial_features=args.initial_features,
         )
     else:

@@ -19,7 +19,7 @@ class TEN(nn.Module):
         num_hidden: int,
         num_out: int,
         num_layers: int,
-        max_com: str,
+        max_dim: int,
         initial_features: str,
         compute_invariants: callable = compute_invariants,
     ) -> None:
@@ -30,16 +30,12 @@ class TEN(nn.Module):
         self.num_inv_fts_map = self.compute_invariants.num_features_map
         # compute adjacencies
         adjacencies = []
-        max_dim = int(max_com[2])  # max_com = 1_2 --> max_dim = 2
         self.max_dim = max_dim
-        inc_final = max_com[0] == max_com[2]
 
-        for dim in range(max_dim + 1):
-            if dim < max_dim or inc_final:
-                adjacencies.append(f"{dim}_{dim}")
-
-            if dim > 0:
-                adjacencies.append(f"{dim-1}_{dim}")
+        for i in range(self.max_dim + 1):
+            adjacencies.append(f"{i}_{i}")
+            if i < self.max_dim:
+                adjacencies.append(f"{i}_{i+1}")
 
         self.adjacencies = adjacencies
 

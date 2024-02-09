@@ -7,7 +7,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 from torch_scatter import scatter_add
 
-from models.utils import compute_centroids, compute_invariants
+from models.utils import compute_centroids, compute_invariants_3d
 
 
 class EMPSN(nn.Module):
@@ -23,7 +23,7 @@ class EMPSN(nn.Module):
         num_layers: int,
         max_com: str,
         initial_features: str,
-        compute_invariants: callable = compute_invariants,
+        compute_invariants: callable = compute_invariants_3d,
     ) -> None:
         super().__init__()
 

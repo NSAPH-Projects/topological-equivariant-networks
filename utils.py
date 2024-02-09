@@ -9,6 +9,103 @@ import torch.nn as nn
 from torch_geometric.loader import DataLoader
 
 
+def get_adjacency_types(max_dim: int, connectivity: str) -> list[str]:
+    """
+    Generate a list of adjacency type strings based on the specified connectivity pattern.
+
+    Parameters
+    ----------
+    max_dim : int
+        The maximum dimension (inclusive) for which to generate adjacency types. Represents the
+        highest rank of cells in the connectivity pattern.
+    connectivity : str
+        The connectivity pattern to use. Must be one of "self_and_next", "self_and_higher", or
+        "all_to_all".
+        - "self_and_next" generates adjacencies where each rank is connected to itself and the next
+        (higher) rank.
+        - "self_and_higher" generates adjacencies where each rank is connected to itself and all
+        higher ranks.
+        - "self_and_previous" generates adjacencies where each rank is connected to itself and the
+        previous (lower) rank.
+        - "self_and_lower" generates adjacencies where each rank is connected to itself and all
+        lower ranks.
+        - "self_and_neighbors" generates adjacencies where each rank is connected to itself, the
+        next (higher) rank and the previous (lower) rank.
+        - "all_to_all" generates adjacencies where each rank is connected to every other rank,
+        including itself.
+
+    Returns
+    -------
+    list[str]
+        A list of strings representing the adjacency types for the specified connectivity pattern.
+        Each string is in the format "i_j" where "i" and "j" are ranks indicating an adjacency
+        from rank "i" to rank "j".
+
+    Raises
+    ------
+    ValueError
+        If `connectivity` is not one of the known connectivity patterns.
+
+    Examples
+    --------
+    >>> get_adjacency_types(2, "self_and_next")
+    ['0_0', '0_1', '1_1', '1_2', '2_2']
+
+    >>> get_adjacency_types(2, "self_and_higher")
+    ['0_0', '0_1', '0_2', '1_1', '1_2', '2_2']
+
+    >>> get_adjacency_types(2, "all_to_all")
+    ['0_0', '0_1', '0_2', '1_0', '1_1', '1_2', '2_0', '2_1', '2_2']
+    """
+    adj_types = []
+    if connectivity not in [
+        "self_and_next",
+        "self_and_higher",
+        "self_and_previous",
+        "self_and_lower",
+        "self_and_neighbors",
+        "all_to_all",
+    ]:
+        raise ValueError(f"{connectivity} is not a known connectivity pattern!")
+
+    if connectivity == "self_and_next":
+        for i in range(max_dim + 1):
+            adj_types.append(f"{i}_{i}")
+            if i < max_dim:
+                adj_types.append(f"{i}_{i+1}")
+
+    elif connectivity == "self_and_higher":
+        for i in range(max_dim + 1):
+            for j in range(i, max_dim + 1):
+                adj_types.append(f"{i}_{j}")
+
+    elif connectivity == "self_and_previous":
+        for i in range(max_dim + 1):
+            adj_types.append(f"{i}_{i}")
+            if i > 0:
+                adj_types.append(f"{i}_{i-1}")
+
+    elif connectivity == "self_and_lower":
+        for i in range(max_dim + 1):
+            for j in range(0, i):
+                adj_types.append(f"{i}_{j}")
+
+    elif connectivity == "self_and_neighbors":
+        for i in range(max_dim + 1):
+            adj_types.append(f"{i}_{i}")
+            if i > 0:
+                adj_types.append(f"{i}_{i-1}")
+            if i < max_dim:
+                adj_types.append(f"{i}_{i+1}")
+
+    else:
+        for i in range(max_dim + 1):
+            for j in range(max_dim + 1):
+                adj_types.append(f"{i}_{j}")
+
+    return adj_types
+
+
 def get_model(args: Namespace) -> nn.Module:
     """Return model based on name."""
     if args.dataset == "qm9":
@@ -54,6 +151,7 @@ def get_model(args: Namespace) -> nn.Module:
             num_out=num_out,
             num_layers=args.num_layers,
             max_dim=args.dim,
+            adjacencies=args.adjacencies,
             initial_features=args.initial_features,
         )
     else:

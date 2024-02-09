@@ -109,13 +109,20 @@ class CombinatorialComplexTransform(BaseTransform):
     The adjacency types (adj) are saved as properties, e.g. object.adj_1_2 gives the edge index from
     1-complexes to 2-complexes."""
 
-    def __init__(self, lifters: Union[list[callable], callable], ranker: callable, dim: int = 2):
+    def __init__(
+        self,
+        lifters: Union[list[callable], callable],
+        ranker: callable,
+        dim: int,
+        adjacencies: list[str],
+    ):
         if isinstance(lifters, list):
             self.lifters = lifters
         else:
             self.lifters = [lifters]
         self.rank = ranker
         self.dim = dim
+        self.adjacencies = adjacencies
 
     def __call__(self, graph: Data) -> CombinatorialComplexData:
         if not torch.is_tensor(graph.x):
@@ -177,40 +184,41 @@ class CombinatorialComplexTransform(BaseTransform):
 
         # compute adjancencies and incidences
         adj, idx_to_cell = dict(), dict()
-        for i in range(self.dim + 1):
-            for j in range(i, self.dim + 1):
-                if i != j:
+        for adj_type in self.adjacencies:
+            i, j = [int(rank) for rank in adj_type.split("_")]
+            if i != j:
+                if i < j:
                     matrix = cc.incidence_matrix(rank=i, to_rank=j)
-
                 else:
-                    index, matrix = cc.adjacency_matrix(rank=i, via_rank=i + 1, index=True)
-                    idx_to_cell[i] = {v: sorted(k) for k, v in index.items()}
+                    matrix = cc.incidence_matrix(rank=j, to_rank=i).T
 
-                if np.array_equal(matrix, np.zeros(1)):
-                    matrix = torch.zeros(2, 0).long()
-                else:
-                    matrix = sparse_to_dense(matrix)
+            else:
+                index, matrix = cc.adjacency_matrix(rank=i, via_rank=i + 1, index=True)
+                idx_to_cell[i] = {v: sorted(k) for k, v in index.items()}
 
-                adj[f"{i}_{j}"] = matrix
+            if np.array_equal(matrix, np.zeros(1)):
+                matrix = torch.zeros(2, 0).long()
+            else:
+                matrix = sparse_to_dense(matrix)
+
+            adj[adj_type] = matrix
 
         # for each adjacency/incidence, store the nodes to be used for computing geometric features
         inv = dict()
-        for i in range(self.dim):
-            inv[f"{i}_{i}"] = []
-            inv[f"{i}_{i+1}"] = []
+        for adj_type in self.adjacencies:
+            inv[adj_type] = []
+            neighbors = adj[adj_type]
+            i, j = [int(rank) for rank in adj_type.split("_")]
 
-        for i in range(self.dim):
-            for j in [i, i + 1]:
-                neighbors = adj[f"{i}_{j}"]
-                for connection in neighbors.t():
-                    idx_a, idx_b = connection[0], connection[1]
-                    cell_a = idx_to_cell[i][idx_a.item()]
-                    cell_b = idx_to_cell[j][idx_b.item()]
-                    shared = [node for node in cell_a if node in cell_b]
-                    only_in_a = [node for node in cell_a if node not in shared]
-                    only_in_b = [node for node in cell_b if node not in shared]
-                    inv_nodes = shared + only_in_b + only_in_a
-                    inv[f"{i}_{j}"].append(inv_nodes)
+            for connection in neighbors.t():
+                idx_a, idx_b = connection[0], connection[1]
+                cell_a = idx_to_cell[i][idx_a.item()]
+                cell_b = idx_to_cell[j][idx_b.item()]
+                shared = [node for node in cell_a if node in cell_b]
+                only_in_a = [node for node in cell_a if node not in shared]
+                only_in_b = [node for node in cell_b if node not in shared]
+                inv_nodes = shared + only_in_b + only_in_a
+                inv[adj_type].append(inv_nodes)
 
         for k, v in inv.items():
             if len(v) == 0:

@@ -184,9 +184,9 @@ class EMPSNLayer(nn.Module):
         # pass the different messages of all adjacency types
         mes = {
             adj_type: self.message_passing[adj_type](
-                x=(x[adj_type[0]], x[adj_type[2]]), index=index, edge_attr=inv[adj_type]
+                x=(x[adj_type[0]], x[adj_type[2]]), index=adj[adj_type], edge_attr=inv[adj_type]
             )
-            for adj_type, index in adj.items()
+            for adj_type in self.adjacencies
         }
 
         # find update states through concatenation, update and add residual connection

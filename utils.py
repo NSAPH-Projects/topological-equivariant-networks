@@ -44,6 +44,18 @@ def get_model(args: Namespace) -> nn.Module:
             max_com=args.max_com,
             initial_features=args.initial_features,
         )
+
+    elif args.model_name == "ten":
+        from models.ten import TEN
+
+        model = TEN(
+            num_input=num_input,
+            num_hidden=args.num_hidden,
+            num_out=num_out,
+            num_layers=args.num_layers,
+            max_com=args.max_com,
+            initial_features=args.initial_features,
+        )
     else:
         raise ValueError(f"Model type {args.model_name} not recognized.")
 

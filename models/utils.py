@@ -206,7 +206,7 @@ def compute_invariants(
         indexed_sender_centroids = mean_cell_positions[sender_rank][cell_pairs[0]]
         indexed_receiver_centroids = mean_cell_positions[receiver_rank][cell_pairs[1]]
         differences = indexed_sender_centroids - indexed_receiver_centroids
-        distances = torch.sqrt((differences**2)).sum(dim=1, keepdim=True)
+        distances = torch.sqrt((differences**2).sum(dim=1, keepdim=True))
 
         new_features[rank_pair] = distances
 

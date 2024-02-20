@@ -217,8 +217,7 @@ compute_invariants.num_features_map = defaultdict(lambda: 1)
 
 
 def compute_max_pairwise_distances(
-    cells: torch.FloatTensor, 
-    pos: torch.FloatTensor
+    cells: torch.FloatTensor, pos: torch.FloatTensor
 ) -> torch.FloatTensor:
     """
     Compute the maximum pairwise distance between nodes within each cell.
@@ -250,13 +249,12 @@ def compute_max_pairwise_distances(
 
     # Set distances for invalid combinations to -inf for max computation
     valid_combinations_mask = mask.unsqueeze(1) & mask.unsqueeze(2)
-    dist_matrix[~valid_combinations_mask] = float('-inf')
+    dist_matrix[~valid_combinations_mask] = float("-inf")
 
     # Find max distance for each cell, ignoring the -inf values
     max_distances = dist_matrix.max(dim=2)[0].max(dim=1)[0].unsqueeze(1)
 
     return max_distances
-
 
 
 def compute_centroids(cells: torch.FloatTensor, features: torch.FloatTensor) -> torch.FloatTensor:

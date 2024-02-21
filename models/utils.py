@@ -242,19 +242,51 @@ def compute_max_pairwise_distances(
     tensor to indicate missing nodes. It computes pairwise distances only for valid (non-NaN) nodes
     within each cell and ignores distances involving missing nodes.
     """
-    mask = ~torch.isnan(cells)
+
+    dist_matrix = compute_pairwise_distances(cells, pos)
+    dist_matrix = dist_matrix.nan_to_num(float("-inf"))
+    max_distances = dist_matrix.max(dim=2)[0].max(dim=1)[0].unsqueeze(1)
+
+    return max_distances
+
+
+def compute_pairwise_distances(
+    cells: torch.FloatTensor, pos: torch.FloatTensor
+) -> torch.FloatTensor:
+    """
+    Compute the pairwise distances between nodes within each cell.
+
+    Parameters
+    ----------
+    cells : torch.FloatTensor
+        A 2D tensor of shape (n, k) containing indices of nodes for n cells. Indices may include
+        NaNs to denote missing values.
+    pos : torch.FloatTensor
+        A 2D tensor of shape (m, 3) representing the 3D positions of m nodes.
+
+    Returns
+    -------
+    torch.FloatTensor
+        A 3D tensor of shape (n, k, k) containing the pairwise distances between nodes within each
+        of the n cells.
+
+    Notes
+    -----
+    The function handles cells with varying numbers of nodes by using NaN values in the `cells`
+    tensor to indicate missing nodes. It computes pairwise distances for valid (non-NaN) nodes
+    within each cell. For pairs where at least one node is NaN, the copmuted distance is also NaN.
+    """
+    # Cast nans to 0 to compute distances in a vectorized fashion
     cells_filled = cells.nan_to_num(0).to(torch.int64)
     positions = pos[cells_filled]
     dist_matrix = torch.norm(positions.unsqueeze(2) - positions.unsqueeze(1), dim=3)
 
-    # Set distances for invalid combinations to -inf for max computation
+    # Set distances for invalid combinations to nan
+    mask = ~torch.isnan(cells)
     valid_combinations_mask = mask.unsqueeze(1) & mask.unsqueeze(2)
-    dist_matrix[~valid_combinations_mask] = float("-inf")
+    dist_matrix[~valid_combinations_mask] = torch.nan
 
-    # Find max distance for each cell, ignoring the -inf values
-    max_distances = dist_matrix.max(dim=2)[0].max(dim=1)[0].unsqueeze(1)
-
-    return max_distances
+    return dist_matrix
 
 
 def compute_centroids(cells: torch.FloatTensor, features: torch.FloatTensor) -> torch.FloatTensor:

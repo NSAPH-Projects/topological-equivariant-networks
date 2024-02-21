@@ -247,47 +247,52 @@ def compute_max_pairwise_distances(
     within each cell and ignores distances involving missing nodes.
     """
 
-    dist_matrix = compute_pairwise_distances(cells, pos)
+    dist_matrix = compute_intercell_distances(cells, cells, pos)
     dist_matrix = dist_matrix.nan_to_num(float("-inf"))
     max_distances = dist_matrix.max(dim=2)[0].max(dim=1)[0].unsqueeze(1)
 
     return max_distances
 
 
-def compute_pairwise_distances(
-    cells: torch.FloatTensor, pos: torch.FloatTensor
+def compute_intercell_distances(
+    sender_cells: torch.FloatTensor, receiver_cells: torch.FloatTensor, pos: torch.FloatTensor
 ) -> torch.FloatTensor:
     """
     Compute the pairwise distances between nodes within each cell.
 
     Parameters
     ----------
-    cells : torch.FloatTensor
-        A 2D tensor of shape (n, k) containing indices of nodes for n cells. Indices may include
-        NaNs to denote missing values.
+    sender_cells : torch.FloatTensor
+        A 2D tensor of shape (n, k_1) containing indices of nodes for n sender cells.
+    receiver_cells : torch.FloatTensor
+        A 2D tensor of shape (n, k_2) containing indices of nodes for n receiver cells.
     pos : torch.FloatTensor
         A 2D tensor of shape (m, 3) representing the 3D positions of m nodes.
 
     Returns
     -------
     torch.FloatTensor
-        A 3D tensor of shape (n, k, k) containing the pairwise distances between nodes within each
-        of the n cells.
+        A 3D tensor of shape (n, k_1, k_2) containing the pairwise distances between nodes within
+        each of the n cells.
 
     Notes
     -----
-    The function handles cells with varying numbers of nodes by using NaN values in the `cells`
-    tensor to indicate missing nodes. It computes pairwise distances for valid (non-NaN) nodes
-    within each cell. For pairs where at least one node is NaN, the copmuted distance is also NaN.
+    This function handles cells with varying numbers of nodes by using NaN values in the
+    `sender_cells` and `receiver_cells` tensors to indicate missing nodes. It computes distances for
+    valid (non-NaN) nodes within each pair of sender and receiver cells. For combinations involving
+    at least one NaN node, the computed distance is set to NaN.
     """
     # Cast nans to 0 to compute distances in a vectorized fashion
-    cells_filled = cells.nan_to_num(0).to(torch.int64)
-    positions = pos[cells_filled]
-    dist_matrix = torch.norm(positions.unsqueeze(2) - positions.unsqueeze(1), dim=3)
+    sender_cells_filled = sender_cells.nan_to_num(0).to(torch.int64)
+    receiver_cells_filled = receiver_cells.nan_to_num(0).to(torch.int64)
+    sender_positions = pos[sender_cells_filled]
+    receiver_positions = pos[receiver_cells_filled]
+    dist_matrix = torch.norm(sender_positions.unsqueeze(2) - receiver_positions.unsqueeze(1), dim=3)
 
     # Set distances for invalid combinations to nan
-    mask = ~torch.isnan(cells)
-    valid_combinations_mask = mask.unsqueeze(1) & mask.unsqueeze(2)
+    sender_mask = ~torch.isnan(sender_cells)
+    receiver_mask = ~torch.isnan(receiver_cells)
+    valid_combinations_mask = sender_mask.unsqueeze(2) & receiver_mask.unsqueeze(1)
     dist_matrix[~valid_combinations_mask] = torch.nan
 
     return dist_matrix

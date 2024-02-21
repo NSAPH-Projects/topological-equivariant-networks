@@ -196,24 +196,28 @@ def compute_invariants(
     """
     new_features = {}
     mean_cell_positions = {}
+    max_pairwise_distances = {}
     for rank_pair, cell_pairs in adj.items():
         # Compute mean cell positions memoized
         sender_rank, receiver_rank = rank_pair.split("_")
         for rank in [sender_rank, receiver_rank]:
             if rank not in mean_cell_positions:
                 mean_cell_positions[rank] = compute_centroids(feat_ind[rank], pos)
+            if rank not in max_pairwise_distances:
+                max_pairwise_distances[rank] = compute_max_pairwise_distances(feat_ind[rank], pos)
         # Compute mean distances
         indexed_sender_centroids = mean_cell_positions[sender_rank][cell_pairs[0]]
         indexed_receiver_centroids = mean_cell_positions[receiver_rank][cell_pairs[1]]
         differences = indexed_sender_centroids - indexed_receiver_centroids
         distances = torch.sqrt((differences**2).sum(dim=1, keepdim=True))
-
-        new_features[rank_pair] = distances
+        max_dist_sender = max_pairwise_distances[sender_rank][cell_pairs[0]]
+        max_dist_receiver = max_pairwise_distances[receiver_rank][cell_pairs[1]]
+        new_features[rank_pair] = torch.cat([distances, max_dist_sender, max_dist_receiver], dim=1)
 
     return new_features
 
 
-compute_invariants.num_features_map = defaultdict(lambda: 1)
+compute_invariants.num_features_map = defaultdict(lambda: 3)
 
 
 def compute_max_pairwise_distances(

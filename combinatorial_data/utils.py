@@ -195,6 +195,7 @@ class CombinatorialComplexTransform(BaseTransform):
         ranker: callable,
         dim: int,
         adjacencies: list[str],
+        enable_indexing_bug: bool = False,
     ):
         if isinstance(lifters, list):
             self.lifters = lifters
@@ -203,6 +204,7 @@ class CombinatorialComplexTransform(BaseTransform):
         self.rank = ranker
         self.dim = dim
         self.adjacencies = adjacencies
+        self.enable_indexing_bug = enable_indexing_bug
 
     def __call__(self, graph: Data) -> CombinatorialComplexData:
         if not torch.is_tensor(graph.x):
@@ -213,7 +215,11 @@ class CombinatorialComplexTransform(BaseTransform):
         # get relevant dictionaries using the Rips complex based on the geometric graph/point cloud
         x_dict, mem_dict, adj_dict, inv_dict = self.get_relevant_dicts(graph)
 
-        com_com_data = CombinatorialComplexData()
+        if self.enable_indexing_bug:
+            com_com_data = LegacyCombinatorialComplexData()
+        else:
+            com_com_data = CombinatorialComplexData()
+
         com_com_data = com_com_data.from_dict(graph.to_dict())
 
         for k, v in x_dict.items():

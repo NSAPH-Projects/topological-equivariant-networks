@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 import wandb
 from qm9.utils import calc_mean_mad
-from utils import get_loaders, get_model, set_seed
+from utils import get_adjacency_types, get_loaders, get_model, set_seed
 
 
 def main(args):
@@ -120,6 +120,12 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument("--initial_features", type=str, default="node", help="features to use")
+    parser.add_argument(
+        "--connectivity",
+        type=str,
+        default="self_and_next",
+        help="connectivity pattern between ranks",
+    )
 
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
@@ -135,6 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42, help="random seed")
 
     parsed_args = parser.parse_args()
+    parsed_args.adjacencies = get_adjacency_types(parsed_args.dim, parsed_args.connectivity)
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     set_seed(parsed_args.seed)

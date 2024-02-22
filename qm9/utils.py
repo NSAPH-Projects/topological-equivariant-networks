@@ -48,7 +48,9 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     # load, subsample and transform the dataset
     lifters = get_lifters(args)
     ranker = get_ranker(args.lifters)
-    transform = CombinatorialComplexTransform(lifters=lifters, ranker=ranker, dim=args.dim)
+    transform = CombinatorialComplexTransform(
+        lifters=lifters, ranker=ranker, dim=args.dim, adjacencies=args.adjacencies
+    )
     dataset = QM9(root=data_root)
     dataset = dataset.shuffle()
     dataset = dataset[: args.num_samples]

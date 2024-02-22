@@ -1,22 +1,20 @@
-import functools
 import hashlib
 import json
-import random
 from argparse import Namespace
-from typing import Dict, Optional, Tuple
 
 import torch
 from torch import Tensor
+from torch.utils.data import DataLoader
 from torch_geometric.data import Data
 from torch_geometric.datasets import QM9
-from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
-from simplicial_data.lifts import get_lifters
-from simplicial_data.utils import SimplicialTransform
+from combinatorial_data.lifts import get_lifters
+from combinatorial_data.ranker import get_ranker
+from combinatorial_data.utils import CombinatorialComplexTransform, CustomCollater
 
 
-def calc_mean_mad(loader: DataLoader) -> Tuple[Tensor, Tensor]:
+def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
     """Return mean and mean average deviation of target in loader."""
     values = [graph.y for graph in loader.dataset]
     mean = sum(values) / len(values)
@@ -24,7 +22,7 @@ def calc_mean_mad(loader: DataLoader) -> Tuple[Tensor, Tensor]:
     return mean, mad
 
 
-def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str, float]) -> Data:
+def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: dict[str, float]) -> Data:
     graph.y = graph.y[0, index]
     one_hot = graph.x[:, :5]  # only get one_hot for cormorant
     # change unit of targets
@@ -40,7 +38,7 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: Dict[str,
     return graph
 
 
-def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
     # define data_root
     data_root = "./datasets/QM9_"
     data_root += generate_dataset_dir_name(
@@ -49,7 +47,8 @@ def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataL
 
     # load, subsample and transform the dataset
     lifters = get_lifters(args)
-    transform = SimplicialTransform(lifters=lifters, dim=args.dim)
+    ranker = get_ranker(args.lifters)
+    transform = CombinatorialComplexTransform(lifters=lifters, ranker=ranker, dim=args.dim)
     dataset = QM9(root=data_root)
     dataset = dataset.shuffle()
     dataset = dataset[: args.num_samples]
@@ -104,27 +103,26 @@ def generate_loaders_qm9(args: Namespace) -> Tuple[DataLoader, DataLoader, DataL
     val_dataset = dataset[n_test:]
 
     # dataloaders
-    follow = [f"x_{i}" for i in range(args.dim + 1)] + ["x"]
-    train_loader = DataLoader(
+    follow_batch = [f"x_{i}" for i in range(args.dim + 1)] + ["x"]
+    dataloader_kwargs = {
+        "batch_size": args.batch_size,
+        "num_workers": args.num_workers,
+        "shuffle": True,
+    }
+    train_loader = torch.utils.data.DataLoader(
         train_dataset,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        shuffle=True,
-        follow_batch=follow,
+        collate_fn=CustomCollater(train_dataset, follow_batch=follow_batch),
+        **dataloader_kwargs,
     )
-    val_loader = DataLoader(
+    val_loader = torch.utils.data.DataLoader(
         val_dataset,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        shuffle=False,
-        follow_batch=follow,
+        collate_fn=CustomCollater(val_dataset, follow_batch=follow_batch),
+        **dataloader_kwargs,
     )
-    test_loader = DataLoader(
+    test_loader = torch.utils.data.DataLoader(
         test_dataset,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        shuffle=False,
-        follow_batch=follow,
+        collate_fn=CustomCollater(test_dataset, follow_batch=follow_batch),
+        **dataloader_kwargs,
     )
 
     return train_loader, val_loader, test_loader

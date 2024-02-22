@@ -50,10 +50,15 @@ class UpdateLayer(nn.Module):
 
 
 def compute_invariants_3d(feat_ind, pos, adj, inv_ind, device):
+
+    # cast to int
+    feat_ind_int = {key: value.int() for key, value in feat_ind.items()}
+    inv_ind_int = {key: value.int() for key, value in inv_ind.items()}
+
     # angles
     angle = {}
 
-    vecs = pos[feat_ind["1"][:, 0]] - pos[feat_ind["1"][:, 1]]
+    vecs = pos[feat_ind_int["1"][:, 0]] - pos[feat_ind_int["1"][:, 1]]
     send_vec, rec_vec = vecs[adj["1_1"][0]], vecs[adj["1_1"][1]]
     send_norm, rec_norm = torch.linalg.norm(send_vec, ord=2, dim=1), torch.linalg.norm(
         rec_vec, ord=2, dim=1
@@ -64,7 +69,7 @@ def compute_invariants_3d(feat_ind, pos, adj, inv_ind, device):
     eps = 1e-6
     angle["1_1"] = torch.arccos(cos_angle.clamp(-1 + eps, 1 - eps)).unsqueeze(1)
 
-    p1, p2, a = pos[inv_ind["1_2"][0]], pos[inv_ind["1_2"][1]], pos[inv_ind["1_2"][2]]
+    p1, p2, a = pos[inv_ind_int["1_2"][0]], pos[inv_ind_int["1_2"][1]], pos[inv_ind_int["1_2"][2]]
     v1, v2, b = p1 - a, p2 - a, p1 - p2
     v1_n, v2_n, b_n = (
         torch.linalg.norm(v1, dim=1),
@@ -79,13 +84,15 @@ def compute_invariants_3d(feat_ind, pos, adj, inv_ind, device):
 
     # areas
     area = {}
-    area["0"] = torch.zeros(len(feat_ind["0"])).unsqueeze(1)
-    area["1"] = torch.norm(pos[feat_ind["1"][:, 0]] - pos[feat_ind["1"][:, 1]], dim=1).unsqueeze(1)
+    area["0"] = torch.zeros(len(feat_ind_int["0"])).unsqueeze(1)
+    area["1"] = torch.norm(
+        pos[feat_ind_int["1"][:, 0]] - pos[feat_ind_int["1"][:, 1]], dim=1
+    ).unsqueeze(1)
     area["2"] = (
         torch.norm(
             torch.cross(
-                pos[feat_ind["2"][:, 0]] - pos[feat_ind["2"][:, 1]],
-                pos[feat_ind["2"][:, 0]] - pos[feat_ind["2"][:, 2]],
+                pos[feat_ind_int["2"][:, 0]] - pos[feat_ind_int["2"][:, 1]],
+                pos[feat_ind_int["2"][:, 0]] - pos[feat_ind_int["2"][:, 2]],
                 dim=1,
             ),
             dim=1,
@@ -93,26 +100,26 @@ def compute_invariants_3d(feat_ind, pos, adj, inv_ind, device):
         / 2
     ).unsqueeze(1)
 
-    area = {k: v.to(feat_ind["0"].device) for k, v in area.items()}
+    area = {k: v.to(device) for k, v in area.items()}
 
     inv = {
         "0_0": torch.linalg.norm(pos[adj["0_0"][0]] - pos[adj["0_0"][1]], dim=1).unsqueeze(1),
-        "0_1": torch.linalg.norm(pos[inv_ind["0_1"][0]] - pos[inv_ind["0_1"][1]], dim=1).unsqueeze(
-            1
-        ),
+        "0_1": torch.linalg.norm(
+            pos[inv_ind_int["0_1"][0]] - pos[inv_ind_int["0_1"][1]], dim=1
+        ).unsqueeze(1),
         "1_1": torch.stack(
             [
-                torch.linalg.norm(pos[inv_ind["1_1"][0]] - pos[inv_ind["1_1"][1]], dim=1),
-                torch.linalg.norm(pos[inv_ind["1_1"][0]] - pos[inv_ind["1_1"][2]], dim=1),
-                torch.linalg.norm(pos[inv_ind["1_1"][1]] - pos[inv_ind["1_1"][2]], dim=1),
+                torch.linalg.norm(pos[inv_ind_int["1_1"][0]] - pos[inv_ind_int["1_1"][1]], dim=1),
+                torch.linalg.norm(pos[inv_ind_int["1_1"][0]] - pos[inv_ind_int["1_1"][2]], dim=1),
+                torch.linalg.norm(pos[inv_ind_int["1_1"][1]] - pos[inv_ind_int["1_1"][2]], dim=1),
             ],
             dim=1,
         ),
         "1_2": torch.stack(
             [
-                torch.linalg.norm(pos[inv_ind["1_2"][0]] - pos[inv_ind["1_2"][2]], dim=1)
-                + torch.linalg.norm(pos[inv_ind["1_2"][1]] - pos[inv_ind["1_2"][2]], dim=1),
-                torch.linalg.norm(pos[inv_ind["1_2"][1]] - pos[inv_ind["1_2"][2]], dim=1),
+                torch.linalg.norm(pos[inv_ind_int["1_2"][0]] - pos[inv_ind_int["1_2"][2]], dim=1)
+                + torch.linalg.norm(pos[inv_ind_int["1_2"][1]] - pos[inv_ind_int["1_2"][2]], dim=1),
+                torch.linalg.norm(pos[inv_ind_int["1_2"][1]] - pos[inv_ind_int["1_2"][2]], dim=1),
             ],
             dim=1,
         ),
@@ -124,7 +131,7 @@ def compute_invariants_3d(feat_ind, pos, adj, inv_ind, device):
         area_send, area_rec = area_send[send], area_rec[rec]
         inv[k] = torch.cat((v, area_send, area_rec), dim=1)
 
-    inv["1_1"] = torch.cat((inv["1_1"], angle["1_1"].to(feat_ind["0"].device)), dim=1)
-    inv["1_2"] = torch.cat((inv["1_2"], angle["1_2"].to(feat_ind["0"].device)), dim=1)
+    inv["1_1"] = torch.cat((inv["1_1"], angle["1_1"].to(device)), dim=1)
+    inv["1_2"] = torch.cat((inv["1_2"], angle["1_2"].to(device)), dim=1)
 
     return inv

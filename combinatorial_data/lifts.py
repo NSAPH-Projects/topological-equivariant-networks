@@ -9,7 +9,7 @@ import torch_geometric.utils as pyg_utils
 from rdkit import Chem
 from torch_geometric.data import Data
 
-from simplicial_data.ifg import identify_functional_groups
+from combinatorial_data.ifg import identify_functional_groups
 
 
 def clique_lift(graph_data) -> set[frozenset[int]]:
@@ -84,7 +84,7 @@ def functional_group_lift(graph: Data) -> set[frozenset[int]]:
     try:
         molecule = Chem.MolFromSmiles(graph.smiles)
         functional_groups = identify_functional_groups(molecule)
-        return {frozenset(fg.atomIds) for fg in functional_groups}
+        return {frozenset(fg.atomIds) for fg in functional_groups if len(fg.atomIds) >= 3}
     except AttributeError:
         return set()
 
@@ -233,6 +233,7 @@ def get_lifters(args) -> list[callable]:
     """
     lifters = []
     for lifter in args.lifters:
+        lifter = lifter.split(":")[0]
         if lifter == "rips":
             lifters.append(partial(rips_lift, dim=args.dim, dis=args.dis))
         else:

@@ -65,7 +65,7 @@ class EMPSN(nn.Module):
 
     def forward(self, graph: Data) -> Tensor:
         device = graph.pos.device
-        x_ind = {str(i): getattr(graph, f"x_{i}").long() for i in range(self.max_dim + 1)}
+        x_ind = {str(i): getattr(graph, f"x_{i}") for i in range(self.max_dim + 1)}
 
         mem = {i: getattr(graph, f"mem_{i}") for i in range(self.max_dim + 1)}
 
@@ -82,13 +82,31 @@ class EMPSN(nn.Module):
         }
 
         # compute initial features
-        node_features = {
-            str(i): torch.sum(
-                torch.stack([graph.x[x_ind[str(i)][:, k]] for k in range(i + 1)], dim=2), 2
-            )
-            / (i + 1)
-            for i in range(self.max_dim + 1)
-        }
+        node_features = {}
+        for i in range(self.max_dim + 1):
+            member_node_fts = []
+            cell_cardinalities = torch.sum(~torch.isnan(x_ind[str(i)]), dim=1)
+            max_cardinality = x_ind[str(i)].shape[1]
+            num_cells = x_ind[str(i)].shape[0]
+            for k in range(max_cardinality):
+                # Initialize a zeros tensor
+                node_fts = torch.zeros(
+                    (num_cells, graph.x.shape[1]), dtype=graph.x.dtype, device=device
+                )
+
+                # Compute the valid node indices and _their_ indices
+                node_idc = x_ind[str(i)][:, k]
+                idx_is_not_nan = ~torch.isnan(node_idc)
+                valid_node_idc = node_idc[idx_is_not_nan]
+
+                # Overwrite the zeros tensor with node features for cells that have that node
+                node_fts[idx_is_not_nan] = graph.x[valid_node_idc.long()]
+                member_node_fts.append(node_fts)
+
+            # For each cell, compute the mean of its node features
+            node_features[str(i)] = torch.sum(
+                torch.stack(member_node_fts, dim=2), dim=2
+            ) / cell_cardinalities.view(-1, 1)
 
         mem_features = {str(i): mem[i].float() for i in range(self.max_dim + 1)}
 

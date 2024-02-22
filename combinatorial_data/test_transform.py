@@ -11,9 +11,10 @@ import pytest
 import torch
 from torch_geometric.datasets import QM9
 
+from combinatorial_data.lifts import rips_lift as new_rips_lift
+from combinatorial_data.ranker import get_ranker
+from combinatorial_data.utils import CombinatorialComplexTransform as NewTransform
 from legacy.simplicial_data.rips_lift import rips_lift as old_rips_lift
-from simplicial_data.lifts import rips_lift as new_rips_lift
-from simplicial_data.utils import SimplicialTransform as NewTransform
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3, 4])
@@ -41,23 +42,28 @@ def test_rips_transform(dim: int, dis: float):
         old_x_dict, old_adj, old_inv = old_rips_lift(graph, dim=dim, dis=dis)
 
         fixed_rips_lift = functools.partial(new_rips_lift, dim=dim, dis=dis)
-        simplicial_transform = NewTransform(fixed_rips_lift, dim)
+        ranker = get_ranker("rips")
+        simplicial_transform = NewTransform(fixed_rips_lift, ranker, dim)
         new_x_dict, _, new_adj, new_inv = simplicial_transform.get_relevant_dicts(graph)
 
         # Check if x_dict are the same
         for i in range(dim + 1):
-            assert torch.equal(old_x_dict[i], new_x_dict[i]), f"old_x_dict[{i}] != new_x_dict[{i}]"
+            if not (torch.numel(old_x_dict[i]) == 0 and torch.numel(new_x_dict[i]) == 0):
+                assert torch.equal(
+                    old_x_dict[i], new_x_dict[i]
+                ), f"old_x_dict[{i}] != new_x_dict[{i}]"
 
         # Check if adjs and invs are the same
         for i in range(dim):
             for j in [i, i + 1]:
                 sorted_old_adj, idc = sort_tensor_columns_and_get_indices(old_adj[f"{i}_{j}"])
-                assert torch.equal(
-                    sorted_old_adj, new_adj[f"{i}_{j}"]
-                ), f"sorted(old_adj[{i}_{j}]) != new_adj[{i}_{j}]"
-                assert torch.equal(
-                    old_inv[f"{i}_{j}"][:, idc], new_inv[f"{i}_{j}"]
-                ), f"sorted(old_inv[{i}_{j}]) != new_inv[{i}_{j}]"
+                if not (torch.numel(sorted_old_adj) == 0 and torch.numel(new_adj[f"{i}_{j}"]) == 0):
+                    assert torch.equal(
+                        sorted_old_adj, new_adj[f"{i}_{j}"]
+                    ), f"sorted(old_adj[{i}_{j}]) != new_adj[{i}_{j}]"
+                    assert torch.equal(
+                        old_inv[f"{i}_{j}"][:, idc], new_inv[f"{i}_{j}"]
+                    ), f"sorted(old_inv[{i}_{j}]) != new_inv[{i}_{j}]"
 
 
 def sort_tensor_columns_and_get_indices(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:

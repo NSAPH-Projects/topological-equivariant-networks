@@ -106,26 +106,79 @@ class LegacyCombinatorialComplexData(Data):
 
 class CombinatorialComplexData(Data):
     """
-    Abstract combinatorial complex class that generalises the pytorch geometric graph (Data).
-    Adjacency tensors are stacked in the same fashion as the standard edge_index.
+    A subclass of PyTorch Geometric's Data class designed for representing combinatorial complexes.
+
+    This class extends standard graph representation to handle higher-dimensional structures found
+    in complex networks. It supports adjacency tensors for cells of different ranks (vertices,
+    edges, faces, etc.) and their relationships, following a specific naming convention for dynamic
+    attribute recognition and processing.
+
+    Attributes
+    ----------
+    x_i : torch.FloatTensor
+        Node indices associated with cells of rank i, where i is a non-negative integer.
+    mem_i : torch.BoolTensor
+        Lifters associated with cells of rank i, where i is a non-negative integer.
+    adj_i_j : torch.LongTensor
+        Adjacency tensors representing the relationships (edges) between cells of rank i and j,
+        where i and j are non-negative integers.
+    inv_i_j : torch.FloatTensor
+        Node indices that can be used to compute legacy geometric features for each cell pair.
     """
 
     def __inc__(self, key: str, value: any, *args, **kwargs) -> any:
+        """
+        Specify how to increment indices for batch processing of data, based on the attribute key.
+
+        Parameters
+        ----------
+        key : str
+            The attribute name to be incremented.
+        value : Any
+            The value associated with the attribute `key`.
+        *args : Additional positional arguments. **kwargs : Additional keyword arguments.
+
+        Returns
+        -------
+        any
+            The increment value for the attribute `key`. Returns a tensor for `adj_i_j` attributes,
+            the number of nodes for `inv_i_j` and `x_i` attributes, or calls the superclass's
+            `__inc__` method for other attributes.
+        """
         num_nodes = getattr(self, "x_0").size(0)
-        if "adj" in key:
-            i, j = key[4], key[6]
+        # The adj_i_j attribute holds cell indices, increment each dim by the number of cells of
+        # corresponding rank
+        if re.match(r"adj_\d+_\d+", key):
+            _, i, j = key.split("_")
             return torch.tensor(
                 [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
             )
-        elif "inv" in key:
-            return num_nodes
-        elif re.match(r"x_\d+", key):
+        # The inv_i_j and x_i attributes hold node indices, they should be incremented
+        elif re.match(r"inv_\d+_\d+", key) or re.match(r"x_\d+", key):
             return num_nodes
         else:
             return super().__inc__(key, value, *args, **kwargs)
 
-    def __cat_dim__(self, key: str, value: any, *args, **kwargs) -> any:
-        if "adj" in key or "inv" in key:
+    def __cat_dim__(self, key: str, value: any, *args, **kwargs) -> int:
+        """
+        Specify the dimension over which to concatenate tensors for batch processing, based on the
+        attribute key.
+
+        Parameters
+        ----------
+        key : str
+            The attribute name for which the concatenation dimension is specified.
+        value : Any
+            The value associated with the attribute `key`.
+        *args : Additional positional arguments. **kwargs : Additional keyword arguments.
+
+        Returns
+        -------
+        int
+            The dimension over which to concatenate the attribute `key`. Returns 1 for `adj_i_j` and
+            `inv_i_j` attributes, and 0 otherwise.
+        """
+        if re.match(r"(adj|inv)_\d+_\d+", key):
             return 1
         else:
             return 0

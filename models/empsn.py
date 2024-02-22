@@ -7,7 +7,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 from torch_scatter import scatter_add
 
-from models.utils import compute_centroids, compute_invariants
+from models.utils import compute_centroids, compute_invariants_3d
 
 
 class EMPSN(nn.Module):
@@ -23,7 +23,7 @@ class EMPSN(nn.Module):
         num_layers: int,
         max_com: str,
         initial_features: str,
-        compute_invariants: callable = compute_invariants,
+        compute_invariants: callable = compute_invariants_3d,
     ) -> None:
         super().__init__()
 
@@ -184,9 +184,9 @@ class EMPSNLayer(nn.Module):
         # pass the different messages of all adjacency types
         mes = {
             adj_type: self.message_passing[adj_type](
-                x=(x[adj_type[0]], x[adj_type[2]]), index=index, edge_attr=inv[adj_type]
+                x=(x[adj_type[0]], x[adj_type[2]]), index=adj[adj_type], edge_attr=inv[adj_type]
             )
-            for adj_type, index in adj.items()
+            for adj_type in self.adjacencies
         }
 
         # find update states through concatenation, update and add residual connection

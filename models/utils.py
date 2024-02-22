@@ -153,14 +153,35 @@ def compute_invariants(
     adj: dict[str, torch.LongTensor],
     inv_ind: dict[str, torch.FloatTensor],
     device: torch.device,
-):
+) -> dict[str, torch.FloatTensor]:
     """
     Compute geometric invariants between pairs of cells specified in `adj`.
 
-    This function calculates the Euclidean distance between the centroids of cell pairs. The
-    centroids are computed only once per rank and memoized to improve efficiency. The distances
-    serve as geometric invariants that characterize the spatial relationships between cells of
-    different ranks.
+    This function calculates the following geometric features:
+
+    Distance between centroids
+        Euclidean distance between the centroids of cell pairs. The centroids are computed only once
+        per rank and memoized to improve efficiency. The distances serve as geometric invariants
+        that characterize the spatial relationships between cells of different ranks.
+
+    Maximum pairwise distance within-cell
+        For both the sender and receiver cell, the pairwise distances between their nodes are
+        computed and the maximum distance is stored. This feature is meant to very loosely
+        approximate the size of each cell.
+
+    Two Hausdorff distances
+        We compute two Hausdorff distances, one from the sender's point of view and one from the
+        receiver's. The Hausdorff distance between two sets of points is typically defined as
+
+            H(A, B) = max{sup_{a in A} inf_{b in B} d(a, b), sup_{b in B} inf_{a in A} d(b, a)}
+
+        where A and B are two sets of points, d(a, b) is the Euclidean distance between points a and
+        b, sup denotes the supremum (least upper bound) of a set, and inf denotes the infimum
+        (greatest lower bound) of a set. Instead of taking the maximum, we instead return both of
+        the terms. This choice allows us to implicitly encode the subset relationship into these
+        features: the first Hausdorff distance is 0 iff A is a subset of B and the second Hausdorff
+        distance is 0 iff B is a subset of A.
+
 
     Parameters
     ----------
@@ -182,9 +203,8 @@ def compute_invariants(
     Returns
     -------
     dict
-        A dictionary where each key corresponds to a key in `adj` and each value is a tensor of
-        Euclidean distances between the centroids of the sender-receiver cell pairs specified by the
-        corresponding value in `adj`.
+        A dictionary where each key corresponds to a key in `adj` and each value is a 2D tensor
+        holding the computed geometric features for each cell pair.
 
     Notes
     -----
@@ -198,6 +218,7 @@ def compute_invariants(
     mean_cell_positions = {}
     max_pairwise_distances = {}
     for rank_pair, cell_pairs in adj.items():
+
         # Compute mean cell positions memoized
         sender_rank, receiver_rank = rank_pair.split("_")
         for rank in [sender_rank, receiver_rank]:
@@ -205,19 +226,31 @@ def compute_invariants(
                 mean_cell_positions[rank] = compute_centroids(feat_ind[rank], pos)
             if rank not in max_pairwise_distances:
                 max_pairwise_distances[rank] = compute_max_pairwise_distances(feat_ind[rank], pos)
+
         # Compute mean distances
         indexed_sender_centroids = mean_cell_positions[sender_rank][cell_pairs[0]]
         indexed_receiver_centroids = mean_cell_positions[receiver_rank][cell_pairs[1]]
         differences = indexed_sender_centroids - indexed_receiver_centroids
         distances = torch.sqrt((differences**2).sum(dim=1, keepdim=True))
+
+        # Retrieve maximum pairwise distances
         max_dist_sender = max_pairwise_distances[sender_rank][cell_pairs[0]]
         max_dist_receiver = max_pairwise_distances[receiver_rank][cell_pairs[1]]
-        new_features[rank_pair] = torch.cat([distances, max_dist_sender, max_dist_receiver], dim=1)
+
+        # Compute Hausdorff distances
+        sender_cells = feat_ind[sender_rank][cell_pairs[0]]
+        receiver_cells = feat_ind[receiver_rank][cell_pairs[1]]
+        hausdorff_distances = compute_hausdorff_distances(sender_cells, receiver_cells, pos)
+
+        # Combine all features
+        new_features[rank_pair] = torch.cat(
+            [distances, max_dist_sender, max_dist_receiver, hausdorff_distances], dim=1
+        )
 
     return new_features
 
 
-compute_invariants.num_features_map = defaultdict(lambda: 3)
+compute_invariants.num_features_map = defaultdict(lambda: 5)
 
 
 def compute_max_pairwise_distances(
@@ -252,6 +285,51 @@ def compute_max_pairwise_distances(
     max_distances = dist_matrix.max(dim=2)[0].max(dim=1)[0].unsqueeze(1)
 
     return max_distances
+
+
+def compute_hausdorff_distances(
+    sender_cells: torch.FloatTensor, receiver_cells: torch.FloatTensor, pos: torch.FloatTensor
+) -> torch.FloatTensor:
+    """
+    Compute the Hausdorff distances between two sets of cells.
+
+    The Hausdorff distance is calculated based on the positions of sender and receiver cells. For
+    two cells A and B where A is the sender and B is the receiver, the two Hausdorff distances
+    computed by this function correspond to the maximum distance between any node in cell A and the
+    node in cell B that is closest to it, and vice versa.
+
+    Parameters
+    ----------
+    sender_cells : torch.FloatTensor
+        A tensor representing the positions of the sender cells.
+    receiver_cells : torch.FloatTensor
+        A tensor representing the positions of the receiver cells.
+    pos : torch.FloatTensor
+        A tensor representing additional position information used in computing intercell distances.
+
+    Returns
+    -------
+    torch.FloatTensor
+        A tensor of shape (N, 2), where N is the number of sender cells. Each element contains the
+        Hausdorff distance from sender to receiver cells in the first column, and receiver to sender
+        cells in the second column.
+    """
+    dist_matrix = compute_intercell_distances(sender_cells, receiver_cells, pos)
+    dist_matrix = dist_matrix.nan_to_num(float("inf"))
+
+    sender_mins = dist_matrix.min(dim=2)[0]
+    # Cast inf to -inf to correctly compute maxima
+    sender_mins = torch.where(sender_mins == float("inf"), float("-inf"), sender_mins)
+    sender_hausdorff = sender_mins.max(dim=1)[0]
+
+    receiver_mins = dist_matrix.min(dim=1)[0]
+    # Cast inf to -inf to correctly compute maxima
+    receiver_mins = torch.where(receiver_mins == float("inf"), float("-inf"), receiver_mins)
+    receiver_hausdorff = receiver_mins.max(dim=1)[0]
+
+    hausdorff_distances = torch.stack([sender_hausdorff, receiver_hausdorff], dim=1)
+
+    return hausdorff_distances
 
 
 def compute_intercell_distances(

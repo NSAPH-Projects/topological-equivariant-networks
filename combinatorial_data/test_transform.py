@@ -13,7 +13,7 @@ from torch_geometric.datasets import QM9
 
 from combinatorial_data.lifts import rips_lift as new_rips_lift
 from combinatorial_data.ranker import get_ranker
-from combinatorial_data.utils import CombinatorialComplexTransform as NewTransform
+from combinatorial_data.transforms import CombinatorialComplexTransform as NewTransform
 from legacy.simplicial_data.rips_lift import rips_lift as old_rips_lift
 
 

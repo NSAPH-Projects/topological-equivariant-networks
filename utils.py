@@ -19,8 +19,7 @@ def get_adjacency_types(max_dim: int, connectivity: str) -> list[str]:
         The maximum dimension (inclusive) for which to generate adjacency types. Represents the
         highest rank of cells in the connectivity pattern.
     connectivity : str
-        The connectivity pattern to use. Must be one of "self_and_next", "self_and_higher", or
-        "all_to_all".
+        The connectivity pattern to use. Must be one of the options defined below:
         - "self_and_next" generates adjacencies where each rank is connected to itself and the next
         (higher) rank.
         - "self_and_higher" generates adjacencies where each rank is connected to itself and all
@@ -33,6 +32,7 @@ def get_adjacency_types(max_dim: int, connectivity: str) -> list[str]:
         next (higher) rank and the previous (lower) rank.
         - "all_to_all" generates adjacencies where each rank is connected to every other rank,
         including itself.
+        - "legacy" ignores the max_dim parameter and returns ['0_0', '0_1', '1_1', '1_2'].
 
     Returns
     -------
@@ -65,6 +65,7 @@ def get_adjacency_types(max_dim: int, connectivity: str) -> list[str]:
         "self_and_lower",
         "self_and_neighbors",
         "all_to_all",
+        "legacy",
     ]:
         raise ValueError(f"{connectivity} is not a known connectivity pattern!")
 
@@ -98,10 +99,13 @@ def get_adjacency_types(max_dim: int, connectivity: str) -> list[str]:
             if i < max_dim:
                 adj_types.append(f"{i}_{i+1}")
 
-    else:
+    elif connectivity == "all_to_all":
         for i in range(max_dim + 1):
             for j in range(max_dim + 1):
                 adj_types.append(f"{i}_{j}")
+
+    else:
+        adj_types = ["0_0", "0_1", "1_1", "1_2"]
 
     return adj_types
 

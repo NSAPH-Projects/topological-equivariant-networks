@@ -7,19 +7,34 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from torch_geometric.data import Data
 from torch_geometric.datasets import QM9
+from torchvision.transforms import Compose
 from tqdm import tqdm
 
 from combinatorial_data.lifts import get_lifters
 from combinatorial_data.ranker import get_ranker
-from combinatorial_data.transforms import CombinatorialComplexTransform
+from combinatorial_data.transforms import CombinatorialComplexTransform, FeatureEngineeringTransform
 from combinatorial_data.utils import CustomCollater
 
 
 def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
-    """Return mean and mean average deviation of target in loader."""
-    values = [graph.y for graph in loader.dataset]
-    mean = sum(values) / len(values)
-    mad = sum([abs(v - mean) for v in values]) / len(values)
+    """
+    Calculate the mean and mean absolute deviation (MAD) of targets from a DataLoader.
+
+    Parameters
+    ----------
+    loader : DataLoader
+        DataLoader containing the dataset with targets.
+
+    Returns
+    -------
+    tuple[Tensor, Tensor]
+        A tuple containing the mean and MAD of the dataset's targets.
+
+    """
+    targets = loader.dataset.y
+    mean = targets.mean()
+    mad = (targets - mean).abs().mean()
+
     return mean, mad
 
 
@@ -39,26 +54,35 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: dict[str,
     return graph
 
 
-def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
-    # define data_root
-    data_root = "./datasets/QM9_"
-    data_root += generate_dataset_dir_name(
-        args, ["num_samples", "target_name", "lifters", "dim", "dis"]
-    )
+def transform_targets(raw_targets: torch.FloatTensor, target_name: str) -> torch.FloatTensor:
+    """
+    Select and transform raw target values to a specific unit (e.g., eV) based on the target name.
 
-    # load, subsample and transform the dataset
-    lifters = get_lifters(args)
-    ranker = get_ranker(args.lifters)
-    transform = CombinatorialComplexTransform(
-        lifters=lifters, ranker=ranker, dim=args.dim, adjacencies=args.adjacencies
-    )
-    dataset = QM9(root=data_root)
-    dataset = dataset.shuffle()
-    dataset = dataset[: args.num_samples]
-    dataset = [transform(sample) for sample in tqdm(dataset)]
+    Parameters
+    ----------
+    raw_targets : torch.FloatTensor
+        A 2D tensor of shape (n_samples, n_targets) containing the raw target values.
+    target_name : str
+        The name of the target to be transformed. Must be one of the predefined target names.
 
-    # filter relevant index and update units to eV
-    qm9_to_ev = {
+    Returns
+    -------
+    torch.FloatTensor
+        A 1D tensor of shape (n_samples,) containing the transformed target values for the specified
+        target name.
+
+    Raises
+    ------
+    ValueError
+        If `target_name` is not among the predefined targets.
+
+    Notes
+    -----
+    The transformation applies a conversion factor to the specified target values based on a
+    predefined dictionary (`QM9_TO_EV`). If the target name does not require conversion (not found
+    in the dictionary), the original values are returned without modification.
+    """
+    QM9_TO_EV = {
         "U0": 27.2114,
         "U": 27.2114,
         "G": 27.2114,
@@ -68,7 +92,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         "homo": 27.2114,
         "lumo": 27.2114,
     }
-    targets = [
+    TARGETS = [
         "mu",
         "alpha",
         "homo",
@@ -89,11 +113,39 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         "B",
         "C",
     ]
-    index = targets.index(args.target_name)
-    dataset = [
-        prepare_data(graph, index, args.target_name, qm9_to_ev)
-        for graph in tqdm(dataset, desc="Preparing data")
-    ]
+    conversion_factor = QM9_TO_EV.get(target_name, 1)
+    index = TARGETS.index(target_name)
+    transformed_targets = conversion_factor * raw_targets[:, index]
+    return transformed_targets
+
+
+def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
+    # define data_root
+    data_root = "./datasets/QM9_"
+    data_root += generate_dataset_dir_name(
+        args, ["num_samples", "target_name", "lifters", "dim", "dis"]
+    )
+
+    # load, subsample and transform the dataset
+    lifters = get_lifters(args)
+    ranker = get_ranker(args.lifters)
+    transform = CombinatorialComplexTransform(
+        lifters=lifters, ranker=ranker, dim=args.dim, adjacencies=args.adjacencies
+    )
+    transform = Compose(
+        [
+            CombinatorialComplexTransform(
+                lifters=lifters, ranker=ranker, dim=args.dim, adjacencies=args.adjacencies
+            ),
+            FeatureEngineeringTransform(),
+        ]
+    )
+    dataset = QM9(root=data_root, transform=transform)
+    dataset._data.y = transform_targets(dataset.y, args.target_name)
+    dataset = dataset.shuffle()
+    dataset = dataset[: args.num_samples]
+
+    # dataset = [transform(sample) for sample in tqdm(dataset)]
 
     # train/val/test split
     if args.num_samples is None:

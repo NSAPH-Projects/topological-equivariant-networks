@@ -248,6 +248,74 @@ def sparse_to_dense(sparse_matrix):
     return torch.from_numpy(dense_array).type(torch.int64)
 
 
+class FeatureEngineeringTransform(object):
+    Z_MAX = 9  # Maximum atomic number in the dataset
+
+    def __call__(self, graph: CombinatorialComplexData) -> CombinatorialComplexData:
+        """
+        TODO: add the info in the github issue to this docstring
+        """
+
+        # Prepare feature transformations
+        one_hot = graph.x[:, :5]
+        Z = graph.x[:, 5]
+        Z_tilde = (Z / self.Z_MAX).unsqueeze(1).repeat(1, 5)
+
+        graph.x = torch.cat((one_hot, Z_tilde * one_hot, Z_tilde * Z_tilde * one_hot), dim=1)
+
+        return graph
+
+
+class TargetEngineeringTransform(object):
+    QM9_TO_EV = {
+        "U0": 27.2114,
+        "U": 27.2114,
+        "G": 27.2114,
+        "H": 27.2114,
+        "zpve": 27211.4,
+        "gap": 27.2114,
+        "homo": 27.2114,
+        "lumo": 27.2114,
+    }
+    TARGETS = [
+        "mu",
+        "alpha",
+        "homo",
+        "lumo",
+        "gap",
+        "r2",
+        "zpve",
+        "U0",
+        "U",
+        "H",
+        "G",
+        "Cv",
+        "U0_atom",
+        "U_atom",
+        "H_atom",
+        "G_atom",
+        "A",
+        "B",
+        "C",
+    ]
+
+    def __init__(self, target_name: str):
+        if target_name not in self.TARGETS:
+            raise ValueError(f"{target_name} is not a valid target name.")
+        self.target_name = target_name
+        self.index = self.TARGETS.index(target_name)
+
+    def __call__(self, graph: CombinatorialComplexData) -> CombinatorialComplexData:
+        # Select the target value
+        graph.y = graph.y[0, self.index]
+
+        # Convert units if necessary
+        if self.target_name in self.QM9_TO_EV:
+            graph.y *= self.QM9_TO_EV[self.target_name]
+
+        return graph
+
+
 if __name__ == "__main__":
     import functools
     import random

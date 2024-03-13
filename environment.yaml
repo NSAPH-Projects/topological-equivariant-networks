@@ -6,6 +6,7 @@ channels:
   - defaults
   - pyg
 dependencies:
+  - coverage=7.4.3
   - gudhi=3.8.0
   - matplotlib=3.7.2
   - networkx=3.1

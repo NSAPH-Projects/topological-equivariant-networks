@@ -21,7 +21,7 @@ dependencies:
   - pytorch=2.1.0
   - pyg::pytorch-scatter
   - rdkit
-  - scipy=1.11.3
+  - scipy=1.7.3
   - seaborn
   - tqdm=4.66.1
   - wandb=0.15.12

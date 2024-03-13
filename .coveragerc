@@ -1,3 +1,6 @@
+[run]
+source = .
+
 [report]
 skip_empty = True
 sort = cover

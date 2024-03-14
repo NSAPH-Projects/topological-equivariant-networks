@@ -1,6 +1,7 @@
 name: ten
 channels:
   - pytorch
+  - nvidia
   - anaconda
   - conda-forge
   - defaults
@@ -19,6 +20,7 @@ dependencies:
   - pytest=7.4.4
   - python=3.10
   - pytorch=2.1.0
+  - pytorch-cuda=11.8
   - pyg::pytorch-scatter
   - rdkit
   - scipy=1.7.3

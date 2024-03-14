@@ -143,6 +143,13 @@ def test_identity_lift(edge_index, x, expected_output):
             torch.tensor([[0, 1, 2, 2, 3], [1, 2, 0, 3, 1]], dtype=torch.long),
             {frozenset([0, 1, 2]), frozenset([1, 2, 3])},
         ),
+        # Test with a composite ring (two doubly-connected triangles sharing a face)
+        (
+            torch.tensor(
+                [[0, 1, 2, 2, 3, 1, 2, 0, 3, 1], [1, 2, 0, 3, 1, 0, 1, 2, 2, 3]], dtype=torch.long
+            ),
+            {frozenset([0, 1, 2]), frozenset([1, 2, 3])},
+        ),
         # Test with a composite ring (two undirected triangles sharing an edge)
         (
             torch.tensor([[0, 2, 2, 3, 3], [1, 1, 0, 2, 1]], dtype=torch.long),

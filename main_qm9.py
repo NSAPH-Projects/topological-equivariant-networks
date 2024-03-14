@@ -140,6 +140,14 @@ if __name__ == "__main__":
     parser.add_argument("--num_samples", type=int, default=None, help="num samples to to train on")
     parser.add_argument("--seed", type=int, default=42, help="random seed")
 
+    # Other arguments
+    parser.add_argument(
+        "--enable_indexing_bug",
+        action="store_true",
+        help="""If the buggy legacy implementation should be used for the combinatorial complex
+             transform. Needed to reproduce EMSPN.""",
+    )
+
     parsed_args = parser.parse_args()
     parsed_args.adjacencies = get_adjacency_types(parsed_args.dim, parsed_args.connectivity)
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -6,12 +6,18 @@ from combinatorial_data.ranker import get_ranker
 @pytest.mark.parametrize(
     "lifter_args, cell, memberships, expected",
     [
+        # simple 1
         (["identity:c", "ring:2"], ["a", "b", "c"], [True, False], 2),
+        # simple 2
         (["identity:c", "ring:2"], ["a", "b"], [False, True], 2),
+        # simple 3
         (["identity:c", "ring:2"], ["a", "b"], [True, True], 1),
-        (["identity:c", "ring:2"], ["a", "b", "c"], [False, False], ValueError),  # no lifters
-        (["identity:c", "ring:2"], ["a", "b"], [True], ValueError),  # len mismatch
-        (["identity:-1"], ["a", "b"], [True], ValueError),  # negative rank
+        # no lifters
+        (["identity:c", "ring:2"], ["a", "b", "c"], [False, False], ValueError),
+        # length mismatch
+        (["identity:c", "ring:2"], ["a", "b"], [True], ValueError),
+        # negative rank
+        (["identity:-1"], ["a", "b"], [True], ValueError),
     ],
 )
 def test_get_ranker(

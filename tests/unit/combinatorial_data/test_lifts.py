@@ -12,7 +12,7 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.datasets import QM9
 
-from combinatorial_data.lifts import clique_lift, identity_lift, rips_lift
+from combinatorial_data.lifts import *
 from combinatorial_data.ranker import get_ranker
 from combinatorial_data.utils import CombinatorialComplexTransform as NewTransform
 from legacy.simplicial_data.rips_lift import rips_lift as old_rips_lift
@@ -123,6 +123,52 @@ def test_identity_lift(edge_index, x, expected_output):
 
         # Check if the returned output matches the expected output
         assert output == expected_output
+
+
+@pytest.mark.parametrize(
+    "edge_index, expected",
+    [
+        # Test with a simple graph with no rings
+        (
+            torch.tensor([[0, 1, 2], [1, 2, 3]], dtype=torch.long),
+            set(),
+        ),
+        # Test with a simple graph with one ring
+        (
+            torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]], dtype=torch.long),
+            {frozenset([0, 1, 2, 3])},
+        ),
+        # Test with a composite ring (two directed triangles sharing an edge)
+        (
+            torch.tensor([[0, 1, 2, 2, 3], [1, 2, 0, 3, 1]], dtype=torch.long),
+            {frozenset([0, 1, 2]), frozenset([1, 2, 3])},
+        ),
+        # Test with a composite ring (two undirected triangles sharing an edge)
+        (
+            torch.tensor([[0, 2, 2, 3, 3], [1, 1, 0, 2, 1]], dtype=torch.long),
+            {frozenset([0, 1, 2]), frozenset([1, 2, 3])},
+        ),
+        # Test with missing edge_index
+        (
+            None,
+            ValueError,
+        ),
+    ],
+)
+def test_ring_lift(edge_index, expected):
+    if expected is ValueError:
+        with pytest.raises(ValueError):
+            graph_data = Data(edge_index=edge_index)
+            ring_lift(graph_data)
+    else:
+        # Create a simple graph
+        graph_data = Data(edge_index=edge_index)
+
+        # Call the ring_lift function
+        output = ring_lift(graph_data)
+
+        # Check if the returned output matches the expected output
+        assert output == expected
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3, 4])

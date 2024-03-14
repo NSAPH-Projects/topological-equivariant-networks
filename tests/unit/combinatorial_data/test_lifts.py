@@ -12,7 +12,7 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.datasets import QM9
 
-from combinatorial_data.lifts import clique_lift, rips_lift
+from combinatorial_data.lifts import clique_lift, identity_lift, rips_lift
 from combinatorial_data.ranker import get_ranker
 from combinatorial_data.utils import CombinatorialComplexTransform as NewTransform
 from legacy.simplicial_data.rips_lift import rips_lift as old_rips_lift
@@ -70,6 +70,59 @@ def test_clique_lift(edge_index, expected_simplices):
 
     # Check if the returned simplices match the expected simplices
     assert simplices == expected_simplices
+
+
+@pytest.mark.parametrize(
+    "edge_index, x, expected_output",
+    [
+        # Test with an empty graph
+        (torch.tensor([[], []], dtype=torch.long), torch.tensor([], dtype=torch.float), set()),
+        # Test with a graph with isolated nodes
+        (
+            torch.tensor([[0, 2], [1, 3]], dtype=torch.long),
+            torch.tensor([[-1], [-1], [-1], [-1]], dtype=torch.float),
+            {
+                frozenset([0]),
+                frozenset([1]),
+                frozenset([2]),
+                frozenset([3]),
+                frozenset([0, 1]),
+                frozenset([2, 3]),
+            },
+        ),
+        # Test with a graph with no feature matrix
+        (
+            torch.tensor([[0, 2], [1, 3]], dtype=torch.long),
+            None,
+            ValueError,
+        ),
+        # Test with a graph with self-loops
+        (
+            torch.tensor([[0, 1, 1], [0, 1, 2]], dtype=torch.long),
+            torch.tensor([[-1], [-1], [-1]], dtype=torch.float),
+            {
+                frozenset([0]),
+                frozenset([1]),
+                frozenset([2]),
+                frozenset([1, 2]),
+            },
+        ),
+    ],
+)
+def test_identity_lift(edge_index, x, expected_output):
+    if expected_output is ValueError:
+        with pytest.raises(ValueError):
+            graph_data = Data(edge_index=edge_index, x=x)
+            identity_lift(graph_data)
+    else:
+        # Create the graph
+        graph_data = Data(edge_index=edge_index, x=x)
+
+        # Call the identity_lift function
+        output = identity_lift(graph_data)
+
+        # Check if the returned output matches the expected output
+        assert output == expected_output
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3, 4])

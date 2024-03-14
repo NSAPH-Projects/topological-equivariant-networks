@@ -3,10 +3,10 @@ import copy
 import time
 
 import torch
+from qm9.utils import calc_mean_mad
 from tqdm import tqdm
 
 import wandb
-from qm9.utils import calc_mean_mad
 from utils import get_adjacency_types, get_loaders, get_model, set_seed
 
 
@@ -16,7 +16,7 @@ def main(args):
     if args.compile:
         model = torch.compile(model)
     # Setup wandb
-    wandb.init(project=f"QM9-{args.target_name}")
+    wandb.init(entity="ten-harvard", project=f"QM9-{args.target_name}")
     wandb.config.update(vars(args))
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Number of parameters: {num_params}")

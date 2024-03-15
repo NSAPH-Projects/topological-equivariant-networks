@@ -63,11 +63,21 @@ def get_ranker(lifter_args: list[str]) -> callable:
             The rank of the cell, determined as the minimum rank among the groups to which the cell
             belongs, with 'c' indicating rank based on cardinality.
 
+        Raises
+        ------
+        ValueError
+            If the length of `memberships` does not match the number of lifters.
+
         Notes
         -----
         The minimum is returned to avoid a situation where a singleton cell gets a nonzero rank,
         which is not allowed in TopoNetX.
         """
+        if len(memberships) != len(lifter_args):
+            raise ValueError(
+                f"""Length of memberships ({len(memberships)}) does not match the number of lifters
+                ({len(lifter_args)})."""
+            )
         ranks = []
         for idx, is_member in enumerate(memberships):
             if is_member:

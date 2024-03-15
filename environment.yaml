@@ -6,6 +6,7 @@ channels:
   - defaults
   - pyg
 dependencies:
+  - coverage=7.4.3
   - gudhi=3.8.0
   - matplotlib=3.7.2
   - networkx=3.1
@@ -21,7 +22,7 @@ dependencies:
   - pytorch=2.1.0
   - pyg::pytorch-scatter
   - rdkit
-  - scipy=1.7.3
+  - scipy=1.11.3
   - seaborn
   - tqdm=4.66.1
   - wandb=0.15.12

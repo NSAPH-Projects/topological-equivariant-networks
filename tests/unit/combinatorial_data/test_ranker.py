@@ -18,6 +18,10 @@ from combinatorial_data.ranker import get_ranker
         (["identity:c", "ring:2"], ["a", "b"], [True], ValueError),
         # negative rank
         (["identity:-1"], ["a", "b"], [True], ValueError),
+        # unspecified rank
+        (["identity"], ["a", "b"], [True], 1),
+        # unknown/illegal rank
+        (["identity:abc"], ["a", "b"], [True], ValueError),
     ],
 )
 def test_get_ranker(

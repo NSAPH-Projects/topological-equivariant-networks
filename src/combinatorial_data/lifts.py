@@ -150,9 +150,18 @@ def ring_lift(graph: Data) -> set[frozenset[int]]:
     -------
     set[frozenset[int]]
         A set of minimal cycles, each cycle is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
     """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+
     # Convert to networkx graph
-    G = pyg_utils.to_networkx(graph)
+    G = pyg_utils.to_networkx(graph, to_undirected=True)
 
     # Compute all cycles (using a set with sorting removes duplicates)
     cycles = {frozenset(cycle) for cycle in nx.simple_cycles(G) if len(cycle) >= 3}

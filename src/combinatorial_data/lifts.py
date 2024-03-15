@@ -107,11 +107,22 @@ def identity_lift(graph: Data) -> set[frozenset[int]]:
         A set of graph elements, where each element is a node (singleton frozenset) or an edge
         (frozenset of two node indices).
 
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain a feature matrix 'x' or an edge index 'edge_index'.
+
     Notes
     -----
     The function directly works with the PyTorch Geometric Data object. Nodes are inferred from the
-    edge_index attribute, and edges are directly extracted from it.
+    x attribute, and edges are inferred from the edge_index attribute.
     """
+
+    if (not hasattr(graph, "x")) or (graph.x is None):
+        raise ValueError("The given graph does not have a feature matrix 'x'!")
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+
     # Create nodes
     nodes = {frozenset([node]) for node in range(graph.x.size(0))}
 
@@ -139,9 +150,18 @@ def ring_lift(graph: Data) -> set[frozenset[int]]:
     -------
     set[frozenset[int]]
         A set of minimal cycles, each cycle is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
     """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+
     # Convert to networkx graph
-    G = pyg_utils.to_networkx(graph)
+    G = pyg_utils.to_networkx(graph, to_undirected=True)
 
     # Compute all cycles (using a set with sorting removes duplicates)
     cycles = {frozenset(cycle) for cycle in nx.simple_cycles(G) if len(cycle) >= 3}

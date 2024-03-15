@@ -203,7 +203,7 @@ def test_rips_transform(dim: int, dis: float):
         old_x_dict, old_adj, old_inv = old_rips_lift(graph, dim=dim, dis=dis)
 
         fixed_rips_lift = functools.partial(rips_lift, dim=dim, dis=dis)
-        ranker = get_ranker("rips")
+        ranker = get_ranker(["rips"])
         adjacencies = []
         for i in range(dim + 1):
             adjacencies.append(f"{i}_{i}")

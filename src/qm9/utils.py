@@ -49,7 +49,11 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     lifters = get_lifters(args)
     ranker = get_ranker(args.lifters)
     transform = CombinatorialComplexTransform(
-        lifters=lifters, ranker=ranker, dim=args.dim, adjacencies=args.adjacencies
+        lifters=lifters,
+        ranker=ranker,
+        dim=args.dim,
+        adjacencies=args.adjacencies,
+        enable_indexing_bug=args.enable_indexing_bug,
     )
     dataset = QM9(root=data_root)
     dataset = dataset.shuffle()

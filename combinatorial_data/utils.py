@@ -328,6 +328,8 @@ class CombinatorialComplexTransform(BaseTransform):
                 matrix += cc.coadjacency_matrix(**kwargs)
             else:
                 matrix += cc.adjacency_matrix(**kwargs)
+
+        matrix[matrix > 0] = 1
         return index, matrix
 
 
@@ -442,9 +444,8 @@ if __name__ == "__main__":
     import functools
     import random
 
-    from torch_geometric.datasets import QM9
-
     from combinatorial_data.lifts import rips_lift
+    from torch_geometric.datasets import QM9
 
     data = QM9("../datasets/QM9")
     dim = 2

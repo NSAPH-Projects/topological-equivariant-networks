@@ -3,10 +3,10 @@ import copy
 import time
 
 import torch
-from qm9.utils import calc_mean_mad
 from tqdm import tqdm
 
 import wandb
+from qm9.utils import calc_mean_mad
 from utils import get_adjacency_types, get_loaders, get_model, set_seed
 
 
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--post_pool_filter",
         nargs="+",
-        type="int",
+        type=int,
         default=None,
         help="specifies which ranks to feed into the final prediction",
     )

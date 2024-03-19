@@ -1,8 +1,10 @@
 import re
+from collections.abc import Iterable
 from typing import Union
 
 import numpy as np
 import torch
+from scipy.sparse import csc_matrix
 from toponetx.classes import CombinatorialComplex
 from torch_geometric.data import Batch, Data
 from torch_geometric.loader.dataloader import Collater
@@ -195,6 +197,7 @@ class CombinatorialComplexTransform(BaseTransform):
         ranker: callable,
         dim: int,
         adjacencies: list[str],
+        neighbor_type: str,
         enable_indexing_bug: bool = False,
     ):
         if isinstance(lifters, list):
@@ -204,6 +207,7 @@ class CombinatorialComplexTransform(BaseTransform):
         self.rank = ranker
         self.dim = dim
         self.adjacencies = adjacencies
+        self.neighbor_type = neighbor_type
         self.enable_indexing_bug = enable_indexing_bug
 
     def __call__(self, graph: Data) -> CombinatorialComplexData:
@@ -255,18 +259,7 @@ class CombinatorialComplexTransform(BaseTransform):
         x_dict, mem_dict = map_to_tensors(cell_dict, len(self.lifters))
 
         # create the combinatorial complex
-        # first add higher-order cells
-        cc = CombinatorialComplex()
-        for rank, cells in cell_dict.items():
-            if rank > 0:
-                cc.add_cells_from(cells, ranks=rank)
-
-        # then remove the artificially created 0-rank cells
-        zero_rank_cells = [cell for cell in cc.cells if len(cell) == 1]
-        cc.remove_cells(zero_rank_cells)
-
-        # finally add the organic 0-rank cells
-        cc.add_cells_from(cell_dict[0], ranks=0)
+        cc = create_combinatorial_complex(cell_dict)
 
         # compute adjancencies and incidences
         adj, idx_to_cell = dict(), dict()
@@ -279,8 +272,7 @@ class CombinatorialComplexTransform(BaseTransform):
                     matrix = cc.incidence_matrix(rank=j, to_rank=i).T
 
             else:
-                index, matrix = cc.adjacency_matrix(rank=i, via_rank=i + 1, index=True)
-                idx_to_cell[i] = {v: sorted(k) for k, v in index.items()}
+                idx_to_cell[i], matrix = self.extended_adjacency_matrix(cc, i)
 
             if np.array_equal(matrix, np.zeros(1)):
                 matrix = torch.zeros(2, 0).long()
@@ -368,6 +360,128 @@ class CombinatorialComplexTransform(BaseTransform):
         }
 
         return cell_lifter_map
+
+    def extended_adjacency_matrix(self, cc, rank):
+        """
+        Compute the extended adjacency matrix for a given combinatorial complex and rank.
+
+        Parameters
+        ----------
+        cc : CombinatorialComplex
+            The combinatorial complex.
+        rank : int
+            The rank of the complex.
+
+        Returns
+        -------
+        tuple[list[frozenset], np.ndarray]
+            A tuple containing the index and the extended adjacency matrix.
+
+        Notes
+        -----
+        - The extended adjacency matrix represents the connectivity between cells of a combinatorial
+        complex.
+        - The matrix is computed based on the neighbor type specified in the class.
+        - The index represents the cells of the complex.
+        - If the complex contains no cells with the given rank, a 1x1 zero matrix is returned. The
+        reason is the desire to be consistent with the behavior of TopoNetX's incidence_matrix()
+        which also returns a 1x1 zero matrix in that case,
+        """
+        index = cc.skeleton(rank=rank)
+        index = [sorted(cell) for cell in index]
+        num_cells = len(index)
+        if num_cells == 0:
+            matrix = np.zeros(1)
+        else:
+            matrix = csc_matrix((num_cells, num_cells), dtype=int)
+            if self.neighbor_type == "adjacency":
+                via_ranks = [rank + 1]
+            elif self.neighbor_type == "any_adjacency":
+                via_ranks = list(range(rank + 1, self.dim + 1))
+            elif self.neighbor_type == "coadjacency":
+                via_ranks = [rank - 1]
+            elif self.neighbor_type == "any_coadjacency":
+                via_ranks = list(range(rank - 1, -1, -1))
+            elif self.neighbor_type == "direct":
+                via_ranks = [rank - 1, rank + 1]
+            elif self.neighbor_type == "all":
+                via_ranks = list(range(self.dim + 1))
+            via_ranks = [r for r in via_ranks if r >= 0 and r <= self.dim and r != rank]
+            for r in via_ranks:
+                kwargs = dict(rank=rank, via_rank=r, index=False)
+                if r < rank:
+                    matrix += cc.coadjacency_matrix(**kwargs)
+                else:
+                    matrix += cc.adjacency_matrix(**kwargs)
+
+            matrix[matrix > 0] = 1
+
+        return index, matrix
+
+
+def create_combinatorial_complex(
+    cell_dict: dict[int, Iterable[frozenset[int]]]
+) -> CombinatorialComplex:
+    """
+    Create a combinatorial complex from a dictionary of cells.
+
+    Parameters
+    ----------
+    cell_dict : dict[int, Iterable[frozenset[int]]]
+        A dictionary of cells, where the keys are the ranks of the cells and the values are
+        iterables of cell indices.
+
+    Returns
+    -------
+    CombinatorialComplex
+        The combinatorial complex created from the input cells.
+
+    Raises
+    ------
+    TypeError
+        If the input cell_dict is not a dictionary or if any of its values are not iterables of
+        frozensets.
+
+    Notes
+    -----
+    When a high-rank cell (rank > 0) is added to the CombinatorialComplex, TopoNetX automatically
+    adds the nodes which constitute the cell as 0-rank cells. As such under-the-hood behavior is
+    prone to introduce hidden bugs, this custom wrapper function was created. This function first
+    adds higher-order cells, then removes the artificially created 0-rank cells, and finally adds
+    the organic 0-rank cells.
+
+    The type of dictionary values is chosen to be Iterable[frozenset[int]] to allow for flexibility.
+    In particular, this choice permits the dictionary values to be themselves dictionaries, in which
+    case only their keys are used to create the complex. This is useful for creating a complex from
+    the keys of a dictionary of cells and their lifter contributions, for example.
+    """
+
+    if not isinstance(cell_dict, dict):
+        raise TypeError("Input cell_dict must be a dictionary.")
+
+    for rank, cells in cell_dict.items():
+        if (not isinstance(cells, Iterable)) or any(
+            not isinstance(cell, frozenset) for cell in cells
+        ):
+            raise TypeError(f"Cells of rank {rank} must be Iterable[frozenset[int]].")
+
+    # Create an instance of the combinatorial complex
+    cc = CombinatorialComplex()
+
+    # First add higher-order cells
+    for rank, cells in cell_dict.items():
+        if rank > 0:
+            cc.add_cells_from(cells, ranks=rank)
+
+    # Then remove the artificially created 0-rank cells
+    zero_rank_cells = [cell for cell in cc.cells if len(cell) == 1]
+    cc.remove_cells(zero_rank_cells)
+
+    # Finally add the organic 0-rank cells
+    if 0 in cell_dict.keys():
+        cc.add_cells_from(cell_dict[0], ranks=0)
+
+    return cc
 
 
 def map_to_tensors(

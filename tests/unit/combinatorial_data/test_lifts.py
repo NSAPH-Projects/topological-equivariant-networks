@@ -209,7 +209,7 @@ def test_rips_transform(dim: int, dis: float):
             adjacencies.append(f"{i}_{i}")
             adjacencies.append(f"{i}_{i+1}")
 
-        simplicial_transform = NewTransform(fixed_rips_lift, ranker, dim, adjacencies)
+        simplicial_transform = NewTransform(fixed_rips_lift, ranker, dim, adjacencies, "adjacency")
         new_x_dict, _, new_adj, new_inv = simplicial_transform.get_relevant_dicts(graph)
 
         # Check if x_dict are the same

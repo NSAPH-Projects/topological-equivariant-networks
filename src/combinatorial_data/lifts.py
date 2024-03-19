@@ -133,6 +133,38 @@ def identity_lift(graph: Data) -> set[frozenset[int]]:
     return nodes.union(edges)
 
 
+def supercell_lift(graph: Data) -> set[frozenset[int]]:
+    """
+    Return the entire graph as a single cell.
+
+    This function returns the entire graph as a single cell, represented as a frozenset of all
+    node indices. If the graph has less than 2 nodes, it returns an empty set.
+
+    Parameters
+    ----------
+    graph : Data
+        The input graph represented as a PyTorch Geometric Data object.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A singleton set containing a frozenset of all node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain a feature matrix 'x'.
+    """
+
+    if (not hasattr(graph, "x")) or (graph.x is None):
+        raise ValueError("The given graph does not have a feature matrix 'x'!")
+    num_nodes = graph.x.size(0)
+    if num_nodes < 2:
+        return set()
+    else:
+        return {frozenset([node for node in range(num_nodes)])}
+
+
 def ring_lift(graph: Data) -> set[frozenset[int]]:
     """
     Identify minimal cycles in a graph.
@@ -229,6 +261,7 @@ lifter_registry = {
     "identity": identity_lift,
     "ring": ring_lift,
     "rips": rips_lift,
+    "supercell": supercell_lift,
 }
 
 

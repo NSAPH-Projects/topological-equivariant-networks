@@ -232,6 +232,27 @@ def test_rips_transform(dim: int, dis: float):
                     ), f"sorted(old_inv[{i}_{j}]) != new_inv[{i}_{j}]"
 
 
+@pytest.mark.parametrize(
+    "x, expected",
+    [
+        (torch.tensor([[-1], [-1], [-1], [-1]], dtype=torch.float), {frozenset([0, 1, 2, 3])}),
+        (torch.tensor([[-1]], dtype=torch.float), set()),
+        (torch.zeros(0, 1, dtype=torch.float), set()),
+        (None, ValueError),
+    ],
+)
+def test_supercell_lift(x, expected):
+    # Call the supercell_lift function
+    if expected is ValueError:
+        with pytest.raises(ValueError):
+            graph_data = Data(x=x)
+            supercell_lift(graph_data)
+    else:
+        graph_data = Data(x=x)
+        output = supercell_lift(graph_data)
+        assert output == expected
+
+
 def sort_tensor_columns_and_get_indices(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Sort a 2D tensor by its second, then first row, returning sorted tensor and indices.

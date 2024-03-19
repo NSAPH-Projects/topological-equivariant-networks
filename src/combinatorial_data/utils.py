@@ -1,4 +1,5 @@
 import re
+from collections.abc import Iterable
 from typing import Union
 
 import numpy as np
@@ -256,18 +257,7 @@ class CombinatorialComplexTransform(BaseTransform):
         x_dict, mem_dict = map_to_tensors(cell_dict, len(self.lifters))
 
         # create the combinatorial complex
-        # first add higher-order cells
-        cc = CombinatorialComplex()
-        for rank, cells in cell_dict.items():
-            if rank > 0:
-                cc.add_cells_from(cells, ranks=rank)
-
-        # then remove the artificially created 0-rank cells
-        zero_rank_cells = [cell for cell in cc.cells if len(cell) == 1]
-        cc.remove_cells(zero_rank_cells)
-
-        # finally add the organic 0-rank cells
-        cc.add_cells_from(cell_dict[0], ranks=0)
+        cc = create_combinatorial_complex(cell_dict)
 
         # compute adjancencies and incidences
         adj, idx_to_cell = dict(), dict()
@@ -419,6 +409,71 @@ class CombinatorialComplexTransform(BaseTransform):
         return index, matrix
 
 
+def create_combinatorial_complex(
+    cell_dict: dict[int, Iterable[frozenset[int]]]
+) -> CombinatorialComplex:
+    """
+    Create a combinatorial complex from a dictionary of cells.
+
+    Parameters
+    ----------
+    cell_dict : dict[int, Iterable[frozenset[int]]]
+        A dictionary of cells, where the keys are the ranks of the cells and the values are
+        iterables of cell indices.
+
+    Returns
+    -------
+    CombinatorialComplex
+        The combinatorial complex created from the input cells.
+
+    Raises
+    ------
+    TypeError
+        If the input cell_dict is not a dictionary or if any of its values are not iterables of
+        frozensets.
+
+    Notes
+    -----
+    When a high-rank cell (rank > 0) is added to the CombinatorialComplex, TopoNetX automatically
+    adds the nodes which constitute the cell as 0-rank cells. As such under-the-hood behavior is
+    prone to introduce hidden bugs, this custom wrapper function was created. This function first
+    adds higher-order cells, then removes the artificially created 0-rank cells, and finally adds
+    the organic 0-rank cells.
+
+    The type of dictionary values is chosen to be Iterable[frozenset[int]] to allow for flexibility.
+    In particular, this choice permits the dictionary values to be themselves dictionaries, in which
+    case only their keys are used to create the complex. This is useful for creating a complex from
+    the keys of a dictionary of cells and their lifter contributions, for example.
+    """
+
+    if not isinstance(cell_dict, dict):
+        raise TypeError("Input cell_dict must be a dictionary.")
+
+    for rank, cells in cell_dict.items():
+        if (not isinstance(cells, Iterable)) or any(
+            not isinstance(cell, frozenset) for cell in cells
+        ):
+            raise TypeError(f"Cells of rank {rank} must be Iterable[frozenset[int]].")
+
+    # Create an instance of the combinatorial complex
+    cc = CombinatorialComplex()
+
+    # First add higher-order cells
+    for rank, cells in cell_dict.items():
+        if rank > 0:
+            cc.add_cells_from(cells, ranks=rank)
+
+    # Then remove the artificially created 0-rank cells
+    zero_rank_cells = [cell for cell in cc.cells if len(cell) == 1]
+    cc.remove_cells(zero_rank_cells)
+
+    # Finally add the organic 0-rank cells
+    if 0 in cell_dict.keys():
+        cc.add_cells_from(cell_dict[0], ranks=0)
+
+    return cc
+
+
 def map_to_tensors(
     input_dict: dict[int, dict[frozenset[int], list[bool]]], num_lifters: int
 ) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor]]:
@@ -530,8 +585,9 @@ if __name__ == "__main__":
     import functools
     import random
 
-    from combinatorial_data.lifts import rips_lift
     from torch_geometric.datasets import QM9
+
+    from combinatorial_data.lifts import rips_lift
 
     data = QM9("../datasets/QM9")
     dim = 2

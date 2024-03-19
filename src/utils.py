@@ -59,6 +59,7 @@ def get_adjacency_types(max_dim: int, connectivity: str) -> list[str]:
     """
     adj_types = []
     if connectivity not in [
+        "self",
         "self_and_next",
         "self_and_higher",
         "self_and_previous",
@@ -69,7 +70,11 @@ def get_adjacency_types(max_dim: int, connectivity: str) -> list[str]:
     ]:
         raise ValueError(f"{connectivity} is not a known connectivity pattern!")
 
-    if connectivity == "self_and_next":
+    if connectivity == "self":
+        for i in range(max_dim + 1):
+            adj_types.append(f"{i}_{i}")
+
+    elif connectivity == "self_and_next":
         for i in range(max_dim + 1):
             adj_types.append(f"{i}_{i}")
             if i < max_dim:

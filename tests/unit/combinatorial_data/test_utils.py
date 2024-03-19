@@ -198,7 +198,7 @@ def test_extended_adjacency_matrix(neighbor_type, rank, expected):
 
     index, matrix = CombinatorialComplexTransform.extended_adjacency_matrix(instance, cc, rank)
 
-    assert index == cc.skeleton(rank)
+    assert index == [sorted(cell) for cell in cc.skeleton(rank)]
     assert np.array_equal(matrix.todense(), expected)
 
 

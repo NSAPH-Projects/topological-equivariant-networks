@@ -53,6 +53,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         ranker=ranker,
         dim=args.dim,
         adjacencies=args.adjacencies,
+        neighbor_type=args.neighbor_type,
         enable_indexing_bug=args.enable_indexing_bug,
     )
     dataset = QM9(root=data_root)

@@ -126,6 +126,12 @@ if __name__ == "__main__":
         default="self_and_next",
         help="connectivity pattern between ranks",
     )
+    parser.add_argument(
+        "--neighbor_type",
+        type=str,
+        default="adjacency",
+        help="how adjacency between cells of same rank is defined",
+    )
 
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")

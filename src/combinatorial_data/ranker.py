@@ -3,7 +3,7 @@ def get_ranker(lifter_args: list[str]) -> callable:
     Create a ranker function based on specified lifter arguments.
 
     The ranker function determines the rank of a cell based on its memberships,
-    using either a specified integer rank or cardinality ('c') as fallback.
+    using either a specified nonnegative integer rank or cardinality ('c') as fallback.
 
     Parameters
     ----------
@@ -19,6 +19,11 @@ def get_ranker(lifter_args: list[str]) -> callable:
         an integer rank. The rank is the minimum among ranks derived from
         `lifter_args` for which the cell is a member.
 
+    Raises
+    ------
+    ValueError
+        If the requested rank is neither a nonnegative integer nor 'c'.
+
     Examples
     --------
     >>> ranker = get_ranker(['identity:c', 'ring:2'])
@@ -32,15 +37,31 @@ def get_ranker(lifter_args: list[str]) -> callable:
     ranking_logics = []
     for lifter in lifter_args:
         parts = lifter.split(":")
+
+        # If no rank is specified, use cardinality as fallback
         try:
-            lifter_rank = int(parts[-1])
-            if lifter_rank < 0:
-                raise ValueError(
-                    f"Negative cell ranks are not allowed, but you requested '{lifter}'."
-                )
-            ranking_logics.append(lifter_rank)
-        except ValueError:
+            lifter_rank = parts[1]
+        except IndexError:
             ranking_logics.append("c")
+            continue
+
+        # Check if cardinality is requested
+        if lifter_rank == "c":
+            ranking_logics.append("c")
+            continue
+
+        # Try to convert the rank to an integer
+        try:
+            lifter_rank = int(lifter_rank)
+        except ValueError:
+            raise ValueError(f"Invalid rank '{lifter_rank}' specified for lifter '{parts[0]}'.")
+
+        # Negative ranks are not allowed
+        if lifter_rank < 0:
+            raise ValueError(f"Negative cell ranks are not allowed, but you requested '{lifter}'.")
+
+        # Add the rank to the list
+        ranking_logics.append(lifter_rank)
 
     def ranker(cell: frozenset[int], memberships: list[bool]):
         """
@@ -63,11 +84,21 @@ def get_ranker(lifter_args: list[str]) -> callable:
             The rank of the cell, determined as the minimum rank among the groups to which the cell
             belongs, with 'c' indicating rank based on cardinality.
 
+        Raises
+        ------
+        ValueError
+            If the length of `memberships` does not match the number of lifters.
+
         Notes
         -----
         The minimum is returned to avoid a situation where a singleton cell gets a nonzero rank,
         which is not allowed in TopoNetX.
         """
+        if len(memberships) != len(lifter_args):
+            raise ValueError(
+                f"""Length of memberships ({len(memberships)}) does not match the number of lifters
+                ({len(lifter_args)})."""
+            )
         ranks = []
         for idx, is_member in enumerate(memberships):
             if is_member:

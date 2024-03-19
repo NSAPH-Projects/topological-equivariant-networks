@@ -43,6 +43,48 @@ def clique_lift(graph_data) -> set[frozenset[int]]:
     return simplices
 
 
+def edge_lift(graph: Data) -> set[frozenset[int]]:
+    """
+    Identify edges in a graph.
+
+    This function returns the edges of the given graph. Each edge is represented as a list of two
+    node indices.
+
+    Parameters
+    ----------
+    graph : Data
+        The input graph represented as a PyTorch Geometric Data object.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A set of graph elements, where each element is an edge (frozenset of two node indices).
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
+
+    Notes
+    -----
+    The function directly works with the PyTorch Geometric Data object. Edges are inferred from the
+    edge_index attribute.
+    """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+
+    # Create edges
+    edges = {
+        frozenset(edge)
+        for edge in graph.edge_index.t().tolist()
+        if len(edge) == 2
+        if edge[0] != edge[1]
+    }
+
+    return edges
+
+
 def functional_group_lift(graph: Data) -> set[frozenset[int]]:
     """
     Identify functional groups within a molecule and returns them as lists of atom indices.
@@ -89,12 +131,12 @@ def functional_group_lift(graph: Data) -> set[frozenset[int]]:
         return set()
 
 
-def identity_lift(graph: Data) -> set[frozenset[int]]:
+def node_lift(graph: Data) -> set[frozenset[int]]:
     """
-    Identify nodes and edges in a graph.
+    Identify nodes in a graph.
 
-    This function returns the nodes and edges of the given graph. Each node is represented as a
-    singleton list containing its index, and each edge is represented as a list of two node indices.
+    This function returns the nodes of the given graph. Each node is represented as a
+    singleton list containing its index.
 
     Parameters
     ----------
@@ -104,22 +146,58 @@ def identity_lift(graph: Data) -> set[frozenset[int]]:
     Returns
     -------
     set[frozenset[int]]
-        A set of graph elements, where each element is a node (singleton frozenset) or an edge
-        (frozenset of two node indices).
+        A set of graph elements, where each element is a node (singleton frozenset).
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain a feature matrix 'x'.
 
     Notes
     -----
     The function directly works with the PyTorch Geometric Data object. Nodes are inferred from the
-    edge_index attribute, and edges are directly extracted from it.
+    x attribute.
     """
+
+    if (not hasattr(graph, "x")) or (graph.x is None):
+        raise ValueError("The given graph does not have a feature matrix 'x'!")
+
     # Create nodes
     nodes = {frozenset([node]) for node in range(graph.x.size(0))}
 
-    # Create edges
-    edges = {frozenset(edge) for edge in graph.edge_index.t().tolist()}
+    return nodes
 
-    # Combine nodes and edges
-    return nodes.union(edges)
+
+def supercell_lift(graph: Data) -> set[frozenset[int]]:
+    """
+    Return the entire graph as a single cell.
+
+    This function returns the entire graph as a single cell, represented as a frozenset of all
+    node indices. If the graph has less than 2 nodes, it returns an empty set.
+
+    Parameters
+    ----------
+    graph : Data
+        The input graph represented as a PyTorch Geometric Data object.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A singleton set containing a frozenset of all node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain a feature matrix 'x'.
+    """
+
+    if (not hasattr(graph, "x")) or (graph.x is None):
+        raise ValueError("The given graph does not have a feature matrix 'x'!")
+    num_nodes = graph.x.size(0)
+    if num_nodes < 2:
+        return set()
+    else:
+        return {frozenset([node for node in range(num_nodes)])}
 
 
 def ring_lift(graph: Data) -> set[frozenset[int]]:
@@ -139,9 +217,18 @@ def ring_lift(graph: Data) -> set[frozenset[int]]:
     -------
     set[frozenset[int]]
         A set of minimal cycles, each cycle is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
     """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+
     # Convert to networkx graph
-    G = pyg_utils.to_networkx(graph)
+    G = pyg_utils.to_networkx(graph, to_undirected=True)
 
     # Compute all cycles (using a set with sorting removes duplicates)
     cycles = {frozenset(cycle) for cycle in nx.simple_cycles(G) if len(cycle) >= 3}
@@ -204,11 +291,15 @@ def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[f
 
 
 lifter_registry = {
+    "atom": node_lift,  # atom is an alias for node
+    "bond": edge_lift,  # bond is an alias for edge
     "clique": clique_lift,
+    "edge": edge_lift,
     "functional_group": functional_group_lift,
-    "identity": identity_lift,
+    "node": node_lift,
     "ring": ring_lift,
     "rips": rips_lift,
+    "supercell": supercell_lift,
 }
 
 

@@ -73,56 +73,73 @@ def test_clique_lift(edge_index, expected_simplices):
 
 
 @pytest.mark.parametrize(
-    "edge_index, x, expected_output",
+    "edge_index, expected",
     [
         # Test with an empty graph
-        (torch.tensor([[], []], dtype=torch.long), torch.tensor([], dtype=torch.float), set()),
-        # Test with a graph with isolated nodes
+        (torch.tensor([[], []], dtype=torch.long), set()),
+        # Test with a simple graph
         (
             torch.tensor([[0, 2], [1, 3]], dtype=torch.long),
+            {
+                frozenset([0, 1]),
+                frozenset([2, 3]),
+            },
+        ),
+        # Test with a graph with self-loops
+        (
+            torch.tensor([[0, 1, 1], [0, 1, 2]], dtype=torch.long),
+            {
+                frozenset([1, 2]),
+            },
+        ),
+        # Test with missing edge_index
+        (None, ValueError),
+    ],
+)
+def test_edge_lift(edge_index, expected):
+    # Call the edge_lift function
+    if expected is ValueError:
+        with pytest.raises(ValueError):
+            graph_data = Data(edge_index=edge_index)
+            edge_lift(graph_data)
+    else:
+        graph_data = Data(edge_index=edge_index)
+        output = edge_lift(graph_data)
+        assert output == expected
+
+
+@pytest.mark.parametrize(
+    "x, expected",
+    [
+        # Test with an empty graph
+        (torch.tensor([], dtype=torch.float), set()),
+        # Test with a normal graph
+        (
             torch.tensor([[-1], [-1], [-1], [-1]], dtype=torch.float),
             {
                 frozenset([0]),
                 frozenset([1]),
                 frozenset([2]),
                 frozenset([3]),
-                frozenset([0, 1]),
-                frozenset([2, 3]),
             },
         ),
         # Test with a graph with no feature matrix
         (
-            torch.tensor([[0, 2], [1, 3]], dtype=torch.long),
             None,
             ValueError,
         ),
-        # Test with a graph with self-loops
-        (
-            torch.tensor([[0, 1, 1], [0, 1, 2]], dtype=torch.long),
-            torch.tensor([[-1], [-1], [-1]], dtype=torch.float),
-            {
-                frozenset([0]),
-                frozenset([1]),
-                frozenset([2]),
-                frozenset([1, 2]),
-            },
-        ),
     ],
 )
-def test_identity_lift(edge_index, x, expected_output):
-    if expected_output is ValueError:
+def test_node_lift(x, expected):
+    # Call the node_lift function
+    if expected is ValueError:
         with pytest.raises(ValueError):
-            graph_data = Data(edge_index=edge_index, x=x)
-            identity_lift(graph_data)
+            graph_data = Data(x=x)
+            node_lift(graph_data)
     else:
-        # Create the graph
-        graph_data = Data(edge_index=edge_index, x=x)
-
-        # Call the identity_lift function
-        output = identity_lift(graph_data)
-
-        # Check if the returned output matches the expected output
-        assert output == expected_output
+        graph_data = Data(x=x)
+        output = node_lift(graph_data)
+        assert output == expected
 
 
 @pytest.mark.parametrize(
@@ -230,6 +247,27 @@ def test_rips_transform(dim: int, dis: float):
                     assert torch.equal(
                         old_inv[f"{i}_{j}"][:, idc], new_inv[f"{i}_{j}"]
                     ), f"sorted(old_inv[{i}_{j}]) != new_inv[{i}_{j}]"
+
+
+@pytest.mark.parametrize(
+    "x, expected",
+    [
+        (torch.tensor([[-1], [-1], [-1], [-1]], dtype=torch.float), {frozenset([0, 1, 2, 3])}),
+        (torch.tensor([[-1]], dtype=torch.float), set()),
+        (torch.zeros(0, 1, dtype=torch.float), set()),
+        (None, ValueError),
+    ],
+)
+def test_supercell_lift(x, expected):
+    # Call the supercell_lift function
+    if expected is ValueError:
+        with pytest.raises(ValueError):
+            graph_data = Data(x=x)
+            supercell_lift(graph_data)
+    else:
+        graph_data = Data(x=x)
+        output = supercell_lift(graph_data)
+        assert output == expected
 
 
 def sort_tensor_columns_and_get_indices(tensor: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:

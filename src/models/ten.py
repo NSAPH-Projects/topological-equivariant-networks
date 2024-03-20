@@ -53,7 +53,7 @@ class TEN(nn.Module):
             )
         self.post_pool = nn.Sequential(
             nn.Sequential(
-                nn.Linear((max_dim + 1) * num_hidden, num_hidden),
+                nn.Linear(len(self.post_pool_filter) * num_hidden, num_hidden),
                 nn.SiLU(),
                 nn.Linear(num_hidden, num_out),
             )
@@ -121,7 +121,8 @@ class TEN(nn.Module):
 
         x = {dim: global_add_pool(x[dim], x_batch[dim]) for dim, feature in x.items()}
         state = torch.cat(
-            tuple([feature for dim, feature in x.items() if dim in self.post_pool_filter]), dim=1
+            tuple([feature for dim, feature in x.items() if int(dim) in self.post_pool_filter]),
+            dim=1,
         )
         out = self.post_pool(state)
         out = torch.squeeze(out)

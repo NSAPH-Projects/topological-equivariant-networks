@@ -11,10 +11,13 @@ python src/main_qm9.py --lifters "atom:0" "supercell:1" \
                        --target_name "alpha" \
                        --neighbor_type "any_adjacency" \
                        --connectivity "self" \
-                       --post_pool_filter "0" \
-                       --epochs 1000 \
+                       --post_pool_filter 0 \
+                       --epochs 30 \
                        --batch_size 96 \
                        --weight_decay 1e-16 \
                        --lr 5e-4 \
                        --num_layers 7 \
-                       --num_hidden 128
+                       --num_hidden 128 \
+                       --model_name "ten" \
+                       --dim 1 \
+                       --num_samples 1000

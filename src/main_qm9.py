@@ -132,7 +132,13 @@ if __name__ == "__main__":
         default="adjacency",
         help="how adjacency between cells of same rank is defined",
     )
-
+    parser.add_argument(
+        "--post_pool_filter",
+        nargs="+",
+        type="int",
+        default=None,
+        help="specifies which ranks to feed into the final prediction",
+    )
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-16, help="learning rate")

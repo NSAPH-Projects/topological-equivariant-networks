@@ -157,6 +157,7 @@ def get_model(args: Namespace) -> nn.Module:
             max_dim=args.dim,
             adjacencies=args.adjacencies,
             initial_features=args.initial_features,
+            post_pool_filter=args.post_pool_filter,
         )
     else:
         raise ValueError(f"Model type {args.model_name} not recognized.")

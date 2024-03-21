@@ -22,6 +22,7 @@ class TEN(nn.Module):
         max_dim: int,
         adjacencies: list[str],
         initial_features: str,
+        post_pool_filter: list[int] | None,
         compute_invariants: callable = compute_invariants,
     ) -> None:
         super().__init__()
@@ -31,7 +32,10 @@ class TEN(nn.Module):
         self.num_inv_fts_map = self.compute_invariants.num_features_map
         self.max_dim = max_dim
         self.adjacencies = adjacencies
-
+        if post_pool_filter is not None:
+            self.post_pool_filter = post_pool_filter
+        else:
+            self.post_pool_filter = list(range(max_dim + 1))
         # layers
         self.feature_embedding = nn.Linear(num_input, num_hidden)
 
@@ -116,7 +120,9 @@ class TEN(nn.Module):
         }
 
         x = {dim: global_add_pool(x[dim], x_batch[dim]) for dim, feature in x.items()}
-        state = torch.cat(tuple([feature for dim, feature in x.items()]), dim=1)
+        state = torch.cat(
+            tuple([feature for dim, feature in x.items() if dim in self.post_pool_filter]), dim=1
+        )
         out = self.post_pool(state)
         out = torch.squeeze(out)
 

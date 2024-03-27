@@ -136,11 +136,11 @@ if __name__ == "__main__":
         help="how adjacency between cells of same rank is defined",
     )
     parser.add_argument(
-        "--post_pool_filter",
+        "--visible_dims",
         nargs="+",
         type=int,
         default=None,
-        help="specifies which ranks to feed into the final prediction",
+        help="specifies which ranks to explicitly represent as nodes",
     )
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
@@ -164,7 +164,9 @@ if __name__ == "__main__":
     )
 
     parsed_args = parser.parse_args()
-    parsed_args.adjacencies = get_adjacency_types(parsed_args.dim, parsed_args.connectivity)
+    parsed_args.adjacencies = get_adjacency_types(
+        parsed_args.dim, parsed_args.connectivity, parsed_args.visible_dims
+    )
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     set_seed(parsed_args.seed)

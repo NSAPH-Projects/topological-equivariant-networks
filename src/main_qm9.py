@@ -15,11 +15,14 @@ def main(args):
     model = get_model(args).to(args.device)
     if args.compile:
         model = torch.compile(model)
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Number of parameters: {num_params}")
+    print(model)
+
     # Setup wandb
     wandb.init(entity="ten-harvard", project=f"QM9-{args.target_name}")
     wandb.config.update(vars(args))
-    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Number of parameters: {num_params}")
+
     # # Get loaders
     train_loader, val_loader, test_loader = get_loaders(args)
     mean, mad = calc_mean_mad(train_loader)

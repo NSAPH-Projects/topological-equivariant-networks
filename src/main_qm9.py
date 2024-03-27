@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
     # Model parameters
     parser.add_argument(
-        "--compile", type=bool, default=False, help="if the model should be compiled"
+        "--compile", action="store_true", default=False, help="if the model should be compiled"
     )
     parser.add_argument("--model_name", type=str, default="empsn", help="model")
     parser.add_argument("--max_com", type=str, default="1_2", help="model type")  # e.g. 1_2

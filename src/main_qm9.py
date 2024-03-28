@@ -29,7 +29,7 @@ def main(args):
     mean, mad = mean.to(args.device), mad.to(args.device)
 
     # Get optimization objects
-    criterion = torch.nn.L1Loss(reduction="sum")
+    criterion = torch.nn.L1Loss(reduction="mean")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
     best_val_mae, best_model = float("inf"), None
@@ -47,7 +47,7 @@ def main(args):
             mae = criterion(pred * mad + mean, batch.y)
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip)
 
             optimizer.step()
             epoch_mae_train += mae.item()
@@ -60,8 +60,8 @@ def main(args):
 
             epoch_mae_val += mae.item()
 
-        epoch_mae_train /= len(train_loader.dataset)
-        epoch_mae_val /= len(val_loader.dataset)
+        epoch_mae_train /= len(train_loader)
+        epoch_mae_val /= len(val_loader)
 
         if epoch_mae_val < best_val_mae:
             best_val_mae = epoch_mae_val
@@ -88,7 +88,7 @@ def main(args):
         mae = criterion(pred * mad + mean, batch.y)
         test_mae += mae.item()
 
-    test_mae /= len(test_loader.dataset)
+    test_mae /= len(test_loader)
     print(f"Test MAE: {test_mae}")
 
     wandb.log(

@@ -106,7 +106,11 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         "B",
         "C",
     ]
-    index = targets.index(args.target_name)
+    target_map = {target: target for target in targets}
+    for key in ["U0", "U", "H", "G"]:
+        target_map[key] = f"{key}_atom"
+    assert target_map["U0"] == "U0_atom"
+    index = targets.index(target_map[args.target_name])
     dataset = [
         prepare_data(graph, index, args.target_name)
         for graph in tqdm(dataset, desc="Preparing data")

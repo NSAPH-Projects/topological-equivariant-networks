@@ -22,12 +22,31 @@ def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
     return mean, mad
 
 
-def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: dict[str, float]) -> Data:
+def prepare_data(graph: Data, index: int) -> Data:
+    """
+    Preprocesses the input graph data.
+
+    Two main modifications are made:
+    1. The target value is extracted and stored in the 'y' attribute. Since QM9 targets are
+    graph-level, we throw away the vector of 'y' values and only keep the target value of the
+    first node in the graph, at the given index.
+    2. The feature vector of each node  is computed as a concatenation of the one-hot encoding of
+    the atomic number, the atomic number scaled by 1/9, and the atomic number scaled by 1/9 squared.
+
+    Parameters
+    ----------
+    graph : Data
+        The input graph data. It should be an instance of the torch_geometric.data.Data class.
+    index : int
+        The index of the target value to extract. It should be a non-negative integer.
+
+    Returns
+    -------
+    Data
+        The preprocessed graph data. It is an instance of the Data class with modified features.
+    """
     graph.y = graph.y[0, index]
     one_hot = graph.x[:, :5]  # only get one_hot for cormorant
-    # change unit of targets
-    if target_name in qm9_to_ev:
-        graph.y *= qm9_to_ev[target_name]
 
     Z_max = 9
     Z = graph.x[:, 5]
@@ -61,17 +80,6 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     dataset = dataset[: args.num_samples]
     dataset = [transform(sample) for sample in tqdm(dataset)]
 
-    # filter relevant index and update units to eV
-    qm9_to_ev = {
-        "U0": 27.2114,
-        "U": 27.2114,
-        "G": 27.2114,
-        "H": 27.2114,
-        "zpve": 27211.4,
-        "gap": 27.2114,
-        "homo": 27.2114,
-        "lumo": 27.2114,
-    }
     targets = [
         "mu",
         "alpha",
@@ -94,10 +102,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         "C",
     ]
     index = targets.index(args.target_name)
-    dataset = [
-        prepare_data(graph, index, args.target_name, qm9_to_ev)
-        for graph in tqdm(dataset, desc="Preparing data")
-    ]
+    dataset = [prepare_data(graph, index) for graph in tqdm(dataset, desc="Preparing data")]
 
     # train/val/test split
     if args.num_samples is None:

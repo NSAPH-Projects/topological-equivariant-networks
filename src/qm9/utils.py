@@ -22,7 +22,7 @@ def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
     return mean, mad
 
 
-def prepare_data(graph: Data, index: int) -> Data:
+def prepare_data(graph: Data, index: int, target_name: str) -> Data:
     """
     Preprocesses the input graph data.
 
@@ -30,7 +30,9 @@ def prepare_data(graph: Data, index: int) -> Data:
     1. The target value is extracted and stored in the 'y' attribute. Since QM9 targets are
     graph-level, we throw away the vector of 'y' values and only keep the target value of the
     first node in the graph, at the given index.
-    2. The feature vector of each node  is computed as a concatenation of the one-hot encoding of
+    2. If the target name is 'zpve', the target value is multiplied by 1e3. This is consistent with
+    EGNN.
+    3. The feature vector of each node  is computed as a concatenation of the one-hot encoding of
     the atomic number, the atomic number scaled by 1/9, and the atomic number scaled by 1/9 squared.
 
     Parameters
@@ -39,6 +41,8 @@ def prepare_data(graph: Data, index: int) -> Data:
         The input graph data. It should be an instance of the torch_geometric.data.Data class.
     index : int
         The index of the target value to extract. It should be a non-negative integer.
+    target_name: str
+        The name of the target.
 
     Returns
     -------
@@ -47,7 +51,8 @@ def prepare_data(graph: Data, index: int) -> Data:
     """
     graph.y = graph.y[0, index]
     one_hot = graph.x[:, :5]  # only get one_hot for cormorant
-
+    if target_name == "zpve":
+        graph.y *= 1e3
     Z_max = 9
     Z = graph.x[:, 5]
     Z_tilde = (Z / Z_max).unsqueeze(1).repeat(1, 5)
@@ -102,7 +107,10 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         "C",
     ]
     index = targets.index(args.target_name)
-    dataset = [prepare_data(graph, index) for graph in tqdm(dataset, desc="Preparing data")]
+    dataset = [
+        prepare_data(graph, index, args.target_name)
+        for graph in tqdm(dataset, desc="Preparing data")
+    ]
 
     # train/val/test split
     if args.num_samples is None:

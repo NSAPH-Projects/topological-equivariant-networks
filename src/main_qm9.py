@@ -77,6 +77,7 @@ def main(args):
                 "Train MAE": epoch_mae_train,
                 "Validation MAE": epoch_mae_val,
                 "Epoch Duration": epoch_duration,
+                "Learning Rate": scheduler.get_last_lr()[0],
             }
         )
 

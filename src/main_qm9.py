@@ -31,7 +31,8 @@ def main(args):
     # Get optimization objects
     criterion = torch.nn.L1Loss(reduction="mean")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
+    T_max = args.epochs // args.num_lr_cycles
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max)
     best_val_mae, best_model = float("inf"), None
 
     for _ in tqdm(range(args.epochs)):
@@ -52,6 +53,7 @@ def main(args):
             optimizer.step()
             epoch_mae_train += mae.item()
 
+        scheduler.step()
         model.eval()
         for _, batch in enumerate(val_loader):
             batch = batch.to(args.device)
@@ -66,8 +68,6 @@ def main(args):
         if epoch_mae_val < best_val_mae:
             best_val_mae = epoch_mae_val
             best_model = copy.deepcopy(model)
-
-        scheduler.step()
 
         epoch_end_time = time.time()  # End timing the epoch
         epoch_duration = epoch_end_time - epoch_start_time  # Calculate the duration
@@ -148,6 +148,9 @@ if __name__ == "__main__":
     parser.add_argument("--weight_decay", type=float, default=1e-16, help="learning rate")
     parser.add_argument(
         "--gradient_clip", type=float, default=1.0, help="gradient clipping, deprecated!"
+    )
+    parser.add_argument(
+        "--num_lr_cycles", type=int, default=3, help="number of learning rate cycles"
     )
 
     # Dataset arguments

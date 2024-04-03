@@ -146,7 +146,9 @@ if __name__ == "__main__":
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-16, help="learning rate")
-    parser.add_argument("--gradient_clip", type=float, default=1.0, help="gradient clipping")
+    parser.add_argument(
+        "--gradient_clip", type=float, default=1.0, help="gradient clipping, deprecated!"
+    )
 
     # Dataset arguments
     parser.add_argument("--dataset", type=str, default="qm9", help="dataset")

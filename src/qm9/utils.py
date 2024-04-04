@@ -64,10 +64,7 @@ def prepare_data(graph: Data, index: int, target_name: str) -> Data:
 
 def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
     # define data_root
-    data_root = "./datasets/QM9_"
-    data_root += generate_dataset_dir_name(
-        args, ["num_samples", "target_name", "lifters", "dim", "dis"]
-    )
+    data_root = "./datasets/QM9"
 
     # load, subsample and transform the dataset
     lifters = get_lifters(args)

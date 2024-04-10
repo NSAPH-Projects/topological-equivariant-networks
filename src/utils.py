@@ -9,7 +9,9 @@ import torch.nn as nn
 from torch_geometric.loader import DataLoader
 
 
-def get_adjacency_types(max_dim: int, connectivity: str) -> list[str]:
+def get_adjacency_types(
+    max_dim: int, connectivity: str, visible_dims: list[int] | None
+) -> list[str]:
     """
     Generate a list of adjacency type strings based on the specified connectivity pattern.
 
@@ -33,6 +35,8 @@ def get_adjacency_types(max_dim: int, connectivity: str) -> list[str]:
         - "all_to_all" generates adjacencies where each rank is connected to every other rank,
         including itself.
         - "legacy" ignores the max_dim parameter and returns ['0_0', '0_1', '1_1', '1_2'].
+    visible_dims: list[int] | None
+        A list of ranks to explicitly represent as nodes. If None, all ranks are represented.
 
     Returns
     -------
@@ -112,6 +116,14 @@ def get_adjacency_types(max_dim: int, connectivity: str) -> list[str]:
     else:
         adj_types = ["0_0", "0_1", "1_1", "1_2"]
 
+    # Filter adjacencies with invisible ranks
+    if visible_dims is not None:
+        adj_types = [
+            adj_type
+            for adj_type in adj_types
+            if all(int(dim) in visible_dims for dim in adj_type.split("_"))
+        ]
+
     return adj_types
 
 
@@ -162,7 +174,7 @@ def get_model(args: Namespace) -> nn.Module:
             max_dim=args.dim,
             adjacencies=args.adjacencies,
             initial_features=args.initial_features,
-            post_pool_filter=args.post_pool_filter,
+            visible_dims=args.visible_dims,
         )
     else:
         raise ValueError(f"Model type {args.model_name} not recognized.")

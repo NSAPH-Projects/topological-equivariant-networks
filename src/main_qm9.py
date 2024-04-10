@@ -15,18 +15,21 @@ def main(args):
     model = get_model(args).to(args.device)
     if args.compile:
         model = torch.compile(model)
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Number of parameters: {num_params}")
+    print(model)
+
     # Setup wandb
     wandb.init(entity="ten-harvard", project=f"QM9-{args.target_name}")
     wandb.config.update(vars(args))
-    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Number of parameters: {num_params}")
+
     # # Get loaders
     train_loader, val_loader, test_loader = get_loaders(args)
     mean, mad = calc_mean_mad(train_loader)
     mean, mad = mean.to(args.device), mad.to(args.device)
 
     # Get optimization objects
-    criterion = torch.nn.L1Loss(reduction="sum")
+    criterion = torch.nn.L1Loss(reduction="mean")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
     best_val_mae, best_model = float("inf"), None
@@ -44,7 +47,7 @@ def main(args):
             mae = criterion(pred * mad + mean, batch.y)
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip)
 
             optimizer.step()
             epoch_mae_train += mae.item()
@@ -57,8 +60,8 @@ def main(args):
 
             epoch_mae_val += mae.item()
 
-        epoch_mae_train /= len(train_loader.dataset)
-        epoch_mae_val /= len(val_loader.dataset)
+        epoch_mae_train /= len(train_loader)
+        epoch_mae_val /= len(val_loader)
 
         if epoch_mae_val < best_val_mae:
             best_val_mae = epoch_mae_val
@@ -85,7 +88,7 @@ def main(args):
         mae = criterion(pred * mad + mean, batch.y)
         test_mae += mae.item()
 
-    test_mae /= len(test_loader.dataset)
+    test_mae /= len(test_loader)
     print(f"Test MAE: {test_mae}")
 
     wandb.log(
@@ -105,7 +108,7 @@ if __name__ == "__main__":
 
     # Model parameters
     parser.add_argument(
-        "--compile", type=bool, default=False, help="if the model should be compiled"
+        "--compile", action="store_true", default=False, help="if the model should be compiled"
     )
     parser.add_argument("--model_name", type=str, default="empsn", help="model")
     parser.add_argument("--max_com", type=str, default="1_2", help="model type")  # e.g. 1_2
@@ -133,11 +136,11 @@ if __name__ == "__main__":
         help="how adjacency between cells of same rank is defined",
     )
     parser.add_argument(
-        "--post_pool_filter",
+        "--visible_dims",
         nargs="+",
         type=int,
         default=None,
-        help="specifies which ranks to feed into the final prediction",
+        help="specifies which ranks to explicitly represent as nodes",
     )
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
@@ -161,7 +164,9 @@ if __name__ == "__main__":
     )
 
     parsed_args = parser.parse_args()
-    parsed_args.adjacencies = get_adjacency_types(parsed_args.dim, parsed_args.connectivity)
+    parsed_args.adjacencies = get_adjacency_types(
+        parsed_args.dim, parsed_args.connectivity, parsed_args.visible_dims
+    )
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     set_seed(parsed_args.seed)

@@ -32,3 +32,6 @@ conda activate ten
 pre-commit install
 
 echo "Installation completed."
+
+# Create job_outputs directory for SLURM output files
+mkdir -p job_outputs

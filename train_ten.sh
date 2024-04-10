@@ -4,8 +4,8 @@
 #SBATCH -p gpu              # Partition to submit to
 #SBATCH --gres=gpu:nvidia_a100-sxm4-80gb:1
 #SBATCH --mem=32000         # Memory pool for all cores (see also --mem-per-cpu)
-#SBATCH -o myoutput_%j.out  # File to which STDOUT will be written, %j inserts jobid
-#SBATCH -e myerrors_%j.err  # File to which STDERR will be written, %j inserts jobid
+#SBATCH -o job_outputs/myoutput_%j.out  # File to which STDOUT will be written, %j inserts jobid
+#SBATCH -e job_outputs/myerrors_%j.err  # File to which STDERR will be written, %j inserts jobid
 
 # Load modules
 module load ncf/1.0.0-fasrc01

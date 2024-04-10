@@ -22,7 +22,7 @@ class TEN(nn.Module):
         max_dim: int,
         adjacencies: list[str],
         initial_features: str,
-        post_pool_filter: list[int] | None,
+        visible_dims: list[int] | None,
         compute_invariants: callable = compute_invariants,
     ) -> None:
         super().__init__()
@@ -32,28 +32,35 @@ class TEN(nn.Module):
         self.num_inv_fts_map = self.compute_invariants.num_features_map
         self.max_dim = max_dim
         self.adjacencies = adjacencies
-        if post_pool_filter is not None:
-            self.post_pool_filter = post_pool_filter
+        if visible_dims is not None:
+            self.visible_dims = visible_dims
         else:
-            self.post_pool_filter = list(range(max_dim + 1))
+            self.visible_dims = list(range(max_dim + 1))
         # layers
         self.feature_embedding = nn.Linear(num_input, num_hidden)
 
         self.layers = nn.ModuleList(
             [
-                EMPSNLayer(self.adjacencies, self.max_dim, num_hidden, self.num_inv_fts_map)
+                EMPSNLayer(
+                    self.adjacencies,
+                    self.visible_dims,
+                    num_hidden,
+                    self.num_inv_fts_map,
+                )
                 for _ in range(num_layers)
             ]
         )
 
         self.pre_pool = nn.ModuleDict()
-        for dim in range(self.max_dim + 1):
+        for dim in visible_dims:
             self.pre_pool[str(dim)] = nn.Sequential(
-                nn.Linear(num_hidden, num_hidden), nn.SiLU(), nn.Linear(num_hidden, num_hidden)
+                nn.Linear(num_hidden, num_hidden),
+                nn.SiLU(),
+                nn.Linear(num_hidden, num_hidden),
             )
         self.post_pool = nn.Sequential(
             nn.Sequential(
-                nn.Linear((max_dim + 1) * num_hidden, num_hidden),
+                nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
                 nn.SiLU(),
                 nn.Linear(num_hidden, num_out),
             )
@@ -61,9 +68,9 @@ class TEN(nn.Module):
 
     def forward(self, graph: Data) -> Tensor:
         device = graph.pos.device
-        x_ind = {str(i): getattr(graph, f"x_{i}") for i in range(self.max_dim + 1)}
+        x_ind = {str(i): getattr(graph, f"x_{i}") for i in self.visible_dims}
 
-        mem = {i: getattr(graph, f"mem_{i}") for i in range(self.max_dim + 1)}
+        mem = {i: getattr(graph, f"mem_{i}") for i in self.visible_dims}
 
         adj = {
             adj_type: getattr(graph, f"adj_{adj_type}")
@@ -79,10 +86,10 @@ class TEN(nn.Module):
 
         # compute initial features
         node_features = {}
-        for i in range(self.max_dim + 1):
+        for i in self.visible_dims:
             node_features[str(i)] = compute_centroids(x_ind[str(i)], graph.x)
 
-        mem_features = {str(i): mem[i].float() for i in range(self.max_dim + 1)}
+        mem_features = {str(i): mem[i].float() for i in self.visible_dims}
 
         if self.initial_features == "node":
             x = node_features
@@ -92,10 +99,10 @@ class TEN(nn.Module):
             # concatenate
             x = {
                 str(i): torch.cat([node_features[str(i)], mem_features[str(i)]], dim=1)
-                for i in range(self.max_dim + 1)
+                for i in self.visible_dims
             }
 
-        x_batch = {str(i): getattr(graph, f"x_{i}_batch") for i in range(self.max_dim + 1)}
+        x_batch = {str(i): getattr(graph, f"x_{i}_batch") for i in self.visible_dims}
 
         # embed features and E(n) invariant information
         x = {dim: self.feature_embedding(feature) for dim, feature in x.items()}
@@ -111,7 +118,10 @@ class TEN(nn.Module):
         # create one dummy node with all features equal to zero for each graph and each rank
         batch_size = graph.y.shape[0]
         x = {
-            dim: torch.cat((feature, torch.zeros(batch_size, feature.shape[1]).to(device)), dim=0)
+            dim: torch.cat(
+                (feature, torch.zeros(batch_size, feature.shape[1]).to(device)),
+                dim=0,
+            )
             for dim, feature in x.items()
         }
         x_batch = {
@@ -121,7 +131,8 @@ class TEN(nn.Module):
 
         x = {dim: global_add_pool(x[dim], x_batch[dim]) for dim, feature in x.items()}
         state = torch.cat(
-            tuple([feature for dim, feature in x.items() if dim in self.post_pool_filter]), dim=1
+            tuple([feature for dim, feature in x.items()]),
+            dim=1,
         )
         out = self.post_pool(state)
         out = torch.squeeze(out)

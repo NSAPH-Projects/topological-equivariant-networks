@@ -15,20 +15,24 @@ def main(args):
     model = get_model(args).to(args.device)
     if args.compile:
         model = torch.compile(model)
-    # Setup wandb
-    wandb.init(project=f"QM9-{args.target_name}")
-    wandb.config.update(vars(args))
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Number of parameters: {num_params}")
+    print(model)
+
+    # Setup wandb
+    wandb.init(entity="ten-harvard", project=f"QM9-{args.target_name}")
+    wandb.config.update(vars(args))
+
     # # Get loaders
     train_loader, val_loader, test_loader = get_loaders(args)
     mean, mad = calc_mean_mad(train_loader)
     mean, mad = mean.to(args.device), mad.to(args.device)
 
     # Get optimization objects
-    criterion = torch.nn.L1Loss(reduction="sum")
+    criterion = torch.nn.L1Loss(reduction="mean")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
+    T_max = args.epochs // args.num_lr_cycles
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max)
     best_val_mae, best_model = float("inf"), None
 
     for _ in tqdm(range(args.epochs)):
@@ -44,11 +48,12 @@ def main(args):
             mae = criterion(pred * mad + mean, batch.y)
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip)
 
             optimizer.step()
             epoch_mae_train += mae.item()
 
+        scheduler.step()
         model.eval()
         for _, batch in enumerate(val_loader):
             batch = batch.to(args.device)
@@ -57,14 +62,12 @@ def main(args):
 
             epoch_mae_val += mae.item()
 
-        epoch_mae_train /= len(train_loader.dataset)
-        epoch_mae_val /= len(val_loader.dataset)
+        epoch_mae_train /= len(train_loader)
+        epoch_mae_val /= len(val_loader)
 
         if epoch_mae_val < best_val_mae:
             best_val_mae = epoch_mae_val
             best_model = copy.deepcopy(model)
-
-        scheduler.step()
 
         epoch_end_time = time.time()  # End timing the epoch
         epoch_duration = epoch_end_time - epoch_start_time  # Calculate the duration
@@ -74,6 +77,7 @@ def main(args):
                 "Train MAE": epoch_mae_train,
                 "Validation MAE": epoch_mae_val,
                 "Epoch Duration": epoch_duration,
+                "Learning Rate": scheduler.get_last_lr()[0],
             }
         )
 
@@ -85,7 +89,7 @@ def main(args):
         mae = criterion(pred * mad + mean, batch.y)
         test_mae += mae.item()
 
-    test_mae /= len(test_loader.dataset)
+    test_mae /= len(test_loader)
     print(f"Test MAE: {test_mae}")
 
     wandb.log(
@@ -105,7 +109,7 @@ if __name__ == "__main__":
 
     # Model parameters
     parser.add_argument(
-        "--compile", type=bool, default=False, help="if the model should be compiled"
+        "--compile", action="store_true", default=False, help="if the model should be compiled"
     )
     parser.add_argument("--model_name", type=str, default="empsn", help="model")
     parser.add_argument("--max_com", type=str, default="1_2", help="model type")  # e.g. 1_2
@@ -133,16 +137,21 @@ if __name__ == "__main__":
         help="how adjacency between cells of same rank is defined",
     )
     parser.add_argument(
-        "--post_pool_filter",
+        "--visible_dims",
         nargs="+",
-        type="int",
+        type=int,
         default=None,
-        help="specifies which ranks to feed into the final prediction",
+        help="specifies which ranks to explicitly represent as nodes",
     )
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-16, help="learning rate")
-    parser.add_argument("--gradient_clip", type=float, default=1.0, help="gradient clipping")
+    parser.add_argument(
+        "--gradient_clip", type=float, default=1.0, help="gradient clipping, deprecated!"
+    )
+    parser.add_argument(
+        "--num_lr_cycles", type=int, default=3, help="number of learning rate cycles"
+    )
 
     # Dataset arguments
     parser.add_argument("--dataset", type=str, default="qm9", help="dataset")
@@ -151,6 +160,7 @@ if __name__ == "__main__":
     parser.add_argument("--dis", type=float, default=4.0, help="radius Rips complex")
     parser.add_argument("--num_samples", type=int, default=None, help="num samples to to train on")
     parser.add_argument("--seed", type=int, default=42, help="random seed")
+    parser.add_argument("--splits", type=str, default="egnn", help="split type")
 
     # Other arguments
     parser.add_argument(
@@ -161,7 +171,9 @@ if __name__ == "__main__":
     )
 
     parsed_args = parser.parse_args()
-    parsed_args.adjacencies = get_adjacency_types(parsed_args.dim, parsed_args.connectivity)
+    parsed_args.adjacencies = get_adjacency_types(
+        parsed_args.dim, parsed_args.connectivity, parsed_args.visible_dims
+    )
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     set_seed(parsed_args.seed)

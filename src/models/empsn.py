@@ -152,13 +152,14 @@ class EMPSNLayer(nn.Module):
     def __init__(
         self,
         adjacencies: List[str],
-        max_dim: int,
+        visible_dims: list[int],
         num_hidden: int,
         num_features_map: dict[str, int],
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
         self.num_features_map = num_features_map
+        self.visible_dims = visible_dims
 
         # messages
         self.message_passing = nn.ModuleDict(
@@ -170,7 +171,7 @@ class EMPSNLayer(nn.Module):
 
         # updates
         self.update = nn.ModuleDict()
-        for dim in range(max_dim + 1):
+        for dim in self.visible_dims:
             factor = 1 + sum([adj_type[2] == str(dim) for adj_type in adjacencies])
             self.update[str(dim)] = nn.Sequential(
                 nn.Linear(factor * num_hidden, num_hidden),

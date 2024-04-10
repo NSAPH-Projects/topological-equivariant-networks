@@ -1,5 +1,7 @@
 import hashlib
 import json
+import pickle
+import random
 from argparse import Namespace
 
 import torch
@@ -22,13 +24,37 @@ def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
     return mean, mad
 
 
-def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: dict[str, float]) -> Data:
+def prepare_data(graph: Data, index: int, target_name: str) -> Data:
+    """
+    Preprocesses the input graph data.
+
+    Two main modifications are made:
+    1. The target value is extracted and stored in the 'y' attribute. Since QM9 targets are
+    graph-level, we throw away the vector of 'y' values and only keep the target value of the
+    first node in the graph, at the given index.
+    2. If the target name is 'zpve', the target value is multiplied by 1e3. This is consistent with
+    EGNN.
+    3. The feature vector of each node  is computed as a concatenation of the one-hot encoding of
+    the atomic number, the atomic number scaled by 1/9, and the atomic number scaled by 1/9 squared.
+
+    Parameters
+    ----------
+    graph : Data
+        The input graph data. It should be an instance of the torch_geometric.data.Data class.
+    index : int
+        The index of the target value to extract. It should be a non-negative integer.
+    target_name: str
+        The name of the target.
+
+    Returns
+    -------
+    Data
+        The preprocessed graph data. It is an instance of the Data class with modified features.
+    """
     graph.y = graph.y[0, index]
     one_hot = graph.x[:, :5]  # only get one_hot for cormorant
-    # change unit of targets
-    if target_name in qm9_to_ev:
-        graph.y *= qm9_to_ev[target_name]
-
+    if target_name == "zpve":
+        graph.y *= 1e3
     Z_max = 9
     Z = graph.x[:, 5]
     Z_tilde = (Z / Z_max).unsqueeze(1).repeat(1, 5)
@@ -39,13 +65,34 @@ def prepare_data(graph: Data, index: int, target_name: str, qm9_to_ev: dict[str,
 
 
 def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
-    # define data_root
-    data_root = "./datasets/QM9_"
-    data_root += generate_dataset_dir_name(
-        args, ["num_samples", "target_name", "lifters", "dim", "dis"]
-    )
 
-    # load, subsample and transform the dataset
+    # Load the QM9 dataset
+    data_root = "./datasets/QM9"
+    dataset = QM9(root=data_root)
+
+    # Compute split indices
+    with open("misc/egnn_splits.pkl", "rb") as f:
+        egnn_splits = pickle.load(f)
+
+    if args.splits == "egnn":
+        split_indices = egnn_splits
+        for split in egnn_splits.keys():
+            random.shuffle(egnn_splits[split])
+    elif args.splits == "random":
+        indices = list(range(len(dataset)))
+        random.shuffle(indices)
+        train_end_idx = len(egnn_splits["train"])
+        val_end_idx = train_end_idx + len(egnn_splits["valid"])
+        test_end_idx = val_end_idx + len(egnn_splits["test"])
+        split_indices = {
+            "train": indices[:train_end_idx],
+            "valid": indices[train_end_idx:val_end_idx],
+            "test": indices[val_end_idx:test_end_idx],
+        }
+    else:
+        raise ValueError(f"Unknown split type: {args.splits}")
+
+    # Create the transform
     lifters = get_lifters(args)
     ranker = get_ranker(args.lifters)
     transform = CombinatorialComplexTransform(
@@ -56,22 +103,8 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         neighbor_type=args.neighbor_type,
         enable_indexing_bug=args.enable_indexing_bug,
     )
-    dataset = QM9(root=data_root)
-    dataset = dataset.shuffle()
-    dataset = dataset[: args.num_samples]
-    dataset = [transform(sample) for sample in tqdm(dataset)]
 
-    # filter relevant index and update units to eV
-    qm9_to_ev = {
-        "U0": 27.2114,
-        "U": 27.2114,
-        "G": 27.2114,
-        "H": 27.2114,
-        "zpve": 27211.4,
-        "gap": 27.2114,
-        "homo": 27.2114,
-        "lumo": 27.2114,
-    }
+    # Compute the target index
     targets = [
         "mu",
         "alpha",
@@ -93,46 +126,46 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         "B",
         "C",
     ]
-    index = targets.index(args.target_name)
-    dataset = [
-        prepare_data(graph, index, args.target_name, qm9_to_ev)
-        for graph in tqdm(dataset, desc="Preparing data")
-    ]
+    target_map = {target: target for target in targets}
+    for key in ["U0", "U", "H", "G"]:
+        target_map[key] = f"{key}_atom"
+    assert target_map["U0"] == "U0_atom"
+    index = targets.index(target_map[args.target_name])
 
-    # train/val/test split
-    if args.num_samples is None:
-        n_train, n_test = 100000, 110000
-    else:
-        n_train = int(len(dataset) * 0.75)
-        n_test = n_train + int(len(dataset) * 0.075)
-    train_dataset = dataset[:n_train]
-    test_dataset = dataset[n_train:n_test]
-    val_dataset = dataset[n_test:]
-
-    # dataloaders
+    # Create DataLoader kwargs
     follow_batch = [f"x_{i}" for i in range(args.dim + 1)] + ["x"]
     dataloader_kwargs = {
         "batch_size": args.batch_size,
         "num_workers": args.num_workers,
         "shuffle": True,
     }
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        collate_fn=CustomCollater(train_dataset, follow_batch=follow_batch),
-        **dataloader_kwargs,
-    )
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        collate_fn=CustomCollater(val_dataset, follow_batch=follow_batch),
-        **dataloader_kwargs,
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test_dataset,
-        collate_fn=CustomCollater(test_dataset, follow_batch=follow_batch),
-        **dataloader_kwargs,
-    )
 
-    return train_loader, val_loader, test_loader
+    # Process data splits
+    loaders = {}
+    for split in ["train", "valid", "test"]:
+
+        # Subsample if requested
+        n_split = len(split_indices[split])
+        if args.num_samples is not None:
+            n_split = min(args.num_samples, n_split)
+            split_indices[split] = split_indices[split][:n_split]
+        split_dataset = [dataset[i] for i in split_indices[split]]
+
+        # Transform and preprocess data
+        processed_split_dataset = []
+        for graph in tqdm(split_dataset, desc="Preparing data"):
+            transformed_graph = transform(graph)
+            preprocessed_graph = prepare_data(transformed_graph, index, args.target_name)
+            processed_split_dataset.append(preprocessed_graph)
+
+        # Create DataLoader
+        loaders[split] = torch.utils.data.DataLoader(
+            processed_split_dataset,
+            collate_fn=CustomCollater(processed_split_dataset, follow_batch=follow_batch),
+            **dataloader_kwargs,
+        )
+
+    return tuple(loaders.values())
 
 
 def generate_dataset_dir_name(args, relevant_args) -> str:

@@ -31,3 +31,4 @@ python src/main_qm9.py --lifters "atom:0" "bond:1" "supercell:2" \
                        --model_name "ten" \
                        --dim 2 \
                        --compile \
+                       --splits "egnn"

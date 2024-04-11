@@ -137,6 +137,13 @@ if __name__ == "__main__":
         help="how adjacency between cells of same rank is defined",
     )
     parser.add_argument(
+        "--merge_neighbors",
+        action="store_true",
+        default=False,
+        help="""if all the neighbors of different types should be represented as a single adjacency
+             matrix""",
+    )
+    parser.add_argument(
         "--visible_dims",
         nargs="+",
         type=int,

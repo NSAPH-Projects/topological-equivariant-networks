@@ -4,9 +4,14 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
+import torch
 from toponetx.classes import CombinatorialComplex
 
-from combinatorial_data.utils import CombinatorialComplexTransform, create_combinatorial_complex
+from combinatorial_data.combinatorial_data_utils import (
+    CombinatorialComplexTransform,
+    create_combinatorial_complex,
+    merge_neighbors,
+)
 
 
 @pytest.mark.parametrize(
@@ -258,3 +263,34 @@ def test_create_combinatorial_complex(cell_dict, expected):
         for rank in range(max_rank):
             expected = [cell for cell in cell_dict[rank]] if rank in cell_dict.keys() else []
             assert cc.skeleton(rank) == expected
+
+
+@pytest.fixture
+def adjacency_dict():
+    return {
+        "0_0_2": torch.tensor([[0, 1, 0], [1, 0, 1], [0, 1, 0]]),
+        "0_1": torch.tensor([[0, 1, 1], [1, 0, 0], [1, 0, 0]]),
+        "1_1_0": torch.tensor([[0, 1, 0], [1, 0, 0], [0, 1, 0]]),
+        "1_1_2": torch.tensor([[0, 1, 0], [0, 0, 1], [0, 1, 0]]),
+        "1_2": torch.tensor([[0, 1, 1], [1, 0, 0], [1, 0, 0]]),
+        "2_2_1": torch.tensor([[0, 1, 0], [1, 0, 1], [0, 1, 0]]),
+    }
+
+
+def test_merge_neighbors(adjacency_dict):
+    merged_adj, adj_types = merge_neighbors(adjacency_dict)
+
+    assert set(adj_types) == set(["0_0", "0_1", "1_1", "1_2", "2_2"])
+
+    assert merged_adj["0_0"].equal(adjacency_dict["0_0_2"])
+    assert merged_adj["1_1"].equal(torch.tensor([[0, 1, 0], [1, 0, 1], [0, 1, 0]]))
+    assert merged_adj["2_2"].equal(adjacency_dict["2_2_1"])
+
+
+def test_merge_neighbors_with_unmerged_adjacencies():
+    adjacency_dict = {
+        "0_0": torch.tensor([[0, 1, 0], [1, 0, 1], [0, 1, 0]]),
+    }
+
+    with pytest.raises(AssertionError):
+        merge_neighbors(adjacency_dict)

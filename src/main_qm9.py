@@ -131,10 +131,13 @@ if __name__ == "__main__":
         help="connectivity pattern between ranks",
     )
     parser.add_argument(
-        "--neighbor_type",
+        "--neighbor_types",
+        nargs="+",
         type=str,
-        default="adjacency",
-        help="how adjacency between cells of same rank is defined",
+        default=["+1"],
+        help="""How adjacency between cells of same rank is defined. Default is +1, meaning that
+                two cells of rank i are connected if they are both connected to the same cell of 
+                rank i+1. See src.utils.py::get_adjacencies for a list of possible values.""",
     )
     parser.add_argument(
         "--merge_neighbors",
@@ -179,7 +182,10 @@ if __name__ == "__main__":
 
     parsed_args = parser.parse_args()
     parsed_args.adjacencies = get_adjacency_types(
-        parsed_args.dim, parsed_args.connectivity, parsed_args.visible_dims
+        parsed_args.dim,
+        parsed_args.connectivity,
+        parsed_args.neighbor_types,
+        parsed_args.visible_dims,
     )
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

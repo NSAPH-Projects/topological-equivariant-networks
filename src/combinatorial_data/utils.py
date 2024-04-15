@@ -150,13 +150,13 @@ class CombinatorialComplexData(Data):
         num_nodes = getattr(self, "x_0").size(0)
         # The adj_i_j attribute holds cell indices, increment each dim by the number of cells of
         # corresponding rank
-        if re.match(r"adj_\d+_\d+", key):
-            _, i, j = key.split("_")
+        if re.match(r"adj_(\d+_\d+|\d+_\d+_\d+)", key):
+            i, j = key.split("_")[1:3]
             return torch.tensor(
                 [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
             )
         # The inv_i_j and x_i attributes hold node indices, they should be incremented
-        elif re.match(r"inv_\d+_\d+", key) or re.match(r"x_\d+", key):
+        elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"x_\d+", key):
             return num_nodes
         else:
             return super().__inc__(key, value, *args, **kwargs)
@@ -197,7 +197,7 @@ class CombinatorialComplexTransform(BaseTransform):
         ranker: callable,
         dim: int,
         adjacencies: list[str],
-        neighbor_type: str,
+        merge_neighbors: bool,
         enable_indexing_bug: bool = False,
     ):
         if isinstance(lifters, list):
@@ -207,7 +207,7 @@ class CombinatorialComplexTransform(BaseTransform):
         self.rank = ranker
         self.dim = dim
         self.adjacencies = adjacencies
-        self.neighbor_type = neighbor_type
+        self.merge_neighbors = merge_neighbors
         self.enable_indexing_bug = enable_indexing_bug
 
     def __call__(self, graph: Data) -> CombinatorialComplexData:
@@ -264,7 +264,8 @@ class CombinatorialComplexTransform(BaseTransform):
         # compute adjancencies and incidences
         adj, idx_to_cell = dict(), dict()
         for adj_type in self.adjacencies:
-            i, j = [int(rank) for rank in adj_type.split("_")]
+            ranks = [int(rank) for rank in adj_type.split("_")]
+            i, j = ranks[:2]
             if i != j:
                 if i < j:
                     matrix = cc.incidence_matrix(rank=i, to_rank=j)
@@ -272,7 +273,16 @@ class CombinatorialComplexTransform(BaseTransform):
                     matrix = cc.incidence_matrix(rank=j, to_rank=i).T
 
             else:
-                idx_to_cell[i], matrix = self.extended_adjacency_matrix(cc, i)
+                # store the cells of the complex and their indices
+                idx_to_cell[i] = [sorted(cell) for cell in cc.skeleton(rank=i)]
+                # if i == j, we must have a third rank specifying via_rank
+                assert len(ranks) == 3
+                via_rank = ranks[2]
+                kwargs = dict(rank=i, via_rank=via_rank, index=False)
+                if via_rank < i:
+                    matrix = cc.coadjacency_matrix(**kwargs)
+                else:
+                    matrix = cc.adjacency_matrix(**kwargs)
 
             if np.array_equal(matrix, np.zeros(1)):
                 matrix = torch.zeros(2, 0).long()
@@ -281,12 +291,16 @@ class CombinatorialComplexTransform(BaseTransform):
 
             adj[adj_type] = matrix
 
+        if self.merge_neighbors:
+            adj, self.adjacencies = merge_neighbors(adj)
+
         # for each adjacency/incidence, store the nodes to be used for computing geometric features
         inv = dict()
         for adj_type in self.adjacencies:
             inv[adj_type] = []
             neighbors = adj[adj_type]
-            i, j = [int(rank) for rank in adj_type.split("_")]
+            ranks = [int(rank) for rank in adj_type.split("_")]
+            i, j = ranks[:2]
 
             for connection in neighbors.t():
                 idx_a, idx_b = connection[0], connection[1]
@@ -501,6 +515,52 @@ def map_to_tensors(
         x_dict[rank] = x
         mem_dict[rank] = mem
     return x_dict, mem_dict
+
+
+def merge_neighbors(adj: dict[str, torch.Tensor]) -> tuple[dict[str, torch.Tensor], list[str]]:
+    """
+    Merge matching adjacency relationships in the adjacency dictionary.
+
+    Specifically, merge all adjacency relationships between cells of the same rank into a single
+    adjacency relationship. This is useful when the adjacency relationships are computed for
+    different types of neighbors, such as direct neighbors, coadjacent neighbors, etc.
+
+    Parameters
+    ----------
+    adj : dict[str, torch.Tensor]
+        The adjacency dictionary containing the neighboring cells.
+
+    Returns
+    -------
+    dict[str, torch.Tensor]
+        The merged adjacency dictionary.
+    list[str]
+        New list of adjacency types.
+    Raises
+    ------
+    AssertionError
+        If any unmerged adjacencies remain in the merged adjacency dictionary.
+    """
+    new_adj = {}
+    for key, value in adj.items():
+        i, j = key.split("_")[:2]
+        # Copy over incidences
+        if i != j:
+            new_adj[key] = value
+        # Merge same-rank adjacencies
+        else:
+            assert len(key.split("_")) == 3
+            merged_key = f"{i}_{j}"
+            if merged_key not in new_adj:
+                new_adj[merged_key] = value
+            else:
+                new_adj[merged_key] = (new_adj[merged_key] | value).type(torch.int64)
+    adj = new_adj
+    adj_types = list(adj.keys())
+    # Check that no unmerged adjacencies remain
+    for adj_type in adj_types:
+        assert len(adj_type.split("_")) == 2
+    return adj, adj_types
 
 
 def pad_lists_to_same_length(

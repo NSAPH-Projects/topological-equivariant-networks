@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from combinatorial_data.lifts import get_lifters
 from combinatorial_data.ranker import get_ranker
-from combinatorial_data.utils import CombinatorialComplexTransform, CustomCollater
+from src.combinatorial_data.utils import CombinatorialComplexTransform, CustomCollater
 
 
 def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
@@ -100,7 +100,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         ranker=ranker,
         dim=args.dim,
         adjacencies=args.adjacencies,
-        neighbor_type=args.neighbor_type,
+        merge_neighbors=args.merge_neighbors,
         enable_indexing_bug=args.enable_indexing_bug,
     )
 

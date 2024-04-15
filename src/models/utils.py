@@ -220,7 +220,7 @@ def compute_invariants(
     for rank_pair, cell_pairs in adj.items():
 
         # Compute mean cell positions memoized
-        sender_rank, receiver_rank = rank_pair.split("_")
+        sender_rank, receiver_rank = rank_pair.split("_")[:2]
         for rank in [sender_rank, receiver_rank]:
             if rank not in mean_cell_positions:
                 mean_cell_positions[rank] = compute_centroids(feat_ind[rank], pos)

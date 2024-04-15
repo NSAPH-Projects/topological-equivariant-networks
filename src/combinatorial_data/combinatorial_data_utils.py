@@ -375,62 +375,7 @@ class CombinatorialComplexTransform(BaseTransform):
 
         return cell_lifter_map
 
-    def extended_adjacency_matrix(self, cc, rank):
-        """
-        Compute the extended adjacency matrix for a given combinatorial complex and rank.
-
-        Parameters
-        ----------
-        cc : CombinatorialComplex
-            The combinatorial complex.
-        rank : int
-            The rank of the complex.
-
-        Returns
-        -------
-        tuple[list[frozenset], np.ndarray]
-            A tuple containing the index and the extended adjacency matrix.
-
-        Notes
-        -----
-        - The extended adjacency matrix represents the connectivity between cells of a combinatorial
-        complex.
-        - The matrix is computed based on the neighbor type specified in the class.
-        - The index represents the cells of the complex.
-        - If the complex contains no cells with the given rank, a 1x1 zero matrix is returned. The
-        reason is the desire to be consistent with the behavior of TopoNetX's incidence_matrix()
-        which also returns a 1x1 zero matrix in that case,
-        """
-        index = cc.skeleton(rank=rank)
-        index = [sorted(cell) for cell in index]
-        num_cells = len(index)
-        if num_cells == 0:
-            matrix = np.zeros(1)
-        else:
-            matrix = csc_matrix((num_cells, num_cells), dtype=int)
-            if self.neighbor_type == "adjacency":
-                via_ranks = [rank + 1]
-            elif self.neighbor_type == "any_adjacency":
-                via_ranks = list(range(rank + 1, self.dim + 1))
-            elif self.neighbor_type == "coadjacency":
-                via_ranks = [rank - 1]
-            elif self.neighbor_type == "any_coadjacency":
-                via_ranks = list(range(rank - 1, -1, -1))
-            elif self.neighbor_type == "direct":
-                via_ranks = [rank - 1, rank + 1]
-            elif self.neighbor_type == "all":
-                via_ranks = list(range(self.dim + 1))
-            via_ranks = [r for r in via_ranks if r >= 0 and r <= self.dim and r != rank]
-            for r in via_ranks:
-                kwargs = dict(rank=rank, via_rank=r, index=False)
-                if r < rank:
-                    matrix += cc.coadjacency_matrix(**kwargs)
-                else:
-                    matrix += cc.adjacency_matrix(**kwargs)
-
-            matrix[matrix > 0] = 1
-
-        return index, matrix
+    
 
 
 def create_combinatorial_complex(

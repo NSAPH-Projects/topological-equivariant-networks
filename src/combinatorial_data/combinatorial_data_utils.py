@@ -207,6 +207,7 @@ class CombinatorialComplexTransform(BaseTransform):
         self.rank = ranker
         self.dim = dim
         self.adjacencies = adjacencies
+        self.processed_adjacencies = self.adjacencies
         self.merge_neighbors = merge_neighbors
         self.enable_indexing_bug = enable_indexing_bug
 
@@ -284,19 +285,24 @@ class CombinatorialComplexTransform(BaseTransform):
                 else:
                     matrix = cc.adjacency_matrix(**kwargs)
 
-            if np.array_equal(matrix, np.zeros(1)):
-                matrix = torch.zeros(2, 0).long()
-            else:
-                matrix = sparse_to_dense(matrix)
-
             adj[adj_type] = matrix
 
+        # merge matching adjacencies
         if self.merge_neighbors:
-            adj, self.adjacencies = merge_neighbors(adj)
+            adj, self.processed_adjacencies = merge_neighbors(adj)
+
+        # convert from sparse numpy matrices to dense torch tensors
+        new_adj = {}
+        for adj_type, matrix in adj.items():
+            if np.array_equal(matrix, np.zeros(1)):
+                new_adj[adj_type] = torch.zeros(2, 0).long()
+            else:
+                new_adj[adj_type] = sparse_to_dense(matrix)
+        adj = new_adj
 
         # for each adjacency/incidence, store the nodes to be used for computing geometric features
         inv = dict()
-        for adj_type in self.adjacencies:
+        for adj_type in self.processed_adjacencies:
             inv[adj_type] = []
             neighbors = adj[adj_type]
             ranks = [int(rank) for rank in adj_type.split("_")]
@@ -374,8 +380,6 @@ class CombinatorialComplexTransform(BaseTransform):
         }
 
         return cell_lifter_map
-
-    
 
 
 def create_combinatorial_complex(
@@ -499,7 +503,9 @@ def merge_neighbors(adj: dict[str, torch.Tensor]) -> tuple[dict[str, torch.Tenso
             if merged_key not in new_adj:
                 new_adj[merged_key] = value
             else:
-                new_adj[merged_key] = (new_adj[merged_key] | value).type(torch.int64)
+                # new_adj[merged_key] = new_adj[merged_key] | value
+                new_adj[merged_key] += value
+                new_adj[merged_key][new_adj[merged_key] > 0] = 1
     adj = new_adj
     adj_types = list(adj.keys())
     # Check that no unmerged adjacencies remain

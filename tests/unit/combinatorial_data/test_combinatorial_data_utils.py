@@ -169,3 +169,29 @@ def test_incidence_matrix(combinatorial_complex, rank, to_rank, expected_matrix)
         assert torch.equal(
             sparse_to_dense(incidence_matrix(cc, rank, to_rank)), sparse_to_dense(expected_matrix)
         )
+
+
+def _dense_to_sparse(dense):
+    rows, cols = np.indices(dense.shape)
+    sparse = csc_matrix((dense.flatten(), (rows.flatten(), cols.flatten())), shape=dense.shape)
+    return sparse
+
+
+@pytest.mark.parametrize(
+    "sparse, expected",
+    [
+        # case 1: regular sparse matrix
+        (
+            csc_matrix(np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]])),
+            torch.tensor([[0, 0, 1, 1, 2, 2], [1, 2, 0, 2, 0, 1]]),
+        ),
+        # case 2: inefficient sparse matrix (also stores zeros)
+        (
+            _dense_to_sparse(np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]])),
+            torch.tensor([[0, 0, 1, 1, 2, 2], [1, 2, 0, 2, 0, 1]]),
+        ),
+    ],
+)
+def test_sparse_to_dense(sparse, expected):
+
+    assert torch.equal(sparse_to_dense(sparse), expected)

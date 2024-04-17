@@ -688,7 +688,20 @@ def pad_tensor(
     return torch.nn.functional.pad(tensor, pad=pad_sizes, value=pad_value)
 
 
-def sparse_to_dense(sparse_matrix):
+def sparse_to_dense(sparse_matrix: csc_matrix) -> torch.Tensor:
+    """
+    Convert a sparse (n, m) matrix to a dense (2, k) PyTorch tensor in an adjacency list format.
+
+    Parameters
+    ----------
+    sparse_matrix : csc_matrix
+        The sparse matrix to convert.
+
+    Returns
+    -------
+    torch.Tensor
+        The dense PyTorch tensor representation of the sparse matrix.
+    """
     # Extract row and column indices of non-zero elements
     rows, cols = sparse_matrix.nonzero()
 

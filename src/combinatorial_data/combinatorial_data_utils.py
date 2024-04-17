@@ -263,27 +263,16 @@ class CombinatorialComplexTransform(BaseTransform):
         cc = create_combinatorial_complex(cell_dict)
 
         # compute adjancencies and incidences
-        adj, idx_to_cell = dict(), dict()
+        adj = dict()
         for adj_type in self.adjacencies:
             ranks = [int(rank) for rank in adj_type.split("_")]
             i, j = ranks[:2]
             if i != j:
-                if i < j:
-                    matrix = cc.incidence_matrix(rank=i, to_rank=j)
-                else:
-                    matrix = cc.incidence_matrix(rank=j, to_rank=i).T
-
+                matrix = incidence_matrix(cc, i, j)
             else:
-                # store the cells of the complex and their indices
-                idx_to_cell[i] = [sorted(cell) for cell in cc.skeleton(rank=i)]
                 # if i == j, we must have a third rank specifying via_rank
                 assert len(ranks) == 3
-                via_rank = ranks[2]
-                kwargs = dict(rank=i, via_rank=via_rank, index=False)
-                if via_rank < i:
-                    matrix = cc.coadjacency_matrix(**kwargs)
-                else:
-                    matrix = cc.adjacency_matrix(**kwargs)
+                matrix = adjacency_matrix(cc, i, ranks[2])
 
             adj[adj_type] = matrix
 
@@ -292,13 +281,13 @@ class CombinatorialComplexTransform(BaseTransform):
             adj, self.processed_adjacencies = merge_neighbors(adj)
 
         # convert from sparse numpy matrices to dense torch tensors
-        new_adj = {}
         for adj_type, matrix in adj.items():
-            if np.array_equal(matrix, np.zeros(1)):
-                new_adj[adj_type] = torch.zeros(2, 0).long()
-            else:
-                new_adj[adj_type] = sparse_to_dense(matrix)
-        adj = new_adj
+            adj[adj_type] = sparse_to_dense(matrix)
+
+        # pre-compute idx_to_cell mappings
+        idx_to_cell = {
+            rank: [sorted(cell) for cell in cc.skeleton(rank=rank)] for rank in range(self.dim + 1)
+        }
 
         # for each adjacency/incidence, store the nodes to be used for computing geometric features
         inv = dict()
@@ -380,6 +369,114 @@ class CombinatorialComplexTransform(BaseTransform):
         }
 
         return cell_lifter_map
+
+
+def adjacency_matrix(cc: CombinatorialComplex, rank: int, via_rank: int) -> csc_matrix:
+    """
+    Compute the adjacency matrix for a given combinatorial complex, rank and via_rank.
+
+    The adjacency matrix is computed based on the ranks of the cells in the complex. If the via_rank
+    is lower than the rank, the coadjacency matrix is computed instead.
+
+    Parameters
+    ----------
+    cc : CombinatorialComplex
+        The combinatorial complex.
+    rank : int
+        The rank for which we want the adjacency matrix.
+    via_rank : int
+        The rank to compute the adjacency matrix via.
+
+    Returns
+    -------
+    scipy.sparse.csc_matrix
+        The adjacency matrix.
+
+    Raises
+    ------
+    ValueError
+        If rank and via_rank are the same, or if any of the input values are negative.
+
+    Notes
+    -----
+    The toponetx adjacency_matrix() and coadjacency_matrix() methods have a bug if rank < via_rank
+    and there are no cells with that rank. This function is a workaround for that bug as well as a
+    convenience wrapper for the toponetx methods.
+
+    """
+    # check for invalid input
+    if rank == via_rank:
+        raise ValueError("rank and via_rank must be different.")
+    if rank < 0:
+        raise ValueError(f"rank must be a non-negative integer, but was {rank}.")
+    if via_rank < 0:
+        raise ValueError(f"via_rank must be a non-negative integer, but was {via_rank}.")
+
+    # compute the adjacency matrix
+    kwargs = dict(rank=rank, via_rank=via_rank, index=False)
+    if via_rank < rank:
+        matrix = cc.coadjacency_matrix(**kwargs)
+    else:
+        matrix = cc.adjacency_matrix(**kwargs)
+
+    # triggered if rank < via_rank, i.e. adj_type = i_j, i != j and i is an empty rank but j is not
+    num_cells = len(cc.skeleton(rank=rank))
+    if matrix.shape != (num_cells, num_cells):
+        matrix = csc_matrix((num_cells, num_cells), dtype=np.float64)
+
+    return matrix
+
+
+def incidence_matrix(cc, rank, to_rank):
+    """
+    Compute the incidence matrix between two ranks in a combinatorial complex.
+
+    Parameters
+    ----------
+    cc : CombinatorialComplex
+        The combinatorial complex.
+    rank : int
+        The starting rank.
+    to_rank : int
+        The ending rank.
+
+    Returns
+    -------
+    csc_matrix
+        The incidence matrix between the two ranks.
+
+    Raises
+    ------
+    ValueError
+        If rank and to_rank are the same.
+    ValueError
+        If rank or to_rank is a negative integer.
+
+    """
+    # check for invalid input
+    if rank == to_rank:
+        raise ValueError("rank and to_rank must be different.")
+
+    def error_msg(arg_name, arg_value):
+        return f"{arg_name} must be a non-negative integer, but was {arg_value}."
+
+    if rank < 0:
+        raise ValueError(error_msg("rank", rank))
+    if to_rank < 0:
+        raise ValueError(error_msg("to_rank", to_rank))
+
+    # compute the incidence matrix
+    if rank < to_rank:
+        matrix = cc.incidence_matrix(rank=rank, to_rank=to_rank)
+    else:
+        matrix = cc.incidence_matrix(rank=to_rank, to_rank=rank).T
+
+    # triggered if adj_type = i_j, i != j and i is an empty rank
+    num_cells_i, num_cells_j = len(cc.skeleton(rank=rank)), len(cc.skeleton(rank=to_rank))
+    if matrix.shape != (num_cells_i, num_cells_j):
+        matrix = csc_matrix((num_cells_i, num_cells_j), dtype=np.float64)
+
+    return matrix
 
 
 def create_combinatorial_complex(

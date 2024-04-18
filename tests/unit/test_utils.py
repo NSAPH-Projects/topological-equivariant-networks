@@ -1,6 +1,6 @@
 import pytest
 
-from utils import get_adjacency_types
+from utils import get_adjacency_types, merge_adjacencies
 
 
 @pytest.mark.parametrize(
@@ -61,3 +61,31 @@ def test_invalid_connectivity():
     with pytest.raises(ValueError) as e:
         get_adjacency_types(2, "invalid_connectivity", ["+1"], None)
     assert str(e.value) == "invalid_connectivity is not a known connectivity pattern!"
+
+
+@pytest.mark.parametrize(
+    "adjacencies, expected",
+    [
+        (
+            [
+                "0_0_1",
+                "0_0_3",
+                "0_1",
+                "1_0",
+                "1_1_0",
+                "1_1_2",
+                "1_1_3",
+                "1_2",
+                "2_1",
+                "2_2_1",
+                "2_2_3",
+                "2_3",
+                "3_2",
+                "3_3_2",
+            ],
+            ["0_0", "0_1", "1_0", "1_1", "1_2", "2_1", "2_2", "2_3", "3_2", "3_3"],
+        ),
+    ],
+)
+def test_merge_adjacencies(adjacencies, expected):
+    assert set(merge_adjacencies(adjacencies)) == set(expected)

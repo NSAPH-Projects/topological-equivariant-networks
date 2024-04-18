@@ -103,6 +103,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         ranker=ranker,
         dim=args.dim,
         adjacencies=args.adjacencies,
+        processed_adjacencies=args.processed_adjacencies,
         merge_neighbors=args.merge_neighbors,
         enable_indexing_bug=args.enable_indexing_bug,
     )

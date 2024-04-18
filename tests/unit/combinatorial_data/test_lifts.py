@@ -18,7 +18,7 @@ from combinatorial_data.combinatorial_data_utils import (
 from combinatorial_data.lifts import *
 from combinatorial_data.ranker import get_ranker
 from legacy.simplicial_data.rips_lift import rips_lift as old_rips_lift
-from utils import get_adjacency_types
+from utils import get_adjacency_types, merge_adjacencies
 
 
 @pytest.mark.parametrize(
@@ -227,12 +227,14 @@ def test_rips_transform(dim: int, dis: float):
         adjacencies = get_adjacency_types(
             max_dim=dim + 1, connectivity="self_and_next", neighbor_types=["+1"], visible_dims=None
         )
+        processed_adjacencies = merge_adjacencies(adjacencies)
 
         simplicial_transform = NewTransform(
             lifters=fixed_rips_lift,
             ranker=ranker,
             dim=dim + 1,
             adjacencies=adjacencies,
+            processed_adjacencies=processed_adjacencies,
             merge_neighbors=True,
         )
         new_x_dict, _, new_adj, new_inv = simplicial_transform.get_relevant_dicts(graph)

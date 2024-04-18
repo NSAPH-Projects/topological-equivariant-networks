@@ -156,6 +156,27 @@ def get_adjacency_types(
     return adj_types
 
 
+def merge_adjacencies(adjacencies: list[str]) -> list[str]:
+    """
+    Merge all adjacency types i_i_j into a single i_i.
+
+    We merge adjacencies of the form i_i_j into a single adjacency i_i. This is useful when we want
+    to represent all rank i neighbors of a cell of rank i as a single adjacency matrix.
+
+    Parameters
+    ----------
+    adjacencies : list[str]
+        A list of adjacency types.
+
+    Returns
+    -------
+    list[str]
+        A list of merged adjacency types.
+
+    """
+    return list(set(["_".join(adj_type.split("_")[:2]) for adj_type in adjacencies]))
+
+
 def get_model(args: Namespace) -> nn.Module:
     """Return model based on name."""
     if args.dataset == "qm9":
@@ -201,7 +222,7 @@ def get_model(args: Namespace) -> nn.Module:
             num_out=num_out,
             num_layers=args.num_layers,
             max_dim=args.dim,
-            adjacencies=args.adjacencies,
+            adjacencies=args.processed_adjacencies,
             initial_features=args.initial_features,
             visible_dims=args.visible_dims,
         )

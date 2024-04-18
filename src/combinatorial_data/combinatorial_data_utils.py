@@ -197,6 +197,7 @@ class CombinatorialComplexTransform(BaseTransform):
         ranker: callable,
         dim: int,
         adjacencies: list[str],
+        processed_adjacencies: list[str],
         merge_neighbors: bool,
         enable_indexing_bug: bool = False,
     ):
@@ -207,7 +208,7 @@ class CombinatorialComplexTransform(BaseTransform):
         self.rank = ranker
         self.dim = dim
         self.adjacencies = adjacencies
-        self.processed_adjacencies = self.adjacencies
+        self.processed_adjacencies = processed_adjacencies
         self.merge_neighbors = merge_neighbors
         self.enable_indexing_bug = enable_indexing_bug
 
@@ -278,7 +279,8 @@ class CombinatorialComplexTransform(BaseTransform):
 
         # merge matching adjacencies
         if self.merge_neighbors:
-            adj, self.processed_adjacencies = merge_neighbors(adj)
+            adj, processed_adjacencies = merge_neighbors(adj)
+            assert set(processed_adjacencies) == set(self.processed_adjacencies)
 
         # convert from sparse numpy matrices to dense torch tensors
         for adj_type, matrix in adj.items():

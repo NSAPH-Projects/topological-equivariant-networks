@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 import wandb
 from qm9.utils import calc_mean_mad
-from utils import get_adjacency_types, get_loaders, get_model, set_seed
+from utils import get_adjacency_types, get_loaders, get_model, merge_adjacencies, set_seed
 
 
 def main(args):
@@ -187,6 +187,12 @@ if __name__ == "__main__":
         parsed_args.neighbor_types,
         parsed_args.visible_dims,
     )
+    # If merge_neighbors is True, the adjacency types we feed to the model will be the merged ones
+    if parsed_args.merge_neighbors:
+        parsed_args.processed_adjacencies = merge_adjacencies(parsed_args.adjacencies)
+    else:
+        parsed_args.processed_adjacencies = parsed_args.adjacencies
+
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     set_seed(parsed_args.seed)

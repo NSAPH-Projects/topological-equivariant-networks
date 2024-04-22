@@ -18,17 +18,18 @@ conda activate ten
 
 # Train EGNN
 python src/main_qm9.py --lifters "atom:0" "supercell:1" \
-                       --target_name "mu" \
-                       --neighbor_type "any_adjacency" \
+                       --target_name "$TARGET_NAME" \
+                       --neighbor_types "+1" \
+                       --merge_neighbors \
                        --connectivity "self" \
                        --visible_dims 0 \
                        --epochs 1000 \
                        --batch_size 96 \
                        --weight_decay 1e-16 \
-                       --lr 5e-4 \
+                       --lr "$LR" \
                        --num_layers 7 \
                        --num_hidden 128 \
                        --model_name "ten" \
                        --dim 1 \
                        --compile \
-                       --splits "egnn"
+                       --splits "egnn" \

@@ -2,9 +2,17 @@
 
 # Get the script name from the first argument
 script_name=$1
+shift
 
 # List of target names
-targets=("gap" "homo" "lumo" "alpha" "mu" "Cv" "G" "H" "r2" "U" "U0" "zpve")
+default_targets=("gap" "homo" "lumo" "alpha" "mu" "Cv" "G" "H" "r2" "U" "U0" "zpve")
+
+# If no targets are provided, use the default list
+if [ $# -eq 0 ]; then
+    targets=("${default_targets[@]}")
+else
+    targets=("$@")
+fi
 
 # Learning rates
 lr1="1e-3"

@@ -33,4 +33,4 @@ python src/main_qm9.py --lifters "atom:0" "bond:1" "functional_group:2" "ring:2"
                        --num_hidden 128 \
                        --model_name "ten" \
                        --dim 3 \
-                       --splits "egnn" \                       
+                       --splits "egnn" \

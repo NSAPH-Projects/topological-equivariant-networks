@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -c 8                # Number of cores (-c)
-#SBATCH -t 0-30:00          # Runtime in D-HH:MM, minimum of 10 minutes
+#SBATCH -t 0-60:00          # Runtime in D-HH:MM, minimum of 10 minutes
 #SBATCH -p gpu              # Partition to submit to
 #SBATCH --gres=gpu:nvidia_a100-sxm4-80gb:1
 #SBATCH --mem=32000         # Memory pool for all cores (see also --mem-per-cpu)

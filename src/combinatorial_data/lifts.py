@@ -2,15 +2,115 @@
 
 from functools import partial
 from itertools import combinations
-
+from collections import deque
 import gudhi
 import networkx as nx
 import torch_geometric.utils as pyg_utils
 from rdkit import Chem
 from torch_geometric.data import Data
+import random
+from math import comb
 
 from combinatorial_data.ifg import identify_functional_groups
 
+def random_lift(graph: Data, K_max: int = 6, num_subsets: int = 10) -> set[frozenset[int]]:
+    """
+    Generate random subsets of nodes from a graph with cardinalities between 3 and K_max.
+
+    This function randomly selects subsets of the entire node set, where each subset's size
+    ranges from 3 to K_max. The function limits the output to a specified number of subsets
+    to manage performance and memory usage.
+
+    Parameters
+    ----------
+    graph : torch.Tensor
+        The input graph represented as a PyTorch tensor.
+    K_max : int
+        The maximum cardinality of the node subsets.
+    num_subsets : int
+        The number of random subsets to return.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A set of node subsets, each subset is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
+    """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+
+    # Convert to networkx graph
+    G = pyg_utils.to_networkx(graph, to_undirected=True)
+
+    nodes = list(G.nodes())
+    all_subsets = set()
+    total_nodes = len(nodes)
+    assert total_nodes >= 3
+
+    # Ensure that K_max is not greater than the total number of nodes
+    max_subset_size = min(K_max, total_nodes)
+
+    # Ensure that you are not requiring too many subsets
+    n_subsets_at_least_3 = lambda n: 2**n - (1 + n + comb(n, 2))
+    num_subsets = min(n_subsets_at_least_3(total_nodes),num_subsets)
+
+    while len(all_subsets) < num_subsets:
+        subset_size = random.randint(3, max_subset_size)
+        sampled_subset = frozenset(random.sample(nodes, subset_size))
+        all_subsets.add(sampled_subset)
+
+    return all_subsets
+
+def path_lift(graph: Data, K_max: int = 4) -> set[frozenset[int]]:
+    """
+    Identify all paths in a graph with lengths up to K_max, optimized for efficiency.
+
+    This function finds all paths of lengths ranging from 2 to K_max in a given graph,
+    with optimizations to improve time and memory performance.
+
+    Parameters
+    ----------
+    graph : torch.Tensor
+        The input graph represented as a PyTorch tensor.
+    K_max : int
+        The maximum length of the paths to be found.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A set of paths, each path is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
+    """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+
+    # Convert to networkx graph
+    G = pyg_utils.to_networkx(graph, to_undirected=True)
+    paths = set()
+    for source_node in G.nodes():
+        paths.add(frozenset([source_node]))
+        # Use deque for more efficient popping from left
+        queue = deque([(source_node, [source_node])])
+        while queue:
+            current_node, path = queue.popleft()
+            if 1 < len(path) <= K_max:
+                paths.add(frozenset(path))
+            if len(path) < K_max:
+                for neighbor in G.neighbors(current_node):
+                    if neighbor not in path:
+                        queue.append((neighbor, path + [neighbor]))
+
+    return paths
 
 def clique_lift(graph_data) -> set[frozenset[int]]:
     """
@@ -300,6 +400,8 @@ lifter_registry = {
     "ring": ring_lift,
     "rips": rips_lift,
     "supercell": supercell_lift,
+    "path": path_lift,
+    "random": random_lift,
 }
 
 

@@ -7,6 +7,8 @@
 #SBATCH -o job_outputs/myoutput_%j.out  # File to which STDOUT will be written, %j inserts jobid
 #SBATCH -e job_outputs/myerrors_%j.err  # File to which STDERR will be written, %j inserts jobid
 
+# Scenario 1 on Slack
+
 # Load modules
 module load ncf/1.0.0-fasrc01
 module load miniconda3/py310_22.11.1-1-linux_x64-ncf
@@ -19,11 +21,9 @@ conda activate ten
 # Train EGNN
 python src/main_qm9.py --lifters "atom:0" "bond:1" "functional_group:2" "ring:2" "supercell:3" \
                        --target_name "$TARGET_NAME" \
-                       --neighbor_type "any_adjacency" \
                        --connectivity "self_and_neighbors" \
+                       --visible_dims 0 1 2 3 \
                        --neighbor_types "+1" "-1" "max" \
-                       --merge_neighbors \
-                       --visible_dims 0 1 2 3\
                        --epochs 1000 \
                        --batch_size 96 \
                        --weight_decay 1e-16 \

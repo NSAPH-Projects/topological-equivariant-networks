@@ -184,6 +184,9 @@ if __name__ == "__main__":
     # Dataset arguments
     parser.add_argument("--dataset", type=str, default="qm9", help="dataset")
     parser.add_argument("--task_type", type=str, default="regression", help="task type")
+    parser.add_argument(
+        "--chain_length", type=int, default=4, help="chain length for the synthetic task"
+    )
     parser.add_argument("--target_name", type=str, default="H", help="regression task")
     parser.add_argument("--dim", type=int, default=2, help="ASC dimension")
     parser.add_argument("--dis", type=float, default=4.0, help="radius Rips complex")

@@ -20,6 +20,67 @@ from combinatorial_data.ranker import get_ranker
 from legacy.simplicial_data.rips_lift import rips_lift as old_rips_lift
 from utils import get_adjacency_types, merge_adjacencies
 
+@pytest.mark.parametrize(
+    "edge_index, expected_simplices",
+  [
+        # Test with a simple graph
+        (
+            torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]], dtype=torch.long),
+            {
+                frozenset([0]),
+                frozenset([1]),
+                frozenset([2]),
+                frozenset([3]),
+                frozenset([0, 1]),
+                frozenset([1, 2]),
+                frozenset([2, 3]),
+                frozenset([3, 0]),
+                frozenset([0, 1, 2]),
+                frozenset([1, 2,3]),
+                frozenset([1, 2,3]),
+                frozenset([2, 3,0]),
+                frozenset([1, 3,0]),
+            },
+        ),
+        # Test with an empty graph
+        (torch.tensor([[], []], dtype=torch.long), set()),
+        # Test with a graph with isolated nodes
+        (
+            torch.tensor([[0, 2], [1, 3]], dtype=torch.long),
+            {
+                frozenset([0]),
+                frozenset([1]),
+                frozenset([2]),
+                frozenset([3]),
+                frozenset([0, 1]),
+                frozenset([2, 3]),
+            },
+        ),
+        # Test with a graph with self-loops
+        (
+            torch.tensor([[0, 1, 1], [0, 1, 2]], dtype=torch.long),
+            {
+                frozenset([0]),
+                frozenset([1]),
+                frozenset([2]),
+                frozenset([1, 2]),
+            },
+        ),
+    ]
+)
+def test_path_lift(edge_index, expected, K_max =3):
+    if expected is ValueError:
+        with pytest.raises(ValueError):
+            graph_data = Data(edge_index=edge_index)
+            path_lift(graph_data,K_max)
+    else:
+        # Create a simple graph
+        graph_data = Data(edge_index=edge_index)
+
+        # Call the ring_lift function
+        output = path_lift(graph_data,K_max)
+        # Check if the returned output matches the expected output
+        assert output == expected
 
 @pytest.mark.parametrize(
     "edge_index, expected_simplices",

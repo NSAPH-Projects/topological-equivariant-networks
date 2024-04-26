@@ -69,8 +69,8 @@ from utils import get_adjacency_types, merge_adjacencies
         ),
     ],
 )
-def test_path_lift(edge_index, expected, K_max=3):
-    if expected is ValueError:
+def test_path_lift(edge_index, expected_simplices, K_max=3):
+    if expected_simplices is ValueError:
         with pytest.raises(ValueError):
             graph_data = Data(edge_index=edge_index)
             path_lift(graph_data, K_max)
@@ -81,7 +81,7 @@ def test_path_lift(edge_index, expected, K_max=3):
         # Call the ring_lift function
         output = path_lift(graph_data, K_max)
         # Check if the returned output matches the expected output
-        assert output == expected
+        assert output == expected_simplices
 
 
 @pytest.mark.parametrize(

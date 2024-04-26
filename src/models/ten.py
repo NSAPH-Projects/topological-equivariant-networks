@@ -23,6 +23,7 @@ class TEN(nn.Module):
         adjacencies: list[str],
         initial_features: str,
         visible_dims: list[int] | None,
+        task_type: str,
         compute_invariants: callable = compute_invariants,
     ) -> None:
         super().__init__()
@@ -32,6 +33,7 @@ class TEN(nn.Module):
         self.num_inv_fts_map = self.compute_invariants.num_features_map
         self.max_dim = max_dim
         self.adjacencies = adjacencies
+        self.task_type = task_type
         if visible_dims is not None:
             self.visible_dims = visible_dims
         else:
@@ -58,13 +60,14 @@ class TEN(nn.Module):
                 nn.SiLU(),
                 nn.Linear(num_hidden, num_hidden),
             )
-        self.post_pool = nn.Sequential(
-            nn.Sequential(
-                nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
-                nn.SiLU(),
-                nn.Linear(num_hidden, num_out),
-            )
-        )
+        post_pool_layers = [
+            nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
+            nn.SiLU(),
+            nn.Linear(num_hidden, num_out),
+        ]
+        if self.task_type == "classification":
+            post_pool_layers.append(nn.Sigmoid())
+        self.post_pool = nn.Sequential(post_pool_layers)
 
     def forward(self, graph: Data) -> Tensor:
         device = graph.pos.device

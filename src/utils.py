@@ -255,6 +255,7 @@ def get_model(args: Namespace) -> nn.Module:
             adjacencies=args.processed_adjacencies,
             initial_features=args.initial_features,
             visible_dims=args.visible_dims,
+            task_type=args.task_type,
         )
     else:
         raise ValueError(f"Model type {args.model_name} not recognized.")

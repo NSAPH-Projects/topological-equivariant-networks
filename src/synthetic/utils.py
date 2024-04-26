@@ -29,7 +29,8 @@ def generate_loaders_synthetic_chains(args: Namespace) -> tuple[DataLoader, Data
         ranker=ranker,
         dim=args.dim,
         adjacencies=args.adjacencies,
-        neighbor_type=args.neighbor_type,
+        processed_adjacencies=args.processed_adjacencies,
+        merge_neighbors=args.merge_neighbors,
     )
 
     # Create DataLoader kwargs

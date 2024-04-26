@@ -42,7 +42,7 @@ def generate_loaders_synthetic_chains(args: Namespace) -> tuple[DataLoader, Data
     }
 
     # Generate k-chains
-    k = args.k_chain
+    k = args.chain_length
     assert k >= 2
 
     dataset = []

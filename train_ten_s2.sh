@@ -19,18 +19,19 @@ source ~/.bashrc
 conda activate ten
 
 # Train EGNN
-python src/main_qm9.py --lifters "atom:0" "bond:1" "functional_group:2" "ring:2" \
-                       --target_name "$TARGET_NAME" \
-                       --connectivity "self_and_neighbors" \
-                       --visible_dims 0 1 2 \
-                       --neighbor_types "+1" "-1" \
-                       --epochs 1000 \
-                       --batch_size 96 \
-                       --weight_decay 1e-16 \
-                       --lr "$LR" \
-                       --num_layers 7 \
-                       --num_hidden 128 \
-                       --model_name "ten" \
-                       --dim 2 \
-                       --splits "egnn" \
-                       --clip_gradient "$CLIP_GRADIENT" \
+python src/main.py --dataset "qm9" \
+                   --lifters "atom:0" "bond:1" "functional_group:2" "ring:2" \
+                   --target_name "$TARGET_NAME" \
+                   --connectivity "self_and_neighbors" \
+                   --visible_dims 0 1 2 \
+                   --neighbor_types "+1" "-1" \
+                   --epochs 1000 \
+                   --batch_size 96 \
+                   --weight_decay 1e-16 \
+                   --lr "$LR" \
+                   --num_layers 7 \
+                   --num_hidden 128 \
+                   --model_name "ten" \
+                   --dim 2 \
+                   --splits "egnn" \
+                   --clip_gradient "$CLIP_GRADIENT" \

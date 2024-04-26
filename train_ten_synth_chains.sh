@@ -19,7 +19,8 @@ source ~/.bashrc
 conda activate ten
 
 # Train EGNN
-python src/main_qm9.py --lifters "path:c"  \
+python src/main_qm9.py --dataset "synthetic_chains" \
+                       --lifters "path:c" \
                        --max_path_length 3 \
                        --connectivity "self" \
                        --visible_dims 0 1 2 3 \

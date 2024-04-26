@@ -33,3 +33,4 @@ python src/main_qm9.py --lifters "atom:0" "bond:1" "functional_group:2" "ring:2"
                        --model_name "ten" \
                        --dim 3 \
                        --splits "egnn" \
+                       --clip_gradient "$CLIP_GRADIENT" \

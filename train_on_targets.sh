@@ -1,5 +1,20 @@
 #!/bin/bash
 
+# Default values
+clip_gradient=False
+
+# Parse command-line options
+while getopts c: option
+do
+    case "${option}"
+    in
+    c) clip_gradient=${OPTARG};;
+    esac
+done
+
+# Remove the parsed options from the command-line arguments
+shift $((OPTIND -1))
+
 # Get the script name from the first argument
 script_name=$1
 shift
@@ -28,5 +43,5 @@ do
         lr=$lr2
     fi
     # Call the specified script with the current target
-    sbatch --export=ALL,TARGET_NAME=$target,LR=$lr $script_name
+    sbatch --export=ALL,TARGET_NAME=$target,LR=$lr,CLIP_GRADIENT=$clip_gradient $script_name
 done

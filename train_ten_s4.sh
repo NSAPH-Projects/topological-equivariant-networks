@@ -24,6 +24,7 @@ python src/main_qm9.py --lifters "atom:0" "bond:1" "functional_group:2" "ring:2"
                        --connectivity "self_and_neighbors" \
                        --visible_dims 0 1 2 \
                        --neighbor_types "+1" "-1" \
+                       --merge_neighbors \
                        --epochs 1000 \
                        --batch_size 96 \
                        --weight_decay 1e-16 \

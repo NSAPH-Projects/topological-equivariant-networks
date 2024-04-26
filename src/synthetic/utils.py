@@ -7,13 +7,14 @@ from argparse import Namespace
 import torch
 from torch import Tensor
 from torch.utils.data import DataLoader
-from torch_geometric.utils import to_undirected
 from torch_geometric.data import Data
+from torch_geometric.utils import to_undirected
 from tqdm import tqdm
 
 from combinatorial_data.lifts import get_lifters
 from combinatorial_data.ranker import get_ranker
 from combinatorial_data.utils import CombinatorialComplexTransform, CustomCollater
+
 
 def generate_loaders_chain(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
 
@@ -37,19 +38,17 @@ def generate_loaders_chain(args: Namespace) -> tuple[DataLoader, DataLoader, Dat
     }
 
     # Generate k-chains
-    k = args.k_chain 
+    k = args.k_chain
     assert k >= 2
-    
+
     dataset = []
-    
+
     # Graph 0
-    x = torch.zeros(len(atoms),0)
-    atoms = torch.LongTensor( [0] + [0] + [0]*(k-1) + [0] )
-    edge_index = torch.LongTensor( [ [i for i in range((k+2) - 1)], [i for i in range(1, k+2)] ] )
+    x = torch.zeros(len(atoms), 0)
+    atoms = torch.LongTensor([0] + [0] + [0] * (k - 1) + [0])
+    edge_index = torch.LongTensor([[i for i in range((k + 2) - 1)], [i for i in range(1, k + 2)]])
     pos = torch.FloatTensor(
-        [[-4, -3, 0]] + 
-        [[0, 5*i , 0] for i in range(k)] + 
-        [[4, 5*(k-1) + 3, 0]]
+        [[-4, -3, 0]] + [[0, 5 * i, 0] for i in range(k)] + [[4, 5 * (k - 1) + 3, 0]]
     )
     center_of_mass = torch.mean(pos, dim=0)
     pos = pos - center_of_mass
@@ -57,15 +56,13 @@ def generate_loaders_chain(args: Namespace) -> tuple[DataLoader, DataLoader, Dat
     graph1 = Data(atoms=atoms, edge_index=edge_index, pos=pos, y=y, x=x)
     graph1.edge_index = to_undirected(graph1.edge_index)
     dataset.append(graph1)
-    
+
     # Graph 1
-    x = torch.zeros(len(atoms),0)
-    atoms = torch.LongTensor( [0] + [0] + [0]*(k-1) + [0] )
-    edge_index = torch.LongTensor( [ [i for i in range((k+2) - 1)], [i for i in range(1, k+2)] ] )
+    x = torch.zeros(len(atoms), 0)
+    atoms = torch.LongTensor([0] + [0] + [0] * (k - 1) + [0])
+    edge_index = torch.LongTensor([[i for i in range((k + 2) - 1)], [i for i in range(1, k + 2)]])
     pos = torch.FloatTensor(
-        [[4, -3, 0]] + 
-        [[0, 5*i , 0] for i in range(k)] + 
-        [[4, 5*(k-1) + 3, 0]]
+        [[4, -3, 0]] + [[0, 5 * i, 0] for i in range(k)] + [[4, 5 * (k - 1) + 3, 0]]
     )
     center_of_mass = torch.mean(pos, dim=0)
     pos = pos - center_of_mass

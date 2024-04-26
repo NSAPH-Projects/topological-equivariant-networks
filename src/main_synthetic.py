@@ -23,7 +23,7 @@ def main(args):
     wandb.config.update(vars(args))
 
     # # Get loaders
-    train_loader, val_loader, test_loader = get_loaders(args) #TODO Register Dataset
+    train_loader, val_loader, test_loader = get_loaders(args)  # TODO Register Dataset
 
     # Get optimization objects
     criterion = torch.nn.CrossEntropyLoss(reduction="mean")
@@ -41,8 +41,8 @@ def main(args):
             batch = batch.to(args.device)
 
             pred = model(batch)
-            loss = criterion(pred, batch.y )
-            acc = torch.sum(pred == batch.y)/batch.y.shape[0]
+            loss = criterion(pred, batch.y)
+            acc = torch.sum(pred == batch.y) / batch.y.shape[0]
             loss.backward()
 
             # torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip)
@@ -55,7 +55,7 @@ def main(args):
         for _, batch in enumerate(val_loader):
             batch = batch.to(args.device)
             pred = model(batch)
-            acc = torch.sum(pred == batch.y)/batch.y.shape[0]
+            acc = torch.sum(pred == batch.y) / batch.y.shape[0]
 
             epoch_acc_val += acc.item()
 
@@ -83,7 +83,7 @@ def main(args):
     for _, batch in enumerate(test_loader):
         batch = batch.to(args.device)
         pred = best_model(batch)
-        acc = torch.sum(pred == batch.y)/batch.y.shape[0]
+        acc = torch.sum(pred == batch.y) / batch.y.shape[0]
         test_acc += acc.item()
 
     test_acc /= len(test_loader)
@@ -165,7 +165,9 @@ if __name__ == "__main__":
     parser.add_argument("--target_name", type=str, default="H", help="regression task")
     parser.add_argument("--dim", type=int, default=2, help="ASC dimension")
     parser.add_argument("--dis", type=float, default=4.0, help="radius Rips complex")
-    parser.add_argument("--path_length", type=int, default=3, help="maximum path length considered for path lifter")
+    parser.add_argument(
+        "--path_length", type=int, default=3, help="maximum path length considered for path lifter"
+    )
     parser.add_argument("--num_samples", type=int, default=None, help="num samples to to train on")
     parser.add_argument("--seed", type=int, default=42, help="random seed")
     parser.add_argument("--splits", type=str, default="egnn", help="split type")
@@ -177,7 +179,6 @@ if __name__ == "__main__":
         help="""If the buggy legacy implementation should be used for the combinatorial complex
              transform. Needed to reproduce EMSPN.""",
     )
-
 
     parsed_args = parser.parse_args()
     parsed_args.adjacencies = get_adjacency_types(

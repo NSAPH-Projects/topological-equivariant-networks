@@ -1,8 +1,9 @@
 """Module for constructing topological structures from graphs."""
 
+from collections import deque
 from functools import partial
 from itertools import combinations
-from collections import deque
+
 import gudhi
 import networkx as nx
 import torch_geometric.utils as pyg_utils
@@ -11,51 +12,6 @@ from torch_geometric.data import Data
 
 from combinatorial_data.ifg import identify_functional_groups
 
-def path_lift(graph: Data, K_max: int) -> set[frozenset[int]]:
-    """
-    Identify all paths in a graph with lengths up to K_max, optimized for efficiency.
-
-    This function finds all paths of lengths ranging from 2 to K_max in a given graph,
-    with optimizations to improve time and memory performance.
-
-    Parameters
-    ----------
-    graph : torch.Tensor
-        The input graph represented as a PyTorch tensor.
-    K_max : int
-        The maximum length of the paths to be found.
-
-    Returns
-    -------
-    set[frozenset[int]]
-        A set of paths, each path is represented as a frozenset of node indices.
-
-    Raises
-    ------
-    ValueError
-        If the input graph does not contain an edge index 'edge_index'.
-    """
-
-    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
-        raise ValueError("The given graph does not have an edge index 'edge_index'!")
-
-    # Convert to networkx graph
-    G = pyg_utils.to_networkx(graph, to_undirected=True)
-    paths = set()
-    for source_node in G.nodes():
-        paths.add(frozenset([source_node]))
-        # Use deque for more efficient popping from left
-        queue = deque([(source_node, [source_node])])
-        while queue:
-            current_node, path = queue.popleft()
-            if 1 < len(path) <= K_max:
-                paths.add(frozenset(path))
-            if len(path) < K_max:
-                for neighbor in G.neighbors(current_node):
-                    if neighbor not in path:
-                        queue.append((neighbor, path + [neighbor]))
-
-    return paths
 
 def clique_lift(graph_data) -> set[frozenset[int]]:
     """
@@ -211,6 +167,53 @@ def node_lift(graph: Data) -> set[frozenset[int]]:
     nodes = {frozenset([node]) for node in range(graph.x.size(0))}
 
     return nodes
+
+
+def path_lift(graph: Data, K_max: int) -> set[frozenset[int]]:
+    """
+    Identify all paths in a graph with lengths up to K_max, optimized for efficiency.
+
+    This function finds all paths of lengths ranging from 2 to K_max in a given graph,
+    with optimizations to improve time and memory performance.
+
+    Parameters
+    ----------
+    graph : torch.Tensor
+        The input graph represented as a PyTorch tensor.
+    K_max : int
+        The maximum length of the paths to be found.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A set of paths, each path is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
+    """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+
+    # Convert to networkx graph
+    G = pyg_utils.to_networkx(graph, to_undirected=True)
+    paths = set()
+    for source_node in G.nodes():
+        paths.add(frozenset([source_node]))
+        # Use deque for more efficient popping from left
+        queue = deque([(source_node, [source_node])])
+        while queue:
+            current_node, path = queue.popleft()
+            if 1 < len(path) <= K_max:
+                paths.add(frozenset(path))
+            if len(path) < K_max:
+                for neighbor in G.neighbors(current_node):
+                    if neighbor not in path:
+                        queue.append((neighbor, path + [neighbor]))
+
+    return paths
 
 
 def supercell_lift(graph: Data) -> set[frozenset[int]]:

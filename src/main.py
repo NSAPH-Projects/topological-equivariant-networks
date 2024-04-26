@@ -187,6 +187,12 @@ if __name__ == "__main__":
     parser.add_argument("--target_name", type=str, default="H", help="regression task")
     parser.add_argument("--dim", type=int, default=2, help="ASC dimension")
     parser.add_argument("--dis", type=float, default=4.0, help="radius Rips complex")
+    parser.add_argument(
+        "--max_path_length",
+        type=int,
+        default=3,
+        help="maximum path length considered for path lifter",
+    )
     parser.add_argument("--num_samples", type=int, default=None, help="num samples to to train on")
     parser.add_argument("--seed", type=int, default=42, help="random seed")
     parser.add_argument("--splits", type=str, default="egnn", help="split type")

@@ -169,18 +169,18 @@ def node_lift(graph: Data) -> set[frozenset[int]]:
     return nodes
 
 
-def path_lift(graph: Data, K_max: int) -> set[frozenset[int]]:
+def path_lift(graph: Data, max_path_length: int) -> set[frozenset[int]]:
     """
-    Identify all paths in a graph with lengths up to K_max, optimized for efficiency.
+    Identify all paths in a graph with lengths up to max_path_length, optimized for efficiency.
 
-    This function finds all paths of lengths ranging from 2 to K_max in a given graph,
+    This function finds all paths of lengths ranging from 2 to max_path_length in a given graph,
     with optimizations to improve time and memory performance.
 
     Parameters
     ----------
     graph : torch.Tensor
         The input graph represented as a PyTorch tensor.
-    K_max : int
+    max_path_length : int
         The maximum length of the paths to be found.
 
     Returns
@@ -206,9 +206,9 @@ def path_lift(graph: Data, K_max: int) -> set[frozenset[int]]:
         queue = deque([(source_node, [source_node])])
         while queue:
             current_node, path = queue.popleft()
-            if 1 < len(path) <= K_max:
+            if 1 < len(path) <= max_path_length:
                 paths.add(frozenset(path))
-            if len(path) < K_max:
+            if len(path) < max_path_length:
                 for neighbor in G.neighbors(current_node):
                     if neighbor not in path:
                         queue.append((neighbor, path + [neighbor]))
@@ -376,6 +376,8 @@ def get_lifters(args) -> list[callable]:
         lifter = lifter.split(":")[0]
         if lifter == "rips":
             lifters.append(partial(rips_lift, dim=args.dim, dis=args.dis))
+        elif lifter == "path":
+            lifters.append(partial(path_lift, max_path_length=args.max_path_length))
         else:
             lifters.append(lifter_registry[lifter])
     return lifters

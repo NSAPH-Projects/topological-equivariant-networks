@@ -150,13 +150,13 @@ class CombinatorialComplexData(Data):
         num_nodes = getattr(self, "x_0").size(0)
         # The adj_i_j attribute holds cell indices, increment each dim by the number of cells of
         # corresponding rank
-        if re.match(r"adj_\d+_\d+", key):
-            _, i, j = key.split("_")
+        if re.match(r"adj_(\d+_\d+|\d+_\d+_\d+)", key):
+            i, j = key.split("_")[1:3]
             return torch.tensor(
                 [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
             )
         # The inv_i_j and x_i attributes hold node indices, they should be incremented
-        elif re.match(r"inv_\d+_\d+", key) or re.match(r"x_\d+", key):
+        elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"x_\d+", key):
             return num_nodes
         else:
             return super().__inc__(key, value, *args, **kwargs)
@@ -197,7 +197,8 @@ class CombinatorialComplexTransform(BaseTransform):
         ranker: callable,
         dim: int,
         adjacencies: list[str],
-        neighbor_type: str,
+        processed_adjacencies: list[str],
+        merge_neighbors: bool,
         enable_indexing_bug: bool = False,
     ):
         if isinstance(lifters, list):
@@ -207,7 +208,8 @@ class CombinatorialComplexTransform(BaseTransform):
         self.rank = ranker
         self.dim = dim
         self.adjacencies = adjacencies
-        self.neighbor_type = neighbor_type
+        self.processed_adjacencies = processed_adjacencies
+        self.merge_neighbors = merge_neighbors
         self.enable_indexing_bug = enable_indexing_bug
 
     def __call__(self, graph: Data) -> CombinatorialComplexData:
@@ -262,31 +264,40 @@ class CombinatorialComplexTransform(BaseTransform):
         cc = create_combinatorial_complex(cell_dict)
 
         # compute adjancencies and incidences
-        adj, idx_to_cell = dict(), dict()
+        adj = dict()
         for adj_type in self.adjacencies:
-            i, j = [int(rank) for rank in adj_type.split("_")]
+            ranks = [int(rank) for rank in adj_type.split("_")]
+            i, j = ranks[:2]
             if i != j:
-                if i < j:
-                    matrix = cc.incidence_matrix(rank=i, to_rank=j)
-                else:
-                    matrix = cc.incidence_matrix(rank=j, to_rank=i).T
-
+                matrix = incidence_matrix(cc, i, j)
             else:
-                idx_to_cell[i], matrix = self.extended_adjacency_matrix(cc, i)
-
-            if np.array_equal(matrix, np.zeros(1)):
-                matrix = torch.zeros(2, 0).long()
-            else:
-                matrix = sparse_to_dense(matrix)
+                # if i == j, we must have a third rank specifying via_rank
+                assert len(ranks) == 3
+                matrix = adjacency_matrix(cc, i, ranks[2])
 
             adj[adj_type] = matrix
 
+        # merge matching adjacencies
+        if self.merge_neighbors:
+            adj, processed_adjacencies = merge_neighbors(adj)
+            assert set(processed_adjacencies) == set(self.processed_adjacencies)
+
+        # convert from sparse numpy matrices to dense torch tensors
+        for adj_type, matrix in adj.items():
+            adj[adj_type] = sparse_to_dense(matrix)
+
+        # pre-compute idx_to_cell mappings
+        idx_to_cell = {
+            rank: [sorted(cell) for cell in cc.skeleton(rank=rank)] for rank in range(self.dim + 1)
+        }
+
         # for each adjacency/incidence, store the nodes to be used for computing geometric features
         inv = dict()
-        for adj_type in self.adjacencies:
+        for adj_type in self.processed_adjacencies:
             inv[adj_type] = []
             neighbors = adj[adj_type]
-            i, j = [int(rank) for rank in adj_type.split("_")]
+            ranks = [int(rank) for rank in adj_type.split("_")]
+            i, j = ranks[:2]
 
             for connection in neighbors.t():
                 idx_a, idx_b = connection[0], connection[1]
@@ -361,62 +372,113 @@ class CombinatorialComplexTransform(BaseTransform):
 
         return cell_lifter_map
 
-    def extended_adjacency_matrix(self, cc, rank):
-        """
-        Compute the extended adjacency matrix for a given combinatorial complex and rank.
 
-        Parameters
-        ----------
-        cc : CombinatorialComplex
-            The combinatorial complex.
-        rank : int
-            The rank of the complex.
+def adjacency_matrix(cc: CombinatorialComplex, rank: int, via_rank: int) -> csc_matrix:
+    """
+    Compute the adjacency matrix for a given combinatorial complex, rank and via_rank.
 
-        Returns
-        -------
-        tuple[list[frozenset], np.ndarray]
-            A tuple containing the index and the extended adjacency matrix.
+    The adjacency matrix is computed based on the ranks of the cells in the complex. If the via_rank
+    is lower than the rank, the coadjacency matrix is computed instead.
 
-        Notes
-        -----
-        - The extended adjacency matrix represents the connectivity between cells of a combinatorial
-        complex.
-        - The matrix is computed based on the neighbor type specified in the class.
-        - The index represents the cells of the complex.
-        - If the complex contains no cells with the given rank, a 1x1 zero matrix is returned. The
-        reason is the desire to be consistent with the behavior of TopoNetX's incidence_matrix()
-        which also returns a 1x1 zero matrix in that case,
-        """
-        index = cc.skeleton(rank=rank)
-        index = [sorted(cell) for cell in index]
-        num_cells = len(index)
-        if num_cells == 0:
-            matrix = np.zeros(1)
-        else:
-            matrix = csc_matrix((num_cells, num_cells), dtype=int)
-            if self.neighbor_type == "adjacency":
-                via_ranks = [rank + 1]
-            elif self.neighbor_type == "any_adjacency":
-                via_ranks = list(range(rank + 1, self.dim + 1))
-            elif self.neighbor_type == "coadjacency":
-                via_ranks = [rank - 1]
-            elif self.neighbor_type == "any_coadjacency":
-                via_ranks = list(range(rank - 1, -1, -1))
-            elif self.neighbor_type == "direct":
-                via_ranks = [rank - 1, rank + 1]
-            elif self.neighbor_type == "all":
-                via_ranks = list(range(self.dim + 1))
-            via_ranks = [r for r in via_ranks if r >= 0 and r <= self.dim and r != rank]
-            for r in via_ranks:
-                kwargs = dict(rank=rank, via_rank=r, index=False)
-                if r < rank:
-                    matrix += cc.coadjacency_matrix(**kwargs)
-                else:
-                    matrix += cc.adjacency_matrix(**kwargs)
+    Parameters
+    ----------
+    cc : CombinatorialComplex
+        The combinatorial complex.
+    rank : int
+        The rank for which we want the adjacency matrix.
+    via_rank : int
+        The rank to compute the adjacency matrix via.
 
-            matrix[matrix > 0] = 1
+    Returns
+    -------
+    scipy.sparse.csc_matrix
+        The adjacency matrix.
 
-        return index, matrix
+    Raises
+    ------
+    ValueError
+        If rank and via_rank are the same, or if any of the input values are negative.
+
+    Notes
+    -----
+    The toponetx adjacency_matrix() and coadjacency_matrix() methods have a bug if rank < via_rank
+    and there are no cells with that rank. This function is a workaround for that bug as well as a
+    convenience wrapper for the toponetx methods.
+
+    """
+    # check for invalid input
+    if rank == via_rank:
+        raise ValueError("rank and via_rank must be different.")
+    if rank < 0:
+        raise ValueError(f"rank must be a non-negative integer, but was {rank}.")
+    if via_rank < 0:
+        raise ValueError(f"via_rank must be a non-negative integer, but was {via_rank}.")
+
+    # compute the adjacency matrix
+    kwargs = dict(rank=rank, via_rank=via_rank, index=False)
+    if via_rank < rank:
+        matrix = cc.coadjacency_matrix(**kwargs)
+    else:
+        matrix = cc.adjacency_matrix(**kwargs)
+
+    # triggered if rank < via_rank, i.e. adj_type = i_j, i != j and i is an empty rank but j is not
+    num_cells = len(cc.skeleton(rank=rank))
+    if matrix.shape != (num_cells, num_cells):
+        matrix = csc_matrix((num_cells, num_cells), dtype=np.float64)
+
+    return matrix
+
+
+def incidence_matrix(cc, rank, to_rank):
+    """
+    Compute the incidence matrix between two ranks in a combinatorial complex.
+
+    Parameters
+    ----------
+    cc : CombinatorialComplex
+        The combinatorial complex.
+    rank : int
+        The starting rank.
+    to_rank : int
+        The ending rank.
+
+    Returns
+    -------
+    csc_matrix
+        The incidence matrix between the two ranks.
+
+    Raises
+    ------
+    ValueError
+        If rank and to_rank are the same.
+    ValueError
+        If rank or to_rank is a negative integer.
+
+    """
+    # check for invalid input
+    if rank == to_rank:
+        raise ValueError("rank and to_rank must be different.")
+
+    def error_msg(arg_name, arg_value):
+        return f"{arg_name} must be a non-negative integer, but was {arg_value}."
+
+    if rank < 0:
+        raise ValueError(error_msg("rank", rank))
+    if to_rank < 0:
+        raise ValueError(error_msg("to_rank", to_rank))
+
+    # compute the incidence matrix
+    if rank < to_rank:
+        matrix = cc.incidence_matrix(rank=rank, to_rank=to_rank)
+    else:
+        matrix = cc.incidence_matrix(rank=to_rank, to_rank=rank).T
+
+    # triggered if adj_type = i_j, i != j and i is an empty rank
+    num_cells_i, num_cells_j = len(cc.skeleton(rank=rank)), len(cc.skeleton(rank=to_rank))
+    if matrix.shape != (num_cells_i, num_cells_j):
+        matrix = csc_matrix((num_cells_i, num_cells_j), dtype=np.float64)
+
+    return matrix
 
 
 def create_combinatorial_complex(
@@ -503,6 +565,54 @@ def map_to_tensors(
     return x_dict, mem_dict
 
 
+def merge_neighbors(adj: dict[str, torch.Tensor]) -> tuple[dict[str, torch.Tensor], list[str]]:
+    """
+    Merge matching adjacency relationships in the adjacency dictionary.
+
+    Specifically, merge all adjacency relationships between cells of the same rank into a single
+    adjacency relationship. This is useful when the adjacency relationships are computed for
+    different types of neighbors, such as direct neighbors, coadjacent neighbors, etc.
+
+    Parameters
+    ----------
+    adj : dict[str, torch.Tensor]
+        The adjacency dictionary containing the neighboring cells.
+
+    Returns
+    -------
+    dict[str, torch.Tensor]
+        The merged adjacency dictionary.
+    list[str]
+        New list of adjacency types.
+    Raises
+    ------
+    AssertionError
+        If any unmerged adjacencies remain in the merged adjacency dictionary.
+    """
+    new_adj = {}
+    for key, value in adj.items():
+        i, j = key.split("_")[:2]
+        # Copy over incidences
+        if i != j:
+            new_adj[key] = value
+        # Merge same-rank adjacencies
+        else:
+            assert len(key.split("_")) == 3
+            merged_key = f"{i}_{j}"
+            if merged_key not in new_adj:
+                new_adj[merged_key] = value
+            else:
+                # new_adj[merged_key] = new_adj[merged_key] | value
+                new_adj[merged_key] += value
+                new_adj[merged_key][new_adj[merged_key] > 0] = 1
+    adj = new_adj
+    adj_types = list(adj.keys())
+    # Check that no unmerged adjacencies remain
+    for adj_type in adj_types:
+        assert len(adj_type.split("_")) == 2
+    return adj, adj_types
+
+
 def pad_lists_to_same_length(
     list_of_lists: list[list[int]], pad_value: float = torch.nan
 ) -> list[list[int]]:
@@ -580,7 +690,20 @@ def pad_tensor(
     return torch.nn.functional.pad(tensor, pad=pad_sizes, value=pad_value)
 
 
-def sparse_to_dense(sparse_matrix):
+def sparse_to_dense(sparse_matrix: csc_matrix) -> torch.Tensor:
+    """
+    Convert a sparse (n, m) matrix to a dense (2, k) PyTorch tensor in an adjacency list format.
+
+    Parameters
+    ----------
+    sparse_matrix : csc_matrix
+        The sparse matrix to convert.
+
+    Returns
+    -------
+    torch.Tensor
+        The dense PyTorch tensor representation of the sparse matrix.
+    """
     # Extract row and column indices of non-zero elements
     rows, cols = sparse_matrix.nonzero()
 

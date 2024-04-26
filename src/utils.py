@@ -10,7 +10,7 @@ from torch_geometric.loader import DataLoader
 
 
 def get_adjacency_types(
-    max_dim: int, connectivity: str, visible_dims: list[int] | None
+    max_dim: int, connectivity: str, neighbor_types: list[str], visible_dims: list[int] | None
 ) -> list[str]:
     """
     Generate a list of adjacency type strings based on the specified connectivity pattern.
@@ -35,6 +35,12 @@ def get_adjacency_types(
         - "all_to_all" generates adjacencies where each rank is connected to every other rank,
         including itself.
         - "legacy" ignores the max_dim parameter and returns ['0_0', '0_1', '1_1', '1_2'].
+    neighbor_types : list[str]
+        The types of adjacency between cells of the same rank. Must be one of the following:
+        +1: two cells of same rank i are neighbors if they are both neighbors of a cell of rank i+1
+        -1: two cells of same rank i are neighbors if they are both neighbors of a cell of rank i-1
+        max: two cells of same rank i are neighbors if they are both neighbors of a cell of max rank
+        min: two cells of same rank i are neighbors if they are both neighbors of a cell of min rank
     visible_dims: list[int] | None
         A list of ranks to explicitly represent as nodes. If None, all ranks are represented.
 
@@ -52,14 +58,14 @@ def get_adjacency_types(
 
     Examples
     --------
-    >>> get_adjacency_types(2, "self_and_next")
-    ['0_0', '0_1', '1_1', '1_2', '2_2']
+    >>> get_adjacency_types(2, "self_and_next", ["+1"])
+    ['0_0_1', '0_1', '1_1_2', '1_2']
 
-    >>> get_adjacency_types(2, "self_and_higher")
-    ['0_0', '0_1', '0_2', '1_1', '1_2', '2_2']
+    >>> get_adjacency_types(2, "self_and_higher", ["-1"])
+    ['0_1', '0_2', '1_1_0', '1_2', '2_2_1']
 
-    >>> get_adjacency_types(2, "all_to_all")
-    ['0_0', '0_1', '0_2', '1_0', '1_1', '1_2', '2_0', '2_1', '2_2']
+    >>> get_adjacency_types(2, "all_to_all", ["-1", "+1", "max", "min"])
+    ['0_0_1', '0_0_2','0_1', '0_2', '1_0', '1_1_0', '1_1_2', '1_2', '2_0', '2_1', '2_2_1', '2_2_0']
     """
     adj_types = []
     if connectivity not in [
@@ -116,15 +122,59 @@ def get_adjacency_types(
     else:
         adj_types = ["0_0", "0_1", "1_1", "1_2"]
 
+    # Add one adjacency type for each neighbor type
+    new_adj_types = []
+    for adj_type in adj_types:
+        i, j = map(int, adj_type.split("_"))
+        if i == j:
+            for neighbor_type in neighbor_types:
+                if neighbor_type == "+1":
+                    if i < max_dim:
+                        new_adj_types.append(f"{i}_{i}_{i+1}")
+                elif neighbor_type == "-1":
+                    if i > 0:
+                        new_adj_types.append(f"{i}_{i}_{i-1}")
+                elif neighbor_type == "max":
+                    if i < max_dim:
+                        new_adj_types.append(f"{i}_{i}_{max_dim}")
+                elif neighbor_type == "min":
+                    if i > 0:
+                        new_adj_types.append(f"{i}_{i}_0")
+        else:
+            new_adj_types.append(adj_type)
+    new_adj_types = list(set(new_adj_types))
+    adj_types = new_adj_types
+
     # Filter adjacencies with invisible ranks
     if visible_dims is not None:
         adj_types = [
             adj_type
             for adj_type in adj_types
-            if all(int(dim) in visible_dims for dim in adj_type.split("_"))
+            if all(int(dim) in visible_dims for dim in adj_type.split("_")[:2])
         ]
 
     return adj_types
+
+
+def merge_adjacencies(adjacencies: list[str]) -> list[str]:
+    """
+    Merge all adjacency types i_i_j into a single i_i.
+
+    We merge adjacencies of the form i_i_j into a single adjacency i_i. This is useful when we want
+    to represent all rank i neighbors of a cell of rank i as a single adjacency matrix.
+
+    Parameters
+    ----------
+    adjacencies : list[str]
+        A list of adjacency types.
+
+    Returns
+    -------
+    list[str]
+        A list of merged adjacency types.
+
+    """
+    return list(set(["_".join(adj_type.split("_")[:2]) for adj_type in adjacencies]))
 
 
 def get_model(args: Namespace) -> nn.Module:
@@ -172,7 +222,7 @@ def get_model(args: Namespace) -> nn.Module:
             num_out=num_out,
             num_layers=args.num_layers,
             max_dim=args.dim,
-            adjacencies=args.adjacencies,
+            adjacencies=args.processed_adjacencies,
             initial_features=args.initial_features,
             visible_dims=args.visible_dims,
         )

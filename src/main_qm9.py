@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 import wandb
 from qm9.utils import calc_mean_mad
-from utils import get_adjacency_types, get_loaders, get_model, set_seed
+from utils import get_adjacency_types, get_loaders, get_model, merge_adjacencies, set_seed
 
 
 def main(args):
@@ -131,10 +131,20 @@ if __name__ == "__main__":
         help="connectivity pattern between ranks",
     )
     parser.add_argument(
-        "--neighbor_type",
+        "--neighbor_types",
+        nargs="+",
         type=str,
-        default="adjacency",
-        help="how adjacency between cells of same rank is defined",
+        default=["+1"],
+        help="""How adjacency between cells of same rank is defined. Default is +1, meaning that
+                two cells of rank i are connected if they are both connected to the same cell of 
+                rank i+1. See src.utils.py::get_adjacencies for a list of possible values.""",
+    )
+    parser.add_argument(
+        "--merge_neighbors",
+        action="store_true",
+        default=False,
+        help="""if all the neighbors of different types should be represented as a single adjacency
+             matrix""",
     )
     parser.add_argument(
         "--visible_dims",
@@ -172,8 +182,17 @@ if __name__ == "__main__":
 
     parsed_args = parser.parse_args()
     parsed_args.adjacencies = get_adjacency_types(
-        parsed_args.dim, parsed_args.connectivity, parsed_args.visible_dims
+        parsed_args.dim,
+        parsed_args.connectivity,
+        parsed_args.neighbor_types,
+        parsed_args.visible_dims,
     )
+    # If merge_neighbors is True, the adjacency types we feed to the model will be the merged ones
+    if parsed_args.merge_neighbors:
+        parsed_args.processed_adjacencies = merge_adjacencies(parsed_args.adjacencies)
+    else:
+        parsed_args.processed_adjacencies = parsed_args.adjacencies
+
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     set_seed(parsed_args.seed)

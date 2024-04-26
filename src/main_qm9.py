@@ -59,7 +59,7 @@ def main(args):
             transformed_pred = pred * mad + mean if args.dataset == "qm9" else pred
 
             loss = criterion(pred, transformed_batch)
-            metric_value = criterion(transformed_pred, batch.y)
+            metric_value = metric["fct"](transformed_pred, batch.y)
             loss.backward()
 
             if args.clip_gradient:
@@ -74,14 +74,14 @@ def main(args):
             batch = batch.to(args.device)
             pred = model(batch)
             transformed_pred = pred * mad + mean if args.dataset == "qm9" else pred
-            metric_value = criterion(transformed_pred, batch.y)
+            metric_value = metric["fct"](transformed_pred, batch.y)
 
             epoch_metric_val += metric_value.item()
 
         epoch_metric_train /= len(train_loader)
         epoch_metric_val /= len(val_loader)
 
-        if epoch_metric_val < best_val_metric:
+        if metric["greater_is_better"] == (epoch_metric_val > best_val_metric):
             best_val_metric = epoch_metric_val
             best_model = copy.deepcopy(model)
 
@@ -103,7 +103,7 @@ def main(args):
         batch = batch.to(args.device)
         pred = best_model(batch)
         transformed_pred = pred * mad + mean if args.dataset == "qm9" else pred
-        metric_value = criterion(transformed_pred, batch.y)
+        metric_value = metric["fct"](transformed_pred, batch.y)
         test_metric += metric_value.item()
 
     test_metric /= len(test_loader)

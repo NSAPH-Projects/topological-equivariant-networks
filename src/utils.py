@@ -8,14 +8,30 @@ import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
 
+
+def accuracy(output, target):
+    """Compute accuracy."""
+    return (output == target).sum().item() / target.size(0)
+
+
 task_settings = {
     "regression": {
         "criterion": torch.nn.L1Loss(reduction="mean"),
-        "metric": {"name": "MAE", "worst_value": float("inf")},
+        "metric": {
+            "name": "MAE",
+            "worst_value": float("inf"),
+            "greater_is_better": False,
+            "fct": torch.nn.L1Loss(reduction="mean"),
+        },
     },
     "classification": {
         "criterion": torch.nn.CrossEntropyLoss(reduction="mean"),
-        "metric": {"name": "Accuracy", "worst_value": 0},
+        "metric": {
+            "name": "Accuracy",
+            "worst_value": 0,
+            "greater_is_better": True,
+            "fct": accuracy,
+        },
     },
 }
 

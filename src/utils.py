@@ -8,6 +8,9 @@ import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
 
+from qm9.utils import generate_loaders_qm9
+from synthetic.utils import generate_loaders_synthetic_chains
+
 
 def accuracy(output, target):
     """Compute accuracy."""
@@ -262,9 +265,9 @@ def get_model(args: Namespace) -> nn.Module:
 def get_loaders(args: Namespace) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Return dataloaders based on dataset."""
     if args.dataset == "qm9":
-        from qm9.utils import generate_loaders_qm9
-
         train_loader, val_loader, test_loader = generate_loaders_qm9(args)
+    elif args.dataset == "synthetic_chains":
+        train_loader, val_loader, test_loader = generate_loaders_synthetic_chains(args)
     else:
         raise ValueError(f"Dataset {args.dataset} not recognized.")
 

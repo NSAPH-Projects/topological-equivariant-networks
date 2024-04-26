@@ -11,12 +11,15 @@ from torch_geometric.data import Data
 from torch_geometric.utils import to_undirected
 from tqdm import tqdm
 
+from combinatorial_data.combinatorial_data_utils import (
+    CombinatorialComplexTransform,
+    CustomCollater,
+)
 from combinatorial_data.lifts import get_lifters
 from combinatorial_data.ranker import get_ranker
-from combinatorial_data.utils import CombinatorialComplexTransform, CustomCollater
 
 
-def generate_loaders_chain(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
+def generate_loaders_synthetic_chains(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
 
     # Create the transform
     lifters = get_lifters(args)

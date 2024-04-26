@@ -48,7 +48,8 @@ def main(args):
             mae = criterion(pred * mad + mean, batch.y)
             loss.backward()
 
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), args.gradient_clip)
+            if args.clip_gradient:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_amount)
 
             optimizer.step()
             epoch_mae_train += mae.item()
@@ -157,8 +158,9 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-16, help="learning rate")
     parser.add_argument(
-        "--gradient_clip", type=float, default=1.0, help="gradient clipping, deprecated!"
+        "--clip_gradient", action="store_true", default=False, help="gradient clipping"
     )
+    parser.add_argument("--clip_amount", type=float, default=1.0, help="gradient clipping amount")
     parser.add_argument(
         "--num_lr_cycles", type=int, default=3, help="number of learning rate cycles"
     )

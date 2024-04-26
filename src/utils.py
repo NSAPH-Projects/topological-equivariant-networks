@@ -8,6 +8,17 @@ import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
 
+task_settings = {
+    "regression": {
+        "criterion": torch.nn.L1Loss(reduction="mean"),
+        "metric": {"name": "MAE", "worst_value": float("inf")},
+    },
+    "classification": {
+        "criterion": torch.nn.CrossEntropyLoss(reduction="mean"),
+        "metric": {"name": "Accuracy", "worst_value": 0},
+    },
+}
+
 
 def get_adjacency_types(
     max_dim: int, connectivity: str, neighbor_types: list[str], visible_dims: list[int] | None

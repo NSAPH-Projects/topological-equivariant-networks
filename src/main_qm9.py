@@ -7,7 +7,14 @@ from tqdm import tqdm
 
 import wandb
 from qm9.utils import calc_mean_mad
-from utils import get_adjacency_types, get_loaders, get_model, merge_adjacencies, set_seed
+from utils import (
+    get_adjacency_types,
+    get_loaders,
+    get_model,
+    merge_adjacencies,
+    set_seed,
+    task_settings,
+)
 
 
 def main(args):
@@ -20,54 +27,62 @@ def main(args):
     print(model)
 
     # Setup wandb
-    wandb.init(entity="ten-harvard", project=f"QM9-{args.target_name}")
+    wandb.init(entity="ten-harvard", project=f"{args.dataset.upper()}-{args.target_name}")
     wandb.config.update(vars(args))
 
     # # Get loaders
     train_loader, val_loader, test_loader = get_loaders(args)
-    mean, mad = calc_mean_mad(train_loader)
-    mean, mad = mean.to(args.device), mad.to(args.device)
+    if args.dataset == "qm9":
+        mean, mad = calc_mean_mad(train_loader)
+        mean, mad = mean.to(args.device), mad.to(args.device)
 
     # Get optimization objects
-    criterion = torch.nn.L1Loss(reduction="mean")
+    criterion = task_settings[args.task_type]["criterion"]
+    metric = task_settings[args.task_type]["metric"]
+    # criterion = torch.nn.L1Loss(reduction="mean")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     T_max = args.epochs // args.num_lr_cycles
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max)
-    best_val_mae, best_model = float("inf"), None
+    best_val_metric, best_model = metric["worst_value"], None
 
     for _ in tqdm(range(args.epochs)):
-        epoch_start_time, epoch_mae_train, epoch_mae_val = time.time(), 0, 0
+        epoch_start_time, epoch_metric_train, epoch_metric_val = time.time(), 0, 0
 
         model.train()
         for _, batch in enumerate(train_loader):
             optimizer.zero_grad()
-            batch = batch.to(args.device)
 
+            batch = batch.to(args.device)
             pred = model(batch)
-            loss = criterion(pred, (batch.y - mean) / mad)
-            mae = criterion(pred * mad + mean, batch.y)
+
+            transformed_batch = (batch.y - mean) / mad if args.dataset == "qm9" else batch.y
+            transformed_pred = pred * mad + mean if args.dataset == "qm9" else pred
+
+            loss = criterion(pred, transformed_batch)
+            metric_value = criterion(transformed_pred, batch.y)
             loss.backward()
 
             if args.clip_gradient:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_amount)
 
             optimizer.step()
-            epoch_mae_train += mae.item()
+            epoch_metric_train += metric_value.item()
 
         scheduler.step()
         model.eval()
         for _, batch in enumerate(val_loader):
             batch = batch.to(args.device)
             pred = model(batch)
-            mae = criterion(pred * mad + mean, batch.y)
+            transformed_pred = pred * mad + mean if args.dataset == "qm9" else pred
+            metric_value = criterion(transformed_pred, batch.y)
 
-            epoch_mae_val += mae.item()
+            epoch_metric_val += metric_value.item()
 
-        epoch_mae_train /= len(train_loader)
-        epoch_mae_val /= len(val_loader)
+        epoch_metric_train /= len(train_loader)
+        epoch_metric_val /= len(val_loader)
 
-        if epoch_mae_val < best_val_mae:
-            best_val_mae = epoch_mae_val
+        if epoch_metric_val < best_val_metric:
+            best_val_metric = epoch_metric_val
             best_model = copy.deepcopy(model)
 
         epoch_end_time = time.time()  # End timing the epoch
@@ -75,27 +90,28 @@ def main(args):
 
         wandb.log(
             {
-                "Train MAE": epoch_mae_train,
-                "Validation MAE": epoch_mae_val,
+                f"Train {metric['name']}": epoch_metric_train,
+                f"Validation {metric['name']}": epoch_metric_val,
                 "Epoch Duration": epoch_duration,
                 "Learning Rate": scheduler.get_last_lr()[0],
             }
         )
 
-    test_mae = 0
+    test_metric = 0
     best_model.eval()
     for _, batch in enumerate(test_loader):
         batch = batch.to(args.device)
         pred = best_model(batch)
-        mae = criterion(pred * mad + mean, batch.y)
-        test_mae += mae.item()
+        transformed_pred = pred * mad + mean if args.dataset == "qm9" else pred
+        metric_value = criterion(transformed_pred, batch.y)
+        test_metric += metric_value.item()
 
-    test_mae /= len(test_loader)
-    print(f"Test MAE: {test_mae}")
+    test_metric /= len(test_loader)
+    print(f"Test {metric['name']}: {test_metric}")
 
     wandb.log(
         {
-            "Test MAE": test_mae,
+            f"Test {metric['name']}": test_metric,
         }
     )
 
@@ -167,6 +183,7 @@ if __name__ == "__main__":
 
     # Dataset arguments
     parser.add_argument("--dataset", type=str, default="qm9", help="dataset")
+    parser.add_argument("--task_type", type=str, default="regression", help="task type")
     parser.add_argument("--target_name", type=str, default="H", help="regression task")
     parser.add_argument("--dim", type=int, default=2, help="ASC dimension")
     parser.add_argument("--dis", type=float, default=4.0, help="radius Rips complex")

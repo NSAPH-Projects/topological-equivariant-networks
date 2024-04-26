@@ -67,7 +67,7 @@ class TEN(nn.Module):
         ]
         if self.task_type == "classification":
             post_pool_layers.append(nn.Sigmoid())
-        self.post_pool = nn.Sequential(post_pool_layers)
+        self.post_pool = nn.Sequential(*post_pool_layers)
 
     def forward(self, graph: Data) -> Tensor:
         device = graph.pos.device

@@ -241,7 +241,7 @@ class CombinatorialComplexTransform(BaseTransform):
             com_com_data[f"inv_{k}"] = v
 
         for att in ["edge_attr", "edge_index"]:
-            if hasattr(com_com_data, att):
+            if att in com_com_data.keys():
                 com_com_data.pop(att)
 
         return com_com_data

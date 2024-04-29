@@ -19,18 +19,19 @@ source ~/.bashrc
 conda activate ten
 
 # Train EGNN
-python src/main_qm9.py --dataset "synthetic_chains" \
-                       --lifters "path:c" \
-                       --max_path_length 3 \
-                       --connectivity "self" \
-                       --visible_dims 0 1 2 3 \
-                       --neighbor_types "-1" \
-                       --epochs 1000 \
-                       --batch_size 2 \
-                       --weight_decay 1e-16 \
-                       --lr "$LR" \
-                       --num_layers 1 \
-                       --num_hidden 128 \
-                       --model_name "ten" \
-                       --dim 3 \
-                       --splits "egnn" \
+python src/main.py --dataset "synthetic_chains" \
+                   --task_type "classification" \
+                   --lifters "path:c" \
+                   --max_path_length 3 \
+                   --connectivity "self" \
+                   --visible_dims 0 1 2 3 \
+                   --neighbor_types "-1" \
+                   --epochs 1000 \
+                   --batch_size 2 \
+                   --weight_decay 1e-16 \
+                   --lr 5e-4 \
+                   --num_layers 1 \
+                   --num_hidden 128 \
+                   --model_name "ten" \
+                   --dim 3 \
+                   --splits "egnn" \

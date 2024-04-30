@@ -49,7 +49,7 @@ def generate_loaders_synthetic_chains(args: Namespace) -> tuple[DataLoader, Data
 
     # Graph 0
     atoms = torch.LongTensor([0] + [0] + [0] * (k - 1) + [0])
-    x = torch.zeros(len(atoms), 0)
+    x = torch.zeros(len(atoms), 1)
     edge_index = torch.LongTensor([[i for i in range((k + 2) - 1)], [i for i in range(1, k + 2)]])
     pos = torch.FloatTensor(
         [[-4, -3, 0]] + [[0, 5 * i, 0] for i in range(k)] + [[4, 5 * (k - 1) + 3, 0]]
@@ -63,7 +63,7 @@ def generate_loaders_synthetic_chains(args: Namespace) -> tuple[DataLoader, Data
 
     # Graph 1
     atoms = torch.LongTensor([0] + [0] + [0] * (k - 1) + [0])
-    x = torch.zeros(len(atoms), 0)
+    x = torch.zeros(len(atoms), 1)
     edge_index = torch.LongTensor([[i for i in range((k + 2) - 1)], [i for i in range(1, k + 2)]])
     pos = torch.FloatTensor(
         [[4, -3, 0]] + [[0, 5 * i, 0] for i in range(k)] + [[4, 5 * (k - 1) + 3, 0]]

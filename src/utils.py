@@ -220,7 +220,7 @@ def get_model(args: Namespace) -> nn.Module:
             num_input = num_node_features + num_lifters
         num_out = 1
     elif args.dataset == "synthetic_chains":
-        num_input = 0
+        num_input = 1
         num_out = 1
     else:
         raise ValueError(f"Do not recognize dataset {args.dataset}.")

@@ -12,9 +12,9 @@ from qm9.utils import generate_loaders_qm9
 from synthetic.utils import generate_loaders_synthetic_chains
 
 
-def accuracy(output, target):
+def accuracy(output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     """Compute accuracy."""
-    return (output == target).sum().item() / target.size(0)
+    return (output == target).sum() / target.size(0)
 
 
 task_settings = {

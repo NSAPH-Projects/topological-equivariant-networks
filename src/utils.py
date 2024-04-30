@@ -14,7 +14,8 @@ from synthetic.utils import generate_loaders_synthetic_chains
 
 def accuracy(output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     """Compute accuracy."""
-    return (output == target).sum() / target.size(0)
+    pred = output >= 0.5
+    return (pred == target).sum() / target.size(0)
 
 
 task_settings = {

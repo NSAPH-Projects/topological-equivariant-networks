@@ -56,7 +56,7 @@ def generate_loaders_synthetic_chains(args: Namespace) -> tuple[DataLoader, Data
     )
     center_of_mass = torch.mean(pos, dim=0)
     pos = pos - center_of_mass
-    y = torch.tensor(0)  # Label 0
+    y = torch.tensor(0, dtype=torch.float)  # Label 0
     graph1 = Data(atoms=atoms, edge_index=edge_index, pos=pos, y=y, x=x)
     graph1.edge_index = to_undirected(graph1.edge_index)
     dataset.append(graph1)

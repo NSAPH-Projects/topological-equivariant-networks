@@ -75,7 +75,7 @@ def main(args):
             pred = model(batch)
             transformed_pred = pred * mad + mean if args.dataset == "qm9" else pred
             metric_value = metric["fct"](transformed_pred, batch.y)
-
+            pos_idx = 0 if batch.y[0] > batch.y[1] else 1
             epoch_metric_val += metric_value.item()
 
         epoch_metric_train /= len(train_loader)
@@ -94,6 +94,8 @@ def main(args):
                 f"Validation {metric['name']}": epoch_metric_val,
                 "Epoch Duration": epoch_duration,
                 "Learning Rate": scheduler.get_last_lr()[0],
+                "Logit_0": pred[1 - pos_idx].item(),
+                "Logit_1": pred[pos_idx].item(),
             }
         )
 

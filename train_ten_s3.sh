@@ -19,6 +19,11 @@ source ~/.bashrc
 conda activate ten
 
 # Train EGNN
+clip_gradient_flag=""
+if [ "$CLIP_GRADIENT" = "True" ]; then
+    clip_gradient_flag="--clip_gradient"
+fi
+
 python src/main_qm9.py --lifters "atom:0" "bond:1" "functional_group:2" "ring:2" "supercell:3" \
                        --target_name "$TARGET_NAME" \
                        --connectivity "self_and_neighbors" \
@@ -34,4 +39,4 @@ python src/main_qm9.py --lifters "atom:0" "bond:1" "functional_group:2" "ring:2"
                        --model_name "ten" \
                        --dim 3 \
                        --splits "egnn" \
-                       --clip_gradient "$CLIP_GRADIENT" \
+                       $clip_gradient_flag \

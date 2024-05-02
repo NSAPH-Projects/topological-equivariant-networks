@@ -208,6 +208,7 @@ class SimplicialEGNNLayer(nn.Module):
     def __init__(self, num_hidden, num_inv):
         super().__init__()
         self.message_mlp = nn.Sequential(
+            nn.BatchNorm1d(2 * num_hidden + num_inv),
             nn.Linear(2 * num_hidden + num_inv, num_hidden),
             nn.SiLU(),
             nn.Linear(num_hidden, num_hidden),

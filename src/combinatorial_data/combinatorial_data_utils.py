@@ -1,5 +1,6 @@
 import re
 from collections.abc import Iterable
+from types import MappingProxyType
 from typing import Union
 
 import numpy as np
@@ -128,6 +129,15 @@ class CombinatorialComplexData(Data):
         Node indices that can be used to compute legacy geometric features for each cell pair.
     """
 
+    attribute_dtype = MappingProxyType(
+        {
+            "x_": torch.float64,
+            "mem_": torch.bool,
+            "adj_": torch.int64,
+            "inv_": torch.float64,
+        }
+    )
+
     def __inc__(self, key: str, value: any, *args, **kwargs) -> any:
         """
         Specify how to increment indices for batch processing of data, based on the attribute key.
@@ -213,32 +223,39 @@ class CombinatorialComplexData(Data):
             setattr(self, key, torch.tensor(data[key]))
 
         for key, value in data.items():
+
+            # cast the x_i
             if "x_" in key:
                 if len(value) == 0:
-                    setattr(self, key, torch.empty((0, 0), dtype=torch.float64))
+                    attr_value = torch.empty((0, 0), dtype=self.attribute_dtype["x_"])
                 else:
-                    setattr(
-                        self,
-                        key,
-                        torch.tensor(pad_lists_to_same_length(value), dtype=torch.float64),
+                    attr_value = torch.tensor(
+                        pad_lists_to_same_length(value), dtype=self.attribute_dtype["x_"]
                     )
-            if "mem_" in key:
+                setattr(self, key, attr_value)
+
+            # cast the mem_i
+            elif "mem_" in key:
                 num_lifters = len(data["mem_0"][0])
                 if len(value) == 0:
-                    setattr(self, key, torch.empty((0, num_lifters), dtype=torch.bool))
+                    attr_value = torch.empty((0, num_lifters), dtype=self.attribute_dtype["mem_"])
                 else:
-                    setattr(self, key, torch.tensor(value, dtype=torch.bool))
-            if "adj_" in key:
-                setattr(self, key, torch.tensor(value, dtype=torch.int64))
-            if "inv_" in key:
+                    attr_value = torch.tensor(value, dtype=self.attribute_dtype["mem_"])
+                setattr(self, key, attr_value)
+
+            # cast the adj_i_j[_foo]
+            elif "adj_" in key:
+                setattr(self, key, torch.tensor(value, dtype=self.attribute_dtype["adj_"]))
+
+            # cast the inv_i_j[_foo]
+            elif "inv_" in key:
                 if len(value) == 0:
-                    setattr(self, key, torch.empty((0, 0), dtype=torch.float64))
+                    attr_value = torch.empty((0, 0), dtype=self.attribute_dtype["inv_"])
                 else:
-                    setattr(
-                        self,
-                        key,
-                        torch.tensor(pad_lists_to_same_length(value), dtype=torch.float64).t(),
-                    )
+                    attr_value = torch.tensor(
+                        pad_lists_to_same_length(value), dtype=self.attribute_dtype["inv_"]
+                    ).t()
+                setattr(self, key, attr_value)
 
         return self
 

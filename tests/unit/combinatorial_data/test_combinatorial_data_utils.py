@@ -1,6 +1,5 @@
 # tests/test_utils.py
 
-from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -9,7 +8,6 @@ from scipy.sparse import csc_matrix
 from toponetx.classes import CombinatorialComplex
 
 from combinatorial_data.combinatorial_data_utils import (
-    CombinatorialComplexTransform,
     adjacency_matrix,
     create_combinatorial_complex,
     extract_cell_and_membership_data,

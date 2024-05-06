@@ -546,6 +546,32 @@ def create_combinatorial_complex(
     return cc
 
 
+def extract_cell_and_membership_data(
+    input_dict: dict[int, dict[frozenset[int], list[bool]]]
+) -> tuple[dict[int, list[list[int]]], dict[int, list[list[bool]]]]:
+    """
+    Extract cell and membership data from the input dictionary.
+
+    Parameters
+    ----------
+    input_dict : dict[int, dict[frozenset[int], list[bool]]]
+        The input dictionary containing cell and membership data.
+
+    Returns
+    -------
+    x_dict : dict[int, list[list[int]]]
+        A dictionary mapping ranks to a list of sorted cells.
+    mem_dict : dict[int, list[list[bool]]]
+        A dictionary mapping ranks to a list of membership values.
+
+    """
+    x_dict, mem_dict = {}, {}
+    for rank, cell_lifter_map in input_dict.items():
+        x_dict[rank] = [sorted(cell) for cell in cell_lifter_map.keys()]
+        mem_dict[rank] = list(cell_lifter_map.values())
+    return x_dict, mem_dict
+
+
 def map_to_tensors(
     input_dict: dict[int, dict[frozenset[int], list[bool]]], num_lifters: int
 ) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor]]:

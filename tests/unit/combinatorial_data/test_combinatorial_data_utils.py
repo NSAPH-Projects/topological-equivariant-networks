@@ -12,6 +12,7 @@ from combinatorial_data.combinatorial_data_utils import (
     CombinatorialComplexTransform,
     adjacency_matrix,
     create_combinatorial_complex,
+    extract_cell_and_membership_data,
     incidence_matrix,
     merge_neighbors,
     sparse_to_dense,
@@ -195,3 +196,17 @@ def _dense_to_sparse(dense):
 def test_sparse_to_dense(sparse, expected):
 
     assert torch.equal(sparse_to_dense(sparse), expected)
+
+
+def test_extract_cell_and_membership_data():
+    input_dict = {
+        0: {frozenset([0]): [True], frozenset([1]): [False], frozenset([2]): [True]},
+        1: {frozenset([0, 1]): [True, False], frozenset([1, 2]): [False, True]},
+        2: {},
+    }
+
+    x_dict, mem_dict = extract_cell_and_membership_data(input_dict)
+
+    assert x_dict == {0: [[0], [1], [2]], 1: [[0, 1], [1, 2]], 2: []}
+
+    assert mem_dict == {0: [[True], [False], [True]], 1: [[True, False], [False, True]], 2: []}

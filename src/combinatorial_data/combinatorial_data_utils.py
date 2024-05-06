@@ -185,6 +185,63 @@ class CombinatorialComplexData(Data):
         else:
             return 0
 
+    def from_json(self, data: dict[str, any]) -> "CombinatorialComplexData":
+        """
+        Convert a dictionary of data to a CombinatorialComplexData object.
+
+        Parameters
+        ----------
+        data : dict[str, any]
+            The dictionary of data to be converted.
+
+        Returns
+        -------
+        CombinatorialComplexData
+            The CombinatorialComplexData object created from the input dictionary.
+
+        Notes
+        -----
+        This method currently only supports QM9 with no heterogeneous features and is not safe.
+        It needs the following information to support heterogeneous features and to be safe:
+
+        - For each rank, the number of features per node (to address the case of no rank-2 cells).
+        - Relevant dataset arguments to determine the required keys in `data`.
+
+        """
+
+        for key in ["x", "pos", "y"]:
+            setattr(self, key, torch.tensor(data[key]))
+
+        for key, value in data.items():
+            if "x_" in key:
+                if len(value) == 0:
+                    setattr(self, key, torch.empty((0, 0), dtype=torch.float64))
+                else:
+                    setattr(
+                        self,
+                        key,
+                        torch.tensor(pad_lists_to_same_length(value), dtype=torch.float64),
+                    )
+            if "mem_" in key:
+                num_lifters = len(data["mem_0"][0])
+                if len(value) == 0:
+                    setattr(self, key, torch.empty((0, num_lifters), dtype=torch.bool))
+                else:
+                    setattr(self, key, torch.tensor(value, dtype=torch.bool))
+            if "adj_" in key:
+                setattr(self, key, torch.tensor(value, dtype=torch.int64))
+            if "inv_" in key:
+                if len(value) == 0:
+                    setattr(self, key, torch.empty((0, 0), dtype=torch.float64))
+                else:
+                    setattr(
+                        self,
+                        key,
+                        torch.tensor(pad_lists_to_same_length(value), dtype=torch.float64).t(),
+                    )
+
+        return self
+
 
 class CombinatorialComplexTransform(BaseTransform):
     """Todo: add
@@ -213,40 +270,152 @@ class CombinatorialComplexTransform(BaseTransform):
         self.enable_indexing_bug = enable_indexing_bug
 
     def __call__(self, graph: Data) -> CombinatorialComplexData:
-        if not torch.is_tensor(graph.x):
-            graph.x = torch.nn.functional.one_hot(graph.z, torch.max(graph.z) + 1)
 
-        assert torch.is_tensor(graph.pos) and torch.is_tensor(graph.x)
+        cc_dict = self.graph_to_ccdict(graph)
 
-        # get relevant dictionaries using the Rips complex based on the geometric graph/point cloud
-        x_dict, mem_dict, adj_dict, inv_dict = self.get_relevant_dicts(graph)
-
+        # to be removed
         if self.enable_indexing_bug:
-            com_com_data = LegacyCombinatorialComplexData()
+            cc_data = LegacyCombinatorialComplexData()
         else:
-            com_com_data = CombinatorialComplexData()
+            cc_data = CombinatorialComplexData()
 
-        com_com_data = com_com_data.from_dict(graph.to_dict())
+        return cc_data.from_json(cc_dict)
+
+    def graph_to_ccdict(self, graph: Data) -> dict[str, list]:
+        """
+        Convert a graph to a combinatorial complex dictionary.
+
+        TODO: refactor into simpler functions.
+
+        Parameters
+        ----------
+        graph : Data
+            The input graph.
+
+        Returns
+        -------
+        dict[str, list]
+            The combinatorial complex dictionary.
+
+        Raises
+        ------
+        AssertionError
+            If the processed adjacencies do not match the expected adjacencies.
+
+        Notes
+        -----
+        The combinatorial complex dictionary is created by performing the following steps:
+
+        1. Compute the cells of the graph using the `lift` method.
+        2. Compute the ranks for each cell using the `rank` method.
+        3. Create a cell dictionary that maps each rank to a dictionary of cells and their
+        memberships.
+        4. Extract the cell indices and memberships from the cell dictionary.
+        5. Create the combinatorial complex using the `create_combinatorial_complex` method.
+        6. Compute the adjacencies and incidences of the combinatorial complex.
+        7. Merge matching adjacencies if the `merge_neighbors` flag is set to True.
+        8. Convert the sparse numpy matrices to dense torch tensors.
+        9. Store the nodes for computing geometric features in the inv_dict.
+        10. Convert the graph and other data to a dictionary format.
+        11. Convert tensors in the dictionary to lists.
+
+        The resulting combinatorial complex dictionary contains the following keys:
+        - 'x': features of rank 0 cells (atoms)
+        - 'pos': positions of rank 0 cells (atoms)
+        - 'y': target values
+        - 'x_i': cell indices for each rank i
+        - 'mem_i': cell memberships for each rank i
+        - 'adj_adj_type': adjacency matrices for each adjacency type
+        - 'inv_adj_type': nodes used for computing geometric features for each adjacency type
+
+        The combinatorial complex dictionary can be stored as a .json file.
+        """
+
+        # compute cells
+        cells = self.lift(graph)
+
+        # compute ranks for each cell
+        cell_dict = {rank: {} for rank in range(self.dim + 1)}
+        for cell, memberships in cells.items():
+            cell_rank = self.rank(cell, memberships)
+            if cell_rank <= self.dim:
+                cell_dict[cell_rank][cell] = memberships
+
+        # compute cell indices and memberships
+        x_dict, mem_dict = extract_cell_and_membership_data(cell_dict)
+
+        # create the combinatorial complex
+        cc = create_combinatorial_complex(cell_dict)
+
+        # compute adjancencies and incidences
+        adj_dict = dict()
+        for adj_type in self.adjacencies:
+            ranks = [int(rank) for rank in adj_type.split("_")]
+            i, j = ranks[:2]
+            if i != j:
+                matrix = incidence_matrix(cc, i, j)
+            else:
+                # if i == j, we must have a third rank specifying via_rank
+                assert len(ranks) == 3
+                matrix = adjacency_matrix(cc, i, ranks[2])
+
+            adj_dict[adj_type] = matrix
+
+        # merge matching adjacencies
+        if self.merge_neighbors:
+            adj_dict, processed_adjacencies = merge_neighbors(adj_dict)
+            assert set(processed_adjacencies) == set(self.processed_adjacencies)
+
+        # convert from sparse numpy matrices list of index lists
+        for adj_type, matrix in adj_dict.items():
+            adj_dict[adj_type] = sparse_to_dense(matrix)
+
+        # for each adjacency/incidence, store the nodes to be used for computing geometric features
+        inv_dict = dict()
+        for adj_type in self.processed_adjacencies:
+            inv_dict[adj_type] = []
+            neighbors = adj_dict[adj_type]
+            ranks = [int(rank) for rank in adj_type.split("_")]
+            i, j = ranks[:2]
+
+            num_edges = len(neighbors[0])
+            for edge_idx in range(num_edges):
+                idx_a, idx_b = neighbors[0][edge_idx], neighbors[1][edge_idx]
+                cell_a = x_dict[i][idx_a]
+                cell_b = x_dict[j][idx_b]
+                shared = [node for node in cell_a if node in cell_b]
+                only_in_a = [node for node in cell_a if node not in shared]
+                only_in_b = [node for node in cell_b if node not in shared]
+                inv_nodes = shared + only_in_b + only_in_a
+                inv_dict[adj_type].append(inv_nodes)
+
+        cc_dict = graph.to_dict()
 
         for k, v in x_dict.items():
-            com_com_data[f"x_{k}"] = v
+            cc_dict[f"x_{k}"] = v
 
         for k, v in mem_dict.items():
-            com_com_data[f"mem_{k}"] = v
+            cc_dict[f"mem_{k}"] = v
 
         for k, v in adj_dict.items():
-            com_com_data[f"adj_{k}"] = v
+            cc_dict[f"adj_{k}"] = v
 
         for k, v in inv_dict.items():
-            com_com_data[f"inv_{k}"] = v
+            cc_dict[f"inv_{k}"] = v
 
         for att in ["edge_attr", "edge_index"]:
-            if hasattr(com_com_data, att):
-                com_com_data.pop(att)
+            if hasattr(cc_dict, att):
+                cc_dict.pop(att)
 
-        return com_com_data
+        # convert tensors to lists
+        for k, v in cc_dict.items():
+            if torch.is_tensor(v):
+                cc_dict[k] = v.tolist()
+
+        return cc_dict
 
     def get_relevant_dicts(self, graph):
+        """This method is unused."""
         # compute cells
         cells = self.lift(graph)
 
@@ -575,6 +744,7 @@ def extract_cell_and_membership_data(
 def map_to_tensors(
     input_dict: dict[int, dict[frozenset[int], list[bool]]], num_lifters: int
 ) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor]]:
+    """This method is unused."""
     x_dict, mem_dict = {}, {}
     for rank, cell_lifter_map in input_dict.items():
         if cell_lifter_map:
@@ -658,7 +828,10 @@ def pad_lists_to_same_length(
         List of lists of integers padded to the same length.
     """
     # Find the maximum length among all lists
-    max_length = max(len(inner_list) for inner_list in list_of_lists)
+    if len(list_of_lists) == 0:
+        max_length = 0
+    else:
+        max_length = max(len(inner_list) for inner_list in list_of_lists)
 
     # Pad each list to match the maximum length
     padded_list = [

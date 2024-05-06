@@ -11,6 +11,10 @@ from torch.utils.data import DataLoader
 from torch_geometric.data import Data
 from torch_geometric.datasets import QM9
 from tqdm import tqdm
+from rdkit import Chem
+from rdkit.Chem import AllChem, rdMolDescriptors
+from typing import List, Dict, Tuple, Optional
+
 
 from combinatorial_data.combinatorial_data_utils import (
     CombinatorialComplexData,
@@ -286,3 +290,152 @@ def generate_dataset_dir_name(args, relevant_args) -> str:
     short_hash = hash_hex[:16]  # First 16 characters
 
     return short_hash
+
+
+def extract_bond_features(mol: Chem.Mol) -> List[Dict[str, any]]:
+    """
+    Extract bond features from a molecule.
+    
+    Parameters:
+        mol (Chem.Mol): RDKit molecule object.
+
+    Returns:
+        List[Dict[str, any]]: A list of dictionaries containing bond features such as bond type,
+                              whether the bond is conjugated, if it's in a ring, and its stereochemistry.
+    """
+    mol = Chem.AddHs(mol)
+    AllChem.EmbedMolecule(mol, AllChem.ETKDG())
+
+    bond_features = []
+    for bond in mol.GetBonds():
+        features = {
+            'bond_type': str(bond.GetBondType()),
+            'is_conjugated': bond.GetIsConjugated(),
+            'is_in_ring': bond.IsInRing(),
+            'stereo': str(bond.GetStereo())
+        }
+        bond_features.append(features)
+    
+    return bond_features
+
+def extract_fg_features(mol: Chem.Mol) -> Dict[str, int]:
+    """
+    Extract counts of various functional groups from a molecule.
+
+    Parameters:
+        mol (Chem.Mol): RDKit molecule object.
+
+    Returns:
+        Dict[str, int]: A dictionary with keys as functional group names and values as their counts in the molecule.
+    """
+    patterns = {
+        'hydroxyl': '[OH]',
+        'carbonyl': 'C=O',
+        'amine': 'N',
+        'carboxyl': 'C(=O)O',
+        'nitro': '[N+](=O)[O-]',
+        'sulfonamide': 'S(=O)(=O)N',
+    }
+
+    results = {}
+    for group_name, smarts in patterns.items():
+        pattern = Chem.MolFromSmarts(smarts)
+        if pattern is None:
+            continue
+        matches = mol.GetSubstructMatches(pattern)
+        results[group_name] = len(matches)
+    
+    return results
+
+def extract_ring_features(mol: Chem.Mol) -> Dict[str, any]:
+    """
+    Extract features related to rings in the molecule.
+
+    Parameters:
+        mol (Chem.Mol): RDKit molecule object.
+
+    Returns:
+        Dict[str, any]: A dictionary containing the number of rings, information about fused systems,
+                        and details about each ring such as size, aromaticity, presence of heteroatoms, and saturation.
+    """
+    ring_info = mol.GetRingInfo()
+    features = {
+        'number_of_rings': ring_info.NumRings(),
+        'fused_systems': rdMolDescriptors.CalcNumRings(mol),
+        'rings': []
+    }
+
+    for ring in ring_info.AtomRings():
+        ring_atoms = [mol.GetAtomWithIdx(idx) for idx in ring]
+        ring_size = len(ring)
+        is_aromatic = all(atom.GetIsAromatic() for atom in ring_atoms)
+        has_heteroatom = any(atom.GetSymbol() not in ('C', 'H') for atom in ring_atoms)
+        is_saturated = all(atom.GetHybridization() == Chem.HybridizationType.SP3 for atom in ring_atoms if not atom.GetIsAromatic())
+
+        ring_details = {
+            'size': ring_size,
+            'is_aromatic': is_aromatic,
+            'has_heteroatom': has_heteroatom,
+            'is_saturated': is_saturated
+        }
+        features['rings'].append(ring_details)
+
+    return features
+
+
+def molecule_from_data(data: any) -> Optional[Chem.Mol]:
+    """
+    Create an RDKit molecule object from data containing a SMILES string.
+
+    Parameters:
+        data (any): Data object containing a SMILES string.
+
+    Returns:
+        Optional[Chem.Mol]: An RDKit molecule object or None if conversion fails.
+    """
+    if hasattr(data, 'smiles') and data.smiles:
+        mol = Chem.MolFromSmiles(data.smiles)
+        if mol is not None:
+            mol = Chem.AddHs(mol)
+            AllChem.EmbedMolecule(mol, AllChem.ETKDG())
+            return mol
+    return None
+
+def featurize_dataset(dataset: List[any]) -> Tuple[List[any], List[any], List[any]]:
+    """
+    Process a dataset to extract bond features, functional groups, and ring features for each molecule.
+
+    Parameters:
+        dataset (List[any]): A list of data objects containing SMILES strings.
+
+    Returns:
+        Tuple[List[any], List[any], List[any]]: Three lists containing bond features, functional group features,
+                                                and ring features for all processed molecules.
+    """
+    all_functional_groups, all_ring_features, all_bond_features = [], [], []
+    cnt = 0
+    for data in tqdm(dataset):
+        mol = molecule_from_data(data)
+        if mol is None:
+            cnt += 1
+            print(f"{cnt}: Invalid or missing SMILES string for data item: {data}")
+            continue
+
+        bond_features = extract_bond_features(mol)
+        all_bond_features.append(bond_features)
+        
+        functional_groups = extract_fg_features(mol)
+        all_functional_groups.append(functional_groups)
+        
+        ring_features = extract_ring_features(mol)
+        all_ring_features.append(ring_features)
+
+    # Save the results
+    with open('qm9_bond_features.pkl', 'wb') as f:
+        pickle.dump(all_bond_features, f)
+    with open('qm9_ring_features.pkl', 'wb') as f:
+        pickle.dump(all_ring_features, f)
+    with open('qm9_fg_features.pkl', 'wb') as f:
+        pickle.dump(all_functional_groups, f)  # Corrected to save functional groups
+
+    return all_bond_features, all_functional_groups, all_ring_features

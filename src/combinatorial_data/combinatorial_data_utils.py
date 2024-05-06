@@ -716,6 +716,31 @@ def pad_tensor(
     return torch.nn.functional.pad(tensor, pad=pad_sizes, value=pad_value)
 
 
+def sparse_matrix_to_index_lists(sparse_matrix: csc_matrix) -> list[list[int]]:
+    """
+    Convert a sparse matrix to a list of row and column index lists.
+
+    Parameters
+    ----------
+    sparse_matrix : csc_matrix
+        The sparse matrix to convert.
+
+    Returns
+    -------
+    list[list[int]]
+        A list containing two lists - the row indices and the column indices.
+    """
+
+    # Get the row and column indices as two separate lists
+    row_indices, col_indices = sparse_matrix.nonzero()
+
+    # Convert numpy arrays to lists
+    row_indices = row_indices.tolist()
+    col_indices = col_indices.tolist()
+
+    return [row_indices, col_indices]
+
+
 def sparse_to_dense(sparse_matrix: csc_matrix) -> torch.Tensor:
     """
     Convert a sparse (n, m) matrix to a dense (2, k) PyTorch tensor in an adjacency list format.

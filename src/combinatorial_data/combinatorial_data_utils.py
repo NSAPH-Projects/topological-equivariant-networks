@@ -434,78 +434,6 @@ class CombinatorialComplexTransform(BaseTransform):
 
         return cc_dict
 
-    def get_relevant_dicts(self, graph):
-        """This method is unused."""
-        # compute cells
-        cells = self.lift(graph)
-
-        # compute ranks for each cell
-        cell_dict = {rank: {} for rank in range(self.dim + 1)}
-        for cell, memberships in cells.items():
-            cell_rank = self.rank(cell, memberships)
-            if cell_rank <= self.dim:
-                cell_dict[cell_rank][cell] = memberships
-
-        # create x_dict
-        x_dict, mem_dict = map_to_tensors(cell_dict, len(self.lifters))
-
-        # create the combinatorial complex
-        cc = create_combinatorial_complex(cell_dict)
-
-        # compute adjancencies and incidences
-        adj = dict()
-        for adj_type in self.adjacencies:
-            ranks = [int(rank) for rank in adj_type.split("_")]
-            i, j = ranks[:2]
-            if i != j:
-                matrix = incidence_matrix(cc, i, j)
-            else:
-                # if i == j, we must have a third rank specifying via_rank
-                assert len(ranks) == 3
-                matrix = adjacency_matrix(cc, i, ranks[2])
-
-            adj[adj_type] = matrix
-
-        # merge matching adjacencies
-        if self.merge_neighbors:
-            adj, processed_adjacencies = merge_neighbors(adj)
-            assert set(processed_adjacencies) == set(self.processed_adjacencies)
-
-        # convert from sparse numpy matrices to dense torch tensors
-        for adj_type, matrix in adj.items():
-            adj[adj_type] = sparse_to_dense(matrix)
-
-        # pre-compute idx_to_cell mappings
-        idx_to_cell = {
-            rank: [sorted(cell) for cell in cc.skeleton(rank=rank)] for rank in range(self.dim + 1)
-        }
-
-        # for each adjacency/incidence, store the nodes to be used for computing geometric features
-        inv = dict()
-        for adj_type in self.processed_adjacencies:
-            inv[adj_type] = []
-            neighbors = adj[adj_type]
-            ranks = [int(rank) for rank in adj_type.split("_")]
-            i, j = ranks[:2]
-
-            for connection in neighbors.t():
-                idx_a, idx_b = connection[0], connection[1]
-                cell_a = idx_to_cell[i][idx_a.item()]
-                cell_b = idx_to_cell[j][idx_b.item()]
-                shared = [node for node in cell_a if node in cell_b]
-                only_in_a = [node for node in cell_a if node not in shared]
-                only_in_b = [node for node in cell_b if node not in shared]
-                inv_nodes = shared + only_in_b + only_in_a
-                inv[adj_type].append(inv_nodes)
-
-        for k, v in inv.items():
-            if len(v) == 0:
-                inv[k] = torch.zeros(0, 0, dtype=torch.float32)
-            else:
-                inv[k] = torch.tensor(pad_lists_to_same_length(v), dtype=torch.float32).t()
-
-        return x_dict, mem_dict, adj, inv
-
     def lift(self, graph: Data) -> dict[frozenset[int], list[bool]]:
         """
         Apply lifters to a data point, process their outputs, and track contributions.
@@ -758,26 +686,6 @@ def extract_cell_and_membership_data(
     for rank, cell_lifter_map in input_dict.items():
         x_dict[rank] = [sorted(cell) for cell in cell_lifter_map.keys()]
         mem_dict[rank] = list(cell_lifter_map.values())
-    return x_dict, mem_dict
-
-
-def map_to_tensors(
-    input_dict: dict[int, dict[frozenset[int], list[bool]]], num_lifters: int
-) -> tuple[dict[int, torch.Tensor], dict[int, torch.Tensor]]:
-    """This method is unused."""
-    x_dict, mem_dict = {}, {}
-    for rank, cell_lifter_map in input_dict.items():
-        if cell_lifter_map:
-            sorted_cells = [sorted(cell) for cell in cell_lifter_map.keys()]
-            padded_cells = pad_lists_to_same_length(sorted_cells)
-            x = torch.tensor(padded_cells, dtype=torch.float32)
-            mem = torch.tensor(list(cell_lifter_map.values()), dtype=torch.bool)
-        else:
-            # For empty lists, create empty tensors
-            x = torch.empty((0, 0), dtype=torch.float32)
-            mem = torch.empty((0, num_lifters), dtype=torch.bool)
-        x_dict[rank] = x
-        mem_dict[rank] = mem
     return x_dict, mem_dict
 
 

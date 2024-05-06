@@ -273,7 +273,6 @@ class CombinatorialComplexTransform(BaseTransform):
         adjacencies: list[str],
         processed_adjacencies: list[str],
         merge_neighbors: bool,
-        enable_indexing_bug: bool = False,
     ):
         if isinstance(lifters, list):
             self.lifters = lifters
@@ -284,19 +283,23 @@ class CombinatorialComplexTransform(BaseTransform):
         self.adjacencies = adjacencies
         self.processed_adjacencies = processed_adjacencies
         self.merge_neighbors = merge_neighbors
-        self.enable_indexing_bug = enable_indexing_bug
 
     def __call__(self, graph: Data) -> CombinatorialComplexData:
+        """
+        Convert a graph to a CombinatorialComplexData object.
 
+        Parameters
+        ----------
+        graph : Data
+            The input graph to convert.
+
+        Returns
+        -------
+        CombinatorialComplexData
+            The converted combinatorial complex data object.
+        """
         cc_dict = self.graph_to_ccdict(graph)
-
-        # to be removed
-        if self.enable_indexing_bug:
-            cc_data = LegacyCombinatorialComplexData()
-        else:
-            cc_data = CombinatorialComplexData()
-
-        return cc_data.from_json(cc_dict)
+        return CombinatorialComplexData().from_json(cc_dict)
 
     def graph_to_ccdict(self, graph: Data) -> dict[str, list]:
         """

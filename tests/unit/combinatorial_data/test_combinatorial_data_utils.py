@@ -13,7 +13,6 @@ from combinatorial_data.combinatorial_data_utils import (
     extract_cell_and_membership_data,
     incidence_matrix,
     merge_neighbors,
-    sparse_matrix_to_index_lists,
     sparse_to_dense,
 )
 
@@ -209,17 +208,3 @@ def test_extract_cell_and_membership_data():
     assert x_dict == {0: [[0], [1], [2]], 1: [[0, 1], [1, 2]], 2: []}
 
     assert mem_dict == {0: [[True], [False], [True]], 1: [[True, False], [False, True]], 2: []}
-
-
-def test_sparse_matrix_to_index_lists():
-    # Create a sparse matrix
-    sparse_matrix = csc_matrix(np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]]))
-
-    # Call the function
-    result = sparse_matrix_to_index_lists(sparse_matrix)
-
-    # Define the expected result
-    expected = [[0, 0, 1, 1, 2, 2], [1, 2, 0, 2, 0, 1]]
-
-    # Check if the result matches the expected result
-    assert result == expected

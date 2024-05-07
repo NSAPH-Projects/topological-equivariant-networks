@@ -424,7 +424,7 @@ class CombinatorialComplexTransform(BaseTransform):
             cc_dict[f"inv_{k}"] = v
 
         for att in ["edge_attr", "edge_index"]:
-            if hasattr(cc_dict, att):
+            if att in cc_dict.keys():
                 cc_dict.pop(att)
 
         # convert tensors to lists

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import pickle
 import random
 from argparse import Namespace
@@ -12,6 +13,7 @@ from torch_geometric.datasets import QM9
 from tqdm import tqdm
 
 from combinatorial_data.combinatorial_data_utils import (
+    CombinatorialComplexData,
     CombinatorialComplexTransform,
     CustomCollater,
 )
@@ -67,11 +69,102 @@ def prepare_data(graph: Data, index: int, target_name: str) -> Data:
     return graph
 
 
+def lift_qm9_to_cc(args: Namespace) -> list[dict]:
+    """
+    Lift QM9 dataset to CombinatorialComplexData format.
+
+    Parameters
+    ----------
+    args : Namespace
+        Command-line arguments.
+
+    Returns
+    -------
+    list[dict]
+        List of Combinatorial Complex representations of QM9 molecules.
+
+    Notes
+    -----
+    The QM9 dataset is loaded and each sample is transformed into a dictionary representation of
+    the CombinatorialComplexData class. We transform to dictionary format to allow for storage as
+    JSON files.
+    """
+    qm9 = QM9("./datasets/QM9")
+    # Create the transform
+    lifters = get_lifters(args)
+    ranker = get_ranker(args.lifters)
+    transform = CombinatorialComplexTransform(
+        lifters=lifters,
+        ranker=ranker,
+        dim=args.dim,
+        adjacencies=args.adjacencies,
+        processed_adjacencies=args.processed_adjacencies,
+        merge_neighbors=args.merge_neighbors,
+    )
+    qm9_cc = []
+    for graph in tqdm(qm9, desc="Lifting QM9 samples"):
+        qm9_cc.append(transform.graph_to_ccdict(graph))
+    return qm9_cc
+
+
+def save_lifted_qm9(storage_path: str, samples: list[dict]) -> None:
+    """
+    Save the lifted QM9 samples to individual JSON files.
+
+    Parameters
+    ----------
+    storage_path : str
+        The path to the directory where the JSON files will be saved.
+    samples : list[dict]
+        The list of lifted QM9 samples.
+
+    Returns
+    -------
+    None
+    """
+
+    if os.path.exists(storage_path):
+        raise FileExistsError(f"Path '{storage_path}' already exists.")
+    os.makedirs(storage_path, exist_ok=True)
+
+    for idx, sample in tqdm(enumerate(samples), desc="Saving lifted QM9 samples"):
+        file_name = f"{idx}.json"
+        file_path = f"{storage_path}/{file_name}"
+        with open(file_path, "w") as f:
+            json.dump(sample, f)
+
+
 def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
 
-    # Load the QM9 dataset
-    data_root = "./datasets/QM9"
-    dataset = QM9(root=data_root)
+    # Compute the data path
+    relevant_args = [
+        "lifters",
+        "neighbor_types",
+        "connectivity",
+        "visible_dims",
+        "merge_neighbors",
+        "dim",
+        "dis",
+    ]
+    data_path = "./datasets/QM9_" + generate_dataset_dir_name(args, relevant_args)
+
+    # Check if data path already exists
+    if os.path.exists(data_path):
+        qm9_cc = []
+        for file in tqdm(sorted(os.listdir(data_path)), desc="Reading lifted QM9 samples"):
+            with open(f"{data_path}/{file}", "r") as f:
+                qm9_cc.append(json.load(f))
+    else:
+        qm9_cc = lift_qm9_to_cc(args)
+        save_lifted_qm9(data_path, qm9_cc)
+
+    print("Success!", flush=True)
+
+    # Convert to CombinatorialComplexData objects
+    dataset = []
+    for ccdict in tqdm(qm9_cc, desc="Converting ccdicts to CombinatorialComplexData objects"):
+        graph = CombinatorialComplexData().from_json(ccdict)
+        dataset.append(graph)
 
     # Compute split indices
     with open("misc/egnn_splits.pkl", "rb") as f:
@@ -94,19 +187,6 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         }
     else:
         raise ValueError(f"Unknown split type: {args.splits}")
-
-    # Create the transform
-    lifters = get_lifters(args)
-    ranker = get_ranker(args.lifters)
-    transform = CombinatorialComplexTransform(
-        lifters=lifters,
-        ranker=ranker,
-        dim=args.dim,
-        adjacencies=args.adjacencies,
-        processed_adjacencies=args.processed_adjacencies,
-        merge_neighbors=args.merge_neighbors,
-        enable_indexing_bug=args.enable_indexing_bug,
-    )
 
     # Compute the target index
     targets = [
@@ -157,9 +237,8 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
 
         # Transform and preprocess data
         processed_split_dataset = []
-        for graph in tqdm(split_dataset, desc="Preparing data"):
-            transformed_graph = transform(graph)
-            preprocessed_graph = prepare_data(transformed_graph, index, args.target_name)
+        for cc in tqdm(split_dataset, desc="Preparing data"):
+            preprocessed_graph = prepare_data(cc, index, args.target_name)
             processed_split_dataset.append(preprocessed_graph)
 
         # Create DataLoader

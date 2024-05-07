@@ -174,14 +174,6 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42, help="random seed")
     parser.add_argument("--splits", type=str, default="egnn", help="split type")
 
-    # Other arguments
-    parser.add_argument(
-        "--enable_indexing_bug",
-        action="store_true",
-        help="""If the buggy legacy implementation should be used for the combinatorial complex
-             transform. Needed to reproduce EMSPN.""",
-    )
-
     parsed_args = parser.parse_args()
     parsed_args.adjacencies = get_adjacency_types(
         parsed_args.dim,

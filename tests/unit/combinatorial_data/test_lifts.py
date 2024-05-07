@@ -237,25 +237,25 @@ def test_rips_transform(dim: int, dis: float):
             processed_adjacencies=processed_adjacencies,
             merge_neighbors=True,
         )
-        new_x_dict, _, new_adj, new_inv = simplicial_transform.get_relevant_dicts(graph)
+        cc = simplicial_transform(graph)
 
         # Check if x_dict are the same
         for i in range(dim + 1):
-            if not (torch.numel(old_x_dict[i]) == 0 and torch.numel(new_x_dict[i]) == 0):
+            if not (torch.numel(old_x_dict[i]) == 0 and torch.numel(cc[f"x_{i}"]) == 0):
                 assert torch.equal(
-                    old_x_dict[i], new_x_dict[i]
+                    old_x_dict[i], cc[f"x_{i}"]
                 ), f"old_x_dict[{i}] != new_x_dict[{i}]"
 
         # Check if adjs and invs are the same
         for i in range(dim):
             for j in [i, i + 1]:
                 sorted_old_adj, idc = sort_tensor_columns_and_get_indices(old_adj[f"{i}_{j}"])
-                if not (torch.numel(sorted_old_adj) == 0 and torch.numel(new_adj[f"{i}_{j}"]) == 0):
+                if not (torch.numel(sorted_old_adj) == 0 and torch.numel(cc[f"adj_{i}_{j}"]) == 0):
                     assert torch.equal(
-                        sorted_old_adj, new_adj[f"{i}_{j}"]
+                        sorted_old_adj, cc[f"adj_{i}_{j}"]
                     ), f"sorted(old_adj[{i}_{j}]) != new_adj[{i}_{j}]"
                     assert torch.equal(
-                        old_inv[f"{i}_{j}"][:, idc], new_inv[f"{i}_{j}"]
+                        old_inv[f"{i}_{j}"][:, idc], cc[f"inv_{i}_{j}"]
                     ), f"sorted(old_inv[{i}_{j}]) != new_inv[{i}_{j}]"
 
 

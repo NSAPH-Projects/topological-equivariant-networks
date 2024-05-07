@@ -118,15 +118,23 @@ class CombinatorialComplexData(Data):
 
     Attributes
     ----------
+    x : torch.FloatTensor
+        Features of rank 0 cells (atoms).
+    y : torch.FloatTensor
+        Target values, assumed to be at the graph level. This tensor should have shape (1,
+        num_targets).
+    pos : torch.FloatTensor
+        Positions of rank 0 cells (atoms). Expected to have shape (num_atoms, 3).
     x_i : torch.FloatTensor
         Node indices associated with cells of rank i, where i is a non-negative integer.
-    mem_i : torch.BoolTensor
-        Lifters associated with cells of rank i, where i is a non-negative integer.
     adj_i_j : torch.LongTensor
         Adjacency tensors representing the relationships (edges) between cells of rank i and j,
         where i and j are non-negative integers.
+    mem_i : torch.BoolTensor
+        Optional. Lifters associated with cells of rank i, where i is a non-negative integer.
     inv_i_j : torch.FloatTensor
-        Node indices that can be used to compute legacy geometric features for each cell pair.
+        Optional. Node indices that can be used to compute legacy geometric features for each cell
+        pair.
     """
 
     attribute_dtype = MappingProxyType(

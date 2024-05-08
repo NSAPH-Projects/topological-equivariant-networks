@@ -23,6 +23,7 @@ class TEN(nn.Module):
         adjacencies: list[str],
         initial_features: str,
         visible_dims: list[int] | None,
+        normalize_invariants: bool,
         compute_invariants: callable = compute_invariants,
     ) -> None:
         super().__init__()
@@ -32,11 +33,19 @@ class TEN(nn.Module):
         self.num_inv_fts_map = self.compute_invariants.num_features_map
         self.max_dim = max_dim
         self.adjacencies = adjacencies
+        self.normalize_invariants = normalize_invariants
+
         if visible_dims is not None:
             self.visible_dims = visible_dims
         else:
             self.visible_dims = list(range(max_dim + 1))
+
         # layers
+        if self.normalize_invariants:
+            self.inv_normalizer = nn.ModuleDict(
+                {adj: nn.BatchNorm1d(self.num_inv_fts_map[adj]) for adj in self.adjacencies}
+            )
+
         self.feature_embedding = nn.Linear(num_input, num_hidden)
 
         self.layers = nn.ModuleList(
@@ -107,7 +116,8 @@ class TEN(nn.Module):
         # embed features and E(n) invariant information
         x = {dim: self.feature_embedding(feature) for dim, feature in x.items()}
         inv = self.compute_invariants(x_ind, graph.pos, adj, inv_ind, device)
-
+        if self.normalize_invariants:
+            inv = {adj: self.inv_normalizer[adj](feature) for adj, feature in inv.items()}
         # message passing
         for layer in self.layers:
             x = layer(x, adj, inv)

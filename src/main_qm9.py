@@ -154,6 +154,12 @@ if __name__ == "__main__":
         default=None,
         help="specifies which ranks to explicitly represent as nodes",
     )
+    parser.add_argument(
+        "--normalize_invariants",
+        action="store_true",
+        default=False,
+        help="if the invariant features should be normalized (via batch normalization)",
+    )
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-16, help="learning rate")

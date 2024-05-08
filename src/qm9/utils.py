@@ -136,35 +136,9 @@ def save_lifted_qm9(storage_path: str, samples: list[dict]) -> None:
 
 def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
 
-    # Compute the data path
-    relevant_args = [
-        "lifters",
-        "neighbor_types",
-        "connectivity",
-        "visible_dims",
-        "merge_neighbors",
-        "dim",
-        "dis",
-    ]
-    data_path = "./datasets/QM9_" + generate_dataset_dir_name(args, relevant_args)
-
-    # Check if data path already exists
-    if os.path.exists(data_path):
-        qm9_cc = []
-        for file in tqdm(sorted(os.listdir(data_path)), desc="Reading lifted QM9 samples"):
-            with open(f"{data_path}/{file}", "r") as f:
-                qm9_cc.append(json.load(f))
-    else:
-        qm9_cc = lift_qm9_to_cc(args)
-        save_lifted_qm9(data_path, qm9_cc)
-
-    print("Success!", flush=True)
-
-    # Convert to CombinatorialComplexData objects
-    dataset = []
-    for ccdict in tqdm(qm9_cc, desc="Converting ccdicts to CombinatorialComplexData objects"):
-        graph = CombinatorialComplexData().from_json(ccdict)
-        dataset.append(graph)
+    # Load the QM9 dataset just to get the number of samples
+    data_root = "./datasets/QM9"
+    num_samples = len(QM9(root=data_root))
 
     # Compute split indices
     with open("misc/egnn_splits.pkl", "rb") as f:
@@ -175,7 +149,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         for split in egnn_splits.keys():
             random.shuffle(egnn_splits[split])
     elif args.splits == "random":
-        indices = list(range(len(dataset)))
+        indices = list(range(num_samples))
         random.shuffle(indices)
         train_end_idx = len(egnn_splits["train"])
         val_end_idx = train_end_idx + len(egnn_splits["valid"])
@@ -187,6 +161,13 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         }
     else:
         raise ValueError(f"Unknown split type: {args.splits}")
+
+    # Subsample if requested
+    for split in split_indices.keys():
+        n_split = len(split_indices[split])
+        if args.num_samples is not None:
+            n_split = min(args.num_samples, n_split)
+            split_indices[split] = split_indices[split][:n_split]
 
     # Compute the target index
     targets = [
@@ -224,18 +205,46 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         "shuffle": True,
     }
 
+    # Compute the data path
+    relevant_args = [
+        "lifters",
+        "neighbor_types",
+        "connectivity",
+        "visible_dims",
+        "merge_neighbors",
+        "dim",
+        "dis",
+    ]
+    data_path = "./datasets/QM9_" + generate_dataset_dir_name(args, relevant_args)
+
+    # Check if data path already exists
+    if not os.path.exists(data_path):
+        qm9_cc = lift_qm9_to_cc(args)
+        save_lifted_qm9(data_path, qm9_cc)
+
     # Process data splits
     loaders = {}
+    data_files = sorted(os.listdir(data_path))
     for split in ["train", "valid", "test"]:
 
-        # Subsample if requested
-        n_split = len(split_indices[split])
-        if args.num_samples is not None:
-            n_split = min(args.num_samples, n_split)
-            split_indices[split] = split_indices[split][:n_split]
-        split_dataset = [dataset[i] for i in split_indices[split]]
+        # Filter out the relevant data files
+        split_files = [data_files[i] for i in split_indices[split]]
 
-        # Transform and preprocess data
+        # Load the ccdicts from the data files
+        split_ccdicts = []
+        for file in tqdm(split_files, desc="Reading lifted QM9 samples"):
+            with open(f"{data_path}/{file}", "r") as f:
+                split_ccdicts.append(json.load(f))
+
+        # Convert the dictionaries to CombinatorialComplexData objects
+        split_dataset = []
+        for ccdict in tqdm(
+            split_ccdicts, desc="Converting ccdicts to CombinatorialComplexData objects"
+        ):
+            ccdata = CombinatorialComplexData().from_json(ccdict)
+            split_dataset.append(ccdata)
+
+        # Preprocess data
         processed_split_dataset = []
         for cc in tqdm(split_dataset, desc="Preparing data"):
             preprocessed_graph = prepare_data(cc, index, args.target_name)

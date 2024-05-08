@@ -224,6 +224,7 @@ def get_model(args: Namespace) -> nn.Module:
             max_dim=args.dim,
             adjacencies=args.processed_adjacencies,
             initial_features=args.initial_features,
+            normalize_invariants=args.normalize_invariants,
             visible_dims=args.visible_dims,
         )
     else:

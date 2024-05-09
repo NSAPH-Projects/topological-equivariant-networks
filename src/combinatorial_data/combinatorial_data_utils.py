@@ -849,6 +849,35 @@ def sparse_to_dense(sparse_matrix: csc_matrix) -> torch.Tensor:
     return torch.from_numpy(dense_array).type(torch.int64)
 
 
+def get_lifters(args) -> list[callable]:
+    """
+    Construct a list of lifter functions based on provided arguments.
+
+    This function iterates through a list of lifter names specified in the input arguments. For each
+    lifter, it either retrieves the corresponding function from a registry or creates a partial
+    function with additional arguments for specific lifters like 'rips'.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The parsed command line arguments. It should contain 'lifters', a list of lifter names, and
+        additional arguments like 'dim' and 'dis' for specific lifters.
+
+    Returns
+    -------
+    List[Callable]
+        A list of callable lifter functions, ready to be applied to data.
+    """
+    lifters = []
+    for lifter in args.lifters:
+        lifter = lifter.split(":")[0]
+        if lifter == "rips":
+            lifters.append(partial(rips_lift, dim=args.dim, dis=args.dis))
+        else:
+            lifters.append(lifter_registry[lifter])
+    return lifters
+
+
 if __name__ == "__main__":
     import functools
     import random

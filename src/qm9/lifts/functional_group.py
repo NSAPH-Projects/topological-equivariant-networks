@@ -132,39 +132,3 @@ def identify_functional_groups(mol):
             )
         )
     return ifgs
-
-
-def main():
-    for ix, smiles in enumerate(
-        [
-            "Cc1nc(NS(=O)(=O)c2ccc(N)cc2)nc(C)c1",  # fig1, 1
-            "NC(=N)c1ccc(C=Cc2ccc(cc2O)C(=N)N)cc1",  # 2
-            "CC(=O)Nc1nnc(s1)S(=O)(=O)N",  # 3
-            "NS(=O)(=O)c1cc2c(NCNS2(=O)=O)cc1Cl",  # 4
-            "CNC1=Nc2ccc(Cl)cc2C(=N(=O)C1)c3ccccc3",  # 5
-            "Cc1onc(c1C(=O)NC2C3SC(C)(C)C(N3C2=O)C(=O)O)c4ccccc4",  # 6
-            "Clc1ccccc1C2=NCC(=O)Nc3ccc(cc23)N(=O)=O",  # 7
-            "COc1cc(cc(C(=O)NCC2CCCN2CC=C)c1OC)S(=O)(=O)N",  # 8
-            "Cc1ccc(Cl)c(Nc2ccccc2C(=O)O)c1Cl",  # 9
-            # there is a discrepancy with the paper here!  I wonder if Peter has the ring as
-            # aromatic?
-            "Clc1ccc2Oc3ccccc3N=C(N4CCNCC4)c2c1",  # 10
-            "FC(F)(F)CN1C(=O)CN=C(c2ccccc2)c3cc(Cl)ccc13",  # 11
-            "OCC1OC(CC1O)n2cnc3C(O)CNC=Nc32",  # 12
-            "CCNC1CC(C)S(=O)(=O)c2sc(cc12)S(=O)(=O)N",  # 13
-            "CC(O)C1C2C(C)C(=C(N2C1=O)C(=O)O)SC3CNC(C3)C(=O)N(C)C",  # 14
-            "CC1CN(CC(C)N1)c2c(F)c(N)c3c(=O)c(cn(C4CC4)c3c2F)C(=O)O",  # 15
-            "CC(=CCC1C(=O)N(N(C1=O)c2ccccc2)c3ccccc3)C",  # 16
-            "Clc1ccc2N=C3NC(=O)CN3Cc2c1Cl",  # 17
-            "CC(=O)NC1C(NC(=N)N)C=C(OC1C(O)C(O)CO)C(=O)O",  # 18
-            "CC(O)C(O)C1CNc2nc(N)nc(O)c2N1",  # 19
-            "NC1CCCCN(C1)c2c(Cl)cc3c(=O)c(cn(C4CC4)c3c2Cl)C(=O)O",  # 20
-        ]
-    ):
-        m = Chem.MolFromSmiles(smiles)
-        fgs = identify_functional_groups(m)
-        print("%2d: %d fgs" % (ix + 1, len(fgs)), fgs)
-
-
-if __name__ == "__main__":
-    main()

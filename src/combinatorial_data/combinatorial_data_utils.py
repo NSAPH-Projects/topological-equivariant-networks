@@ -874,40 +874,7 @@ def get_lifters(args: Namespace, lifter_registry: dict[str, callable]) -> list[c
     for lifter in args.lifters:
         lifter = lifter.split(":")[0]
         if lifter == "rips":
-            lifters.append(partial(rips_lift, dim=args.dim, dis=args.dis))
+            lifters.append(partial(lifter_registry[lifter], dim=args.dim, dis=args.dis))
         else:
             lifters.append(lifter_registry[lifter])
     return lifters
-
-
-if __name__ == "__main__":
-    import functools
-    import random
-
-    from torch_geometric.datasets import QM9
-
-    from combinatorial_data.lifts import rips_lift
-
-    data = QM9("../datasets/QM9")
-    dim = 2
-    transform_2 = CombinatorialComplexTransform(
-        functools.partial(rips_lift, dim=dim, dis=2.0), dim=dim
-    )
-    transform_3 = CombinatorialComplexTransform(
-        functools.partial(rips_lift, dim=dim, dis=3.0), dim=dim
-    )
-    transform_4 = CombinatorialComplexTransform(
-        functools.partial(rips_lift, dim=dim, dis=4.0), dim=dim
-    )
-
-    random_graph = random.randint(0, len(data) - 1)
-
-    # transform data[0] to combinatorial complex
-    com_2 = transform_2(data[random_graph])
-    com_3 = transform_3(data[random_graph])
-    com_4 = transform_4(data[random_graph])
-
-    print(f"Original Graph: {data[random_graph]}")
-    print(f"Combinatorial Complex (delta = 2.0): {com_2}")
-    print(f"Combinatorial Complex (delta = 3.0): {com_3}")
-    print(f"Combinatorial Complex (delta = 4.0): {com_4}")

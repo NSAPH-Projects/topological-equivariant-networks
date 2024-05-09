@@ -1,4 +1,5 @@
 import re
+from argparse import Namespace
 from collections.abc import Iterable
 from types import MappingProxyType
 from typing import Union
@@ -849,7 +850,7 @@ def sparse_to_dense(sparse_matrix: csc_matrix) -> torch.Tensor:
     return torch.from_numpy(dense_array).type(torch.int64)
 
 
-def get_lifters(args) -> list[callable]:
+def get_lifters(args: Namespace) -> list[callable]:
     """
     Construct a list of lifter functions based on provided arguments.
 

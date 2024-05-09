@@ -52,6 +52,9 @@ def functional_group_lift(graph: Data) -> set[Cell]:
         return set()
 
 
+# The code below was taken from https://github.com/rdkit/rdkit/blob/master/Contrib/IFG/ifg.py
+# and serves to identify functional groups within a molecule.
+
 #  Original authors: Richard Hall and Guillaume Godin
 #  This file is part of the RDKit.
 #  The contents are covered by the terms of the BSD license

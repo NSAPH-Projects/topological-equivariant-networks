@@ -1,6 +1,7 @@
 import re
 from argparse import Namespace
 from collections.abc import Iterable
+from functools import partial
 from types import MappingProxyType
 from typing import Union
 

@@ -11,8 +11,11 @@ from torch_geometric.data import Data
 
 from combinatorial_data.ifg import identify_functional_groups
 
+# Type alias for a cell in a simplicial complex. Frozenset of node indices and a list of features.
+Cell = tuple[frozenset[int], list[float]]
 
-def clique_lift(graph_data) -> set[frozenset[int]]:
+
+def clique_lift(graph_data) -> set[Cell]:
     """
     Construct a clique complex from a graph represented as a torch_geometric.data.Data object.
 
@@ -24,7 +27,7 @@ def clique_lift(graph_data) -> set[frozenset[int]]:
 
     Returns
     -------
-    set[frozenset[int]]
+    set[Cell]
         Simplices of the clique complex.
     """
     # Convert torch_geometric.data.Data to networkx graph
@@ -43,7 +46,7 @@ def clique_lift(graph_data) -> set[frozenset[int]]:
     return simplices
 
 
-def edge_lift(graph: Data) -> set[frozenset[int]]:
+def edge_lift(graph: Data) -> set[Cell]:
     """
     Identify edges in a graph.
 
@@ -57,7 +60,7 @@ def edge_lift(graph: Data) -> set[frozenset[int]]:
 
     Returns
     -------
-    set[frozenset[int]]
+    set[Cell]
         A set of graph elements, where each element is an edge (frozenset of two node indices).
 
     Raises
@@ -85,7 +88,7 @@ def edge_lift(graph: Data) -> set[frozenset[int]]:
     return edges
 
 
-def functional_group_lift(graph: Data) -> set[frozenset[int]]:
+def functional_group_lift(graph: Data) -> set[Cell]:
     """
     Identify functional groups within a molecule and returns them as lists of atom indices.
 
@@ -102,7 +105,7 @@ def functional_group_lift(graph: Data) -> set[frozenset[int]]:
 
     Returns
     -------
-    set[frozenset[int]]
+    set[Cell]
         A set of frozensets, where each frozenset contains the atom indices of a functional group in
         the molecule.
 
@@ -131,7 +134,7 @@ def functional_group_lift(graph: Data) -> set[frozenset[int]]:
         return set()
 
 
-def node_lift(graph: Data) -> set[frozenset[int]]:
+def node_lift(graph: Data) -> set[Cell]:
     """
     Identify nodes in a graph.
 
@@ -145,7 +148,7 @@ def node_lift(graph: Data) -> set[frozenset[int]]:
 
     Returns
     -------
-    set[frozenset[int]]
+    set[Cell]
         A set of graph elements, where each element is a node (singleton frozenset).
 
     Raises
@@ -168,7 +171,7 @@ def node_lift(graph: Data) -> set[frozenset[int]]:
     return nodes
 
 
-def supercell_lift(graph: Data) -> set[frozenset[int]]:
+def supercell_lift(graph: Data) -> set[Cell]:
     """
     Return the entire graph as a single cell.
 
@@ -182,7 +185,7 @@ def supercell_lift(graph: Data) -> set[frozenset[int]]:
 
     Returns
     -------
-    set[frozenset[int]]
+    set[Cell]
         A singleton set containing a frozenset of all node indices.
 
     Raises
@@ -200,7 +203,7 @@ def supercell_lift(graph: Data) -> set[frozenset[int]]:
         return {frozenset([node for node in range(num_nodes)])}
 
 
-def ring_lift(graph: Data) -> set[frozenset[int]]:
+def ring_lift(graph: Data) -> set[Cell]:
     """
     Identify minimal cycles in a graph.
 
@@ -215,7 +218,7 @@ def ring_lift(graph: Data) -> set[frozenset[int]]:
 
     Returns
     -------
-    set[frozenset[int]]
+    set[Cell]
         A set of minimal cycles, each cycle is represented as a frozenset of node indices.
 
     Raises
@@ -242,7 +245,7 @@ def ring_lift(graph: Data) -> set[frozenset[int]]:
     return minimal_cycles
 
 
-def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[frozenset[int]]:
+def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[Cell]:
     """
     Construct a Rips complex from a graph and returns its simplices.
 
@@ -260,7 +263,7 @@ def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[f
 
     Returns
     -------
-    set[frozenset[int]]
+    set[Cell]
         A set of frozensets, where each frozenset represents a simplex in the Rips
         complex. Each simplex is a frozenset of vertex indices.
 

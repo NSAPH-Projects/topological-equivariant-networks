@@ -219,6 +219,12 @@ def get_lifters(
         ranking_logic = parse_ranking_logic(lifter_str)
 
         lifters.append((lifter, ranking_logic))
+
+    for lifter, lifter_rank in lifters:
+        if lifter_rank == "c" and lifter.num_features > 0:
+            raise ValueError(
+                "cardinality-based rank cannot be combined with heterogeneous features!"
+            )
     return lifters
 
 

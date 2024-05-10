@@ -252,14 +252,12 @@ class CombinatorialComplexTransform(BaseTransform):
     def __init__(
         self,
         lifter: Lifter,
-        ranker: callable,
         dim: int,
         adjacencies: list[str],
         processed_adjacencies: list[str],
         merge_neighbors: bool,
     ):
         self.lifter = lifter
-        self.rank = ranker
         self.dim = dim
         self.adjacencies = adjacencies
         self.processed_adjacencies = processed_adjacencies
@@ -333,14 +331,7 @@ class CombinatorialComplexTransform(BaseTransform):
         """
 
         # compute cells
-        cells = self.lifter.lift(graph)
-
-        # compute ranks for each cell
-        cell_dict = {rank: {} for rank in range(self.dim + 1)}
-        for cell, memberships in cells.items():
-            cell_rank = self.rank(cell, memberships)
-            if cell_rank <= self.dim:
-                cell_dict[cell_rank][cell] = memberships
+        cell_dict = self.lifter.lift(graph)
 
         # compute cell indices and memberships
         x_dict, mem_dict = extract_cell_and_membership_data(cell_dict)

@@ -3,6 +3,8 @@ from functools import partial
 
 from torch_geometric.data import Data
 
+from combinatorial_data.ranker import get_ranker
+
 
 class Lifter:
 
@@ -29,8 +31,10 @@ class Lifter:
         # TODO: check inputs: a lift with hetero features may not be used with cardinality
 
         self.lifters = get_lifters(args, lifter_registry)
+        self.ranker = get_ranker(args.lifters)
+        self.dim = args.dim
 
-    def lift(self, graph: Data) -> dict[frozenset[int], list[bool]]:
+    def lift(self, graph: Data) -> dict[frozenset[int], list[list[float] | None]]:
         """
         Apply lifters to a data point, process their outputs, and track contributions.
 
@@ -72,11 +76,11 @@ class Lifter:
         cell_lifter_map = {}
         for lifter_idx, lifter in enumerate(self.lifters):
             lifter_output = lifter(graph)
-            for cell_obj in lifter_output:
-                cell = cell_obj[0]
-                if cell not in cell_lifter_map:
-                    cell_lifter_map[cell] = [False] * len(self.lifters)
-                cell_lifter_map[cell][lifter_idx] = True
+            for cell in lifter_output:
+                node_idc, feature_vec = cell
+                if node_idc not in cell_lifter_map:
+                    cell_lifter_map[node_idc] = [None] * len(self.lifters)
+                cell_lifter_map[node_idc][lifter_idx] = feature_vec
 
         # Reorder the dictionary keys numerically
         sorted_cells = sorted(sorted(list(cell)) for cell in cell_lifter_map.keys())
@@ -84,7 +88,17 @@ class Lifter:
             frozenset(cell): cell_lifter_map[frozenset(cell)] for cell in sorted_cells
         }
 
-        return cell_lifter_map
+        # compute ranks for each cell
+        # TODO: here make cells not frozenset[int], but Cell where the tuple contains the combined
+        # feature vector. will probably need to modify ranker
+        cell_dict = {rank: {} for rank in range(self.dim + 1)}
+        for cell, feature_vectors in cell_lifter_map.items():
+            memberships = [(ft_vec is not None) for ft_vec in feature_vectors]
+            cell_rank = self.ranker(cell, memberships)
+            if cell_rank <= self.dim:
+                cell_dict[cell_rank][cell] = memberships
+
+        return cell_dict
 
 
 def get_lifters(args: Namespace, lifter_registry: dict[str, callable]) -> list[callable]:

@@ -18,7 +18,6 @@ from combinatorial_data.combinatorial_data_utils import (
     CustomCollater,
 )
 from combinatorial_data.lifter import Lifter
-from combinatorial_data.ranker import get_ranker
 from qm9.lifts.registry import lifter_registry
 
 
@@ -93,10 +92,8 @@ def lift_qm9_to_cc(args: Namespace) -> list[dict]:
     qm9 = QM9("./datasets/QM9")
     # Create the transform
     lifter = Lifter(args, lifter_registry)
-    ranker = get_ranker(args.lifters)
     transform = CombinatorialComplexTransform(
         lifter=lifter,
-        ranker=ranker,
         dim=args.dim,
         adjacencies=args.adjacencies,
         processed_adjacencies=args.processed_adjacencies,

@@ -18,7 +18,8 @@ def edge_lift(graph: Data) -> set[Cell]:
     Returns
     -------
     set[Cell]
-        A set of graph elements, where each element is an edge (frozenset of two node indices).
+        A set of graph elements, where each element is an edge (frozenset of two node indices) and
+        its associated feature vector.
 
     Raises
     ------
@@ -42,4 +43,4 @@ def edge_lift(graph: Data) -> set[Cell]:
         if edge[0] != edge[1]
     }
 
-    return edges
+    return {(edge, ()) for edge in edges}

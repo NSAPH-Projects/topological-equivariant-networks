@@ -19,22 +19,20 @@ def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[C
     dis : float
         Maximum distance between any two points in a simplex.
     fc_nodes : bool, optional
-        If True, force inclusion of all edges as 1-dimensional simplices.
-        Default is True.
+        If True, force inclusion of all edges as 1-dimensional simplices. Default is True.
 
     Returns
     -------
     set[Cell]
-        A set of frozensets, where each frozenset represents a simplex in the Rips
-        complex. Each simplex is a frozenset of vertex indices.
+        A set of Cells, where each Cell represents a simplex in the Rips complex. Each simplex is a
+        frozenset of vertex indices accompanied by a 0-dimensional feature vector.
 
     Notes
     -----
-    The function uses the `gudhi` library to construct the Rips complex. It
-    first converts the graph positions to a list of points, then generates the
-    Rips complex and its simplex tree up to the specified dimension and edge
-    length. Optionally, it includes all nodes as 0-dimensional simplices.
-    Finally, it extracts and returns the simplices from the simplex tree.
+    The function uses the `gudhi` library to construct the Rips complex. It first converts the graph
+    positions to a list of points, then generates the Rips complex and its simplex tree up to the
+    specified dimension and edge length. Optionally, it includes all nodes as 0-dimensional
+    simplices. Finally, it extracts and returns the simplices from the simplex tree.
     """
     # create simplicial complex
     x_0, pos = graph.x, graph.pos
@@ -50,5 +48,8 @@ def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[C
     # convert simplicial complex to set of frozensets
     simplexes = set()
     simplexes.update(frozenset(simplex) for simplex, _ in simplex_tree.get_simplices())
+
+    # add 0-dimensional feature vectors
+    simplexes = {(simplex, ()) for simplex in simplexes}
 
     return simplexes

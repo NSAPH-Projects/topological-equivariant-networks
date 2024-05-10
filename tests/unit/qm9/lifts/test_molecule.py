@@ -23,4 +23,6 @@ def test_supercell_lift(x, expected):
     else:
         graph_data = Data(x=x)
         output = supercell_lift(graph_data)
+        output = {t[0] for t in output}
+
         assert output == expected

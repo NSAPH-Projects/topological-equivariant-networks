@@ -24,8 +24,8 @@ def functional_group_lift(graph: Data) -> set[Cell]:
     Returns
     -------
     set[Cell]
-        A set of frozensets, where each frozenset contains the atom indices of a functional group in
-        the molecule.
+        A set of Cells, where each Cell contains the atom indices of a functional group in
+        the molecule and the feature vector of the functional group.
 
     Raises
     ------
@@ -47,7 +47,11 @@ def functional_group_lift(graph: Data) -> set[Cell]:
     try:
         molecule = Chem.MolFromSmiles(graph.smiles)
         functional_groups = identify_functional_groups(molecule)
-        return {frozenset(fg.atomIds) for fg in functional_groups if len(fg.atomIds) >= 3}
+        functional_groups = {
+            frozenset(fg.atomIds) for fg in functional_groups if len(fg.atomIds) >= 3
+        }
+        # Add 0-dimensional feature vectors to each functional group
+        functional_groups = {(fg, ()) for fg in functional_groups}
     except AttributeError:
         return set()
 

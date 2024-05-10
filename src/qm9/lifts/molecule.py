@@ -7,8 +7,9 @@ def supercell_lift(graph: Data) -> set[Cell]:
     """
     Return the entire graph as a single cell.
 
-    This function returns the entire graph as a single cell, represented as a frozenset of all
-    node indices. If the graph has less than 2 nodes, it returns an empty set.
+    This function returns the entire graph as a single cell, represented as a frozenset of all node
+    indices and a corresponding feature vector. If the graph has less than 2 nodes, it returns an
+    empty set.
 
     Parameters
     ----------
@@ -18,7 +19,8 @@ def supercell_lift(graph: Data) -> set[Cell]:
     Returns
     -------
     set[Cell]
-        A singleton set containing a frozenset of all node indices.
+        A singleton set containing a frozenset of all node indices and a corresponding feature
+        vector.
 
     Raises
     ------
@@ -32,4 +34,4 @@ def supercell_lift(graph: Data) -> set[Cell]:
     if num_nodes < 2:
         return set()
     else:
-        return {frozenset([node for node in range(num_nodes)])}
+        return {(frozenset([node for node in range(num_nodes)]), ())}

@@ -1,7 +1,6 @@
-import functools
-
 import pytest
 import torch
+from torch_geometric.data import Data
 from torch_geometric.datasets import QM9
 
 from combinatorial_data.combinatorial_data_utils import (
@@ -37,7 +36,10 @@ def test_rips_transform(dim: int, dis: float):
     for graph in dataset[:n_test_samples]:
         old_x_dict, old_adj, old_inv = old_rips_lift(graph, dim=dim, dis=dis)
 
-        fixed_rips_lift = functools.partial(rips_lift, dim=dim, dis=dis)
+        def fixed_rips_lift(graph: Data) -> set[frozenset[int]]:
+            output = rips_lift(graph, dim=dim, dis=dis)
+            return {t[0] for t in output}
+
         ranker = get_ranker(["rips"])
         adjacencies = get_adjacency_types(
             max_dim=dim + 1, connectivity="self_and_next", neighbor_types=["+1"], visible_dims=None

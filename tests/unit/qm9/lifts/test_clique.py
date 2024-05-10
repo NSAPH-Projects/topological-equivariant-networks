@@ -54,6 +54,7 @@ def test_clique_lift(edge_index, expected_simplices):
 
     # Call the clique_lift function
     simplices = clique_lift(graph_data)
+    simplices = {t[0] for t in simplices}
 
     # Check if the returned simplices match the expected simplices
     assert simplices == expected_simplices

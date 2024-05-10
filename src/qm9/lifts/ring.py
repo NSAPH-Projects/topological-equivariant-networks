@@ -21,7 +21,8 @@ def ring_lift(graph: Data) -> set[Cell]:
     Returns
     -------
     set[Cell]
-        A set of minimal cycles, each cycle is represented as a frozenset of node indices.
+        A set of minimal cycles, each cycle is represented as a frozenset of node indices and a
+        corresponding feature vector.
 
     Raises
     ------
@@ -44,4 +45,6 @@ def ring_lift(graph: Data) -> set[Cell]:
         if not any(cycle > other_cycle for other_cycle in cycles if cycle != other_cycle):
             minimal_cycles.add(cycle)
 
+    # Add feature vectors
+    minimal_cycles = {(cycle, ()) for cycle in minimal_cycles}
     return minimal_cycles

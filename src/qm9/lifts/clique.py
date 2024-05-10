@@ -19,7 +19,8 @@ def clique_lift(graph_data) -> set[Cell]:
     Returns
     -------
     set[Cell]
-        Simplices of the clique complex.
+        Simplices of the clique complex. A 0-dimensional feature vector is attached to each simplex
+        as a clique has no inherent features.
     """
     # Convert torch_geometric.data.Data to networkx graph
     G = pyg_utils.to_networkx(graph_data, to_undirected=True)
@@ -34,4 +35,6 @@ def clique_lift(graph_data) -> set[Cell]:
         for i in range(1, len(clique) + 1):
             simplices.update(frozenset(subset) for subset in combinations(clique, i))
 
+    # Add 0-dimensional feature vectors to each simplex
+    simplices = {(simplex, ()) for simplex in simplices}
     return simplices

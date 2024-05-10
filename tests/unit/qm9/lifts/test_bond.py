@@ -38,4 +38,5 @@ def test_edge_lift(edge_index, expected):
     else:
         graph_data = Data(edge_index=edge_index)
         output = edge_lift(graph_data)
+        output = {t[0] for t in output}
         assert output == expected

@@ -18,7 +18,7 @@ def node_lift(graph: Data) -> set[Cell]:
     Returns
     -------
     set[Cell]
-        A set of graph elements, where each element is a node (singleton frozenset).
+        A set of tuples, where each tuple is a singleton set of node indices and a feature vector.
 
     Raises
     ------
@@ -35,6 +35,6 @@ def node_lift(graph: Data) -> set[Cell]:
         raise ValueError("The given graph does not have a feature matrix 'x'!")
 
     # Create nodes
-    nodes = {frozenset([node]) for node in range(graph.x.size(0))}
+    nodes = {(frozenset([node]), ()) for node in range(graph.x.size(0))}
 
     return nodes

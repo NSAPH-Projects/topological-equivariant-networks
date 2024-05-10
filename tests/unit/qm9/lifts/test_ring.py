@@ -53,6 +53,7 @@ def test_ring_lift(edge_index, expected):
 
         # Call the ring_lift function
         output = ring_lift(graph_data)
+        output = {t[0] for t in output}
 
         # Check if the returned output matches the expected output
         assert output == expected

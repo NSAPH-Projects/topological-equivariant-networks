@@ -1,9 +1,6 @@
 import re
-from argparse import Namespace
 from collections.abc import Iterable
-from functools import partial
 from types import MappingProxyType
-from typing import Union
 
 import numpy as np
 import torch
@@ -12,6 +9,8 @@ from toponetx.classes import CombinatorialComplex
 from torch_geometric.data import Batch, Data
 from torch_geometric.loader.dataloader import Collater
 from torch_geometric.transforms import BaseTransform
+
+from combinatorial_data.lifter import Lifter
 
 
 class CustomCollater(Collater):
@@ -277,17 +276,14 @@ class CombinatorialComplexTransform(BaseTransform):
 
     def __init__(
         self,
-        lifters: Union[list[callable], callable],
+        lifter: Lifter,
         ranker: callable,
         dim: int,
         adjacencies: list[str],
         processed_adjacencies: list[str],
         merge_neighbors: bool,
     ):
-        if isinstance(lifters, list):
-            self.lifters = lifters
-        else:
-            self.lifters = [lifters]
+        self.lifter = lifter
         self.rank = ranker
         self.dim = dim
         self.adjacencies = adjacencies
@@ -362,7 +358,7 @@ class CombinatorialComplexTransform(BaseTransform):
         """
 
         # compute cells
-        cells = self.lift(graph)
+        cells = self.lifter.lift(graph)
 
         # compute ranks for each cell
         cell_dict = {rank: {} for rank in range(self.dim + 1)}
@@ -443,61 +439,6 @@ class CombinatorialComplexTransform(BaseTransform):
                 cc_dict[k] = v.tolist()
 
         return cc_dict
-
-    def lift(self, graph: Data) -> dict[frozenset[int], list[bool]]:
-        """
-        Apply lifters to a data point, process their outputs, and track contributions.
-
-        This method applies each registered lifter to the given graph, processes the output to
-        ensure uniqueness, and tracks which lifters contributed to each resulting cell. A cell is
-        considered contributed by a lifter if it appears in the lifter's processed output.
-
-        Parameters
-        ----------
-        graph : Data
-            The input graph to which the lifters are applied. It should be an instance of a Data
-            class or similar structure containing graph data.
-
-        Returns
-        -------
-        dict[frozenset[int], list[bool]]
-            A dictionary mapping each unique cell (a list of integers representing a cell) to a list
-            of booleans. Each boolean value indicates whether the corresponding lifter (by index)
-            contributed to the creation of that cell. The length of the boolean list for each cell
-            equals the total number of lifters, with True indicating contribution and False
-            indicating no contribution. The keys of the dictionary are ordered according to the
-            sorting order they would have if they were cast to lists and internally sorted.
-
-        Examples
-        --------
-        Assuming `self.lifters` contains two lifters and the graph is such that both lifters
-        contribute to the cell [1, 2], and only the first lifter contributes to the cell [2, 3], the
-        method might return: {
-            [1, 2]: [True, True], [2, 3]: [True, False]
-        }
-
-        Notes
-        -----
-        The keys of the dictionary are reordered according to the sorting order they would have if
-        they were cast to lists and internally sorted. This sorting must happen here as the keys of
-        this dictionary determine the ordering of rows/columns in all of x_dict, mem_dict, adj and
-        inv in get_relevant_dicts(), which is the only caller of this function.
-        """
-        cell_lifter_map = {}
-        for lifter_idx, lifter in enumerate(self.lifters):
-            lifter_output = lifter(graph)
-            for cell in lifter_output:
-                if cell not in cell_lifter_map:
-                    cell_lifter_map[cell] = [False] * len(self.lifters)
-                cell_lifter_map[cell][lifter_idx] = True
-
-        # Reorder the dictionary keys numerically
-        sorted_cells = sorted(sorted(list(cell)) for cell in cell_lifter_map.keys())
-        cell_lifter_map = {
-            frozenset(cell): cell_lifter_map[frozenset(cell)] for cell in sorted_cells
-        }
-
-        return cell_lifter_map
 
 
 def adjacency_matrix(cc: CombinatorialComplex, rank: int, via_rank: int) -> csc_matrix:
@@ -849,32 +790,3 @@ def sparse_to_dense(sparse_matrix: csc_matrix) -> torch.Tensor:
 
     # Convert the NumPy array to a PyTorch tensor
     return torch.from_numpy(dense_array).type(torch.int64)
-
-
-def get_lifters(args: Namespace, lifter_registry: dict[str, callable]) -> list[callable]:
-    """
-    Construct a list of lifter functions based on provided arguments.
-
-    This function iterates through a list of lifter names specified in the input arguments. For each
-    lifter, it either retrieves the corresponding function from a registry or creates a partial
-    function with additional arguments for specific lifters like 'rips'.
-
-    Parameters
-    ----------
-    args : argparse.Namespace
-        The parsed command line arguments. It should contain 'lifters', a list of lifter names, and
-        additional arguments like 'dim' and 'dis' for specific lifters.
-
-    Returns
-    -------
-    List[Callable]
-        A list of callable lifter functions, ready to be applied to data.
-    """
-    lifters = []
-    for lifter in args.lifters:
-        lifter = lifter.split(":")[0]
-        if lifter == "rips":
-            lifters.append(partial(lifter_registry[lifter], dim=args.dim, dis=args.dis))
-        else:
-            lifters.append(lifter_registry[lifter])
-    return lifters

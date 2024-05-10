@@ -11,6 +11,7 @@ from torch_geometric.loader.dataloader import Collater
 from torch_geometric.transforms import BaseTransform
 
 from combinatorial_data.lifter import Lifter
+from qm9.lifts.common import Cell
 
 
 class CustomCollater(Collater):
@@ -515,17 +516,15 @@ def incidence_matrix(cc, rank, to_rank):
     return matrix
 
 
-def create_combinatorial_complex(
-    cell_dict: dict[int, Iterable[frozenset[int]]]
-) -> CombinatorialComplex:
+def create_combinatorial_complex(cell_dict: dict[int, Iterable[Cell]]) -> CombinatorialComplex:
     """
     Create a combinatorial complex from a dictionary of cells.
 
     Parameters
     ----------
-    cell_dict : dict[int, Iterable[frozenset[int]]]
+    cell_dict : dict[int, Iterable[Cell]]
         A dictionary of cells, where the keys are the ranks of the cells and the values are
-        iterables of cell indices.
+        iterables of tuples of cell indices and corresponding feature vectors.
 
     Returns
     -------
@@ -546,7 +545,7 @@ def create_combinatorial_complex(
     adds higher-order cells, then removes the artificially created 0-rank cells, and finally adds
     the organic 0-rank cells.
 
-    The type of dictionary values is chosen to be Iterable[frozenset[int]] to allow for flexibility.
+    The type of dictionary values is chosen to be Iterable[Cell] to allow for flexibility.
     In particular, this choice permits the dictionary values to be themselves dictionaries, in which
     case only their keys are used to create the complex. This is useful for creating a complex from
     the keys of a dictionary of cells and their lifter contributions, for example.
@@ -555,19 +554,14 @@ def create_combinatorial_complex(
     if not isinstance(cell_dict, dict):
         raise TypeError("Input cell_dict must be a dictionary.")
 
-    for rank, cells in cell_dict.items():
-        if (not isinstance(cells, Iterable)) or any(
-            not isinstance(cell, frozenset) for cell in cells
-        ):
-            raise TypeError(f"Cells of rank {rank} must be Iterable[frozenset[int]].")
-
     # Create an instance of the combinatorial complex
     cc = CombinatorialComplex()
 
     # First add higher-order cells
     for rank, cells in cell_dict.items():
         if rank > 0:
-            cc.add_cells_from(cells, ranks=rank)
+            node_idc = [cell[0] for cell in cells.keys()]
+            cc.add_cells_from(node_idc, ranks=rank)
 
     # Then remove the artificially created 0-rank cells
     zero_rank_cells = [cell for cell in cc.cells if len(cell) == 1]
@@ -575,20 +569,21 @@ def create_combinatorial_complex(
 
     # Finally add the organic 0-rank cells
     if 0 in cell_dict.keys():
-        cc.add_cells_from(cell_dict[0], ranks=0)
+        node_idc = [cell[0] for cell in cell_dict[0].keys()]
+        cc.add_cells_from(node_idc, ranks=0)
 
     return cc
 
 
 def extract_cell_and_membership_data(
-    input_dict: dict[int, dict[frozenset[int], list[bool]]]
+    input_dict: dict[int, dict[Cell, list[bool]]]
 ) -> tuple[dict[int, list[list[int]]], dict[int, list[list[bool]]]]:
     """
     Extract cell and membership data from the input dictionary.
 
     Parameters
     ----------
-    input_dict : dict[int, dict[frozenset[int], list[bool]]]
+    input_dict : dict[int, dict[Cell, list[bool]]]
         The input dictionary containing cell and membership data.
 
     Returns
@@ -601,7 +596,7 @@ def extract_cell_and_membership_data(
     """
     x_dict, mem_dict = {}, {}
     for rank, cell_lifter_map in input_dict.items():
-        x_dict[rank] = [sorted(cell) for cell in cell_lifter_map.keys()]
+        x_dict[rank] = [sorted(cell[0]) for cell in cell_lifter_map.keys()]
         mem_dict[rank] = list(cell_lifter_map.values())
     return x_dict, mem_dict
 

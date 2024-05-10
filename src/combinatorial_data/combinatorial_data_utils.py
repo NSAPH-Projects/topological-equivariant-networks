@@ -83,31 +83,6 @@ class CustomCollater(Collater):
         return batch
 
 
-class LegacyCombinatorialComplexData(Data):
-    """
-    Abstract combinatorial complex class that generalises the pytorch geometric graph (Data).
-    Adjacency tensors are stacked in the same fashion as the standard edge_index.
-    """
-
-    def __inc__(self, key: str, value: any, *args, **kwargs) -> any:
-        num_nodes = getattr(self, "x_0").size(0)
-        if "adj" in key:
-            i, j = key[4], key[6]
-            return torch.tensor(
-                [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
-            )
-        elif "inv" in key:
-            return num_nodes
-        else:
-            return super().__inc__(key, value, *args, **kwargs)
-
-    def __cat_dim__(self, key: str, value: any, *args, **kwargs) -> any:
-        if "adj" in key or "inv" in key:
-            return 1
-        else:
-            return 0
-
-
 class CombinatorialComplexData(Data):
     """
     A subclass of PyTorch Geometric's Data class designed for representing combinatorial complexes.

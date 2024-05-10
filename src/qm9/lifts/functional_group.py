@@ -59,6 +59,7 @@ def functional_group_lift(graph: Data) -> set[Cell]:
         }
         # Add 0-dimensional feature vectors to each functional group
         functional_groups = {(fg, ()) for fg in functional_groups}
+        return functional_groups
     except AttributeError:
         return set()
 

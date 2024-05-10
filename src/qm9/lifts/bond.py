@@ -1,4 +1,4 @@
-from torch.geometric.data import Data
+from torch_geometric.data import Data
 
 from .common import Cell
 

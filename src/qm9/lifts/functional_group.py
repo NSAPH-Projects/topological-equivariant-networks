@@ -1,7 +1,7 @@
 from collections import namedtuple
 
 from rdkit import Chem
-from torch.geometric.data import Data
+from torch_geometric.data import Data
 
 from .common import Cell
 

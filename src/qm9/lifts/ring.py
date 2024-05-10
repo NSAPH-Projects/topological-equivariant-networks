@@ -1,6 +1,6 @@
 import networkx as nx
 import torch_geometric.utils as pyg_utils
-from torch_geometric import Data
+from torch.geometric.data import Data
 
 from .common import Cell
 

@@ -1,7 +1,7 @@
 from itertools import combinations
 
 import gudhi
-from torch_geometric import Data
+from torch.geometric.data import Data
 
 from .common import Cell
 

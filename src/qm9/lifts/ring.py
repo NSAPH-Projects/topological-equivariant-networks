@@ -53,7 +53,8 @@ def ring_lift(graph: Data) -> set[Cell]:
             minimal_cycles.add(cycle)
 
     # Add feature vectors
-    minimal_cycles = {(cycle, ()) for cycle in minimal_cycles}
+    dummy_features = tuple(range(NUM_FEATURES))
+    minimal_cycles = {(cycle, dummy_features) for cycle in minimal_cycles}
     return minimal_cycles
 
 

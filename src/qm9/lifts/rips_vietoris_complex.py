@@ -57,7 +57,8 @@ def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[C
     simplexes.update(frozenset(simplex) for simplex, _ in simplex_tree.get_simplices())
 
     # add 0-dimensional feature vectors
-    simplexes = {(simplex, ()) for simplex in simplexes}
+    dummy_features = tuple(range(NUM_FEATURES))
+    simplexes = {(simplex, dummy_features) for simplex in simplexes}
 
     return simplexes
 

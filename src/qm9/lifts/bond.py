@@ -49,8 +49,8 @@ def edge_lift(graph: Data) -> set[Cell]:
         if len(edge) == 2
         if edge[0] != edge[1]
     }
-
-    return {(edge, ()) for edge in edges}
+    dummy_features = tuple(range(NUM_FEATURES))
+    return {(edge, dummy_features) for edge in edges}
 
 
 edge_lift.num_features = NUM_FEATURES

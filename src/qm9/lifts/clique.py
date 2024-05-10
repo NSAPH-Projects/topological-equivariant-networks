@@ -43,7 +43,8 @@ def clique_lift(graph_data) -> set[Cell]:
             simplices.update(frozenset(subset) for subset in combinations(clique, i))
 
     # Add 0-dimensional feature vectors to each simplex
-    simplices = {(simplex, ()) for simplex in simplices}
+    dummy_features = tuple(range(NUM_FEATURES))
+    simplices = {(simplex, dummy_features) for simplex in simplices}
     return simplices
 
 

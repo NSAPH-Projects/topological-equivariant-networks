@@ -58,7 +58,8 @@ def functional_group_lift(graph: Data) -> set[Cell]:
             frozenset(fg.atomIds) for fg in functional_groups if len(fg.atomIds) >= 3
         }
         # Add 0-dimensional feature vectors to each functional group
-        functional_groups = {(fg, ()) for fg in functional_groups}
+        dummy_features = tuple(range(NUM_FEATURES))
+        functional_groups = {(fg, dummy_features) for fg in functional_groups}
         return functional_groups
     except AttributeError:
         return set()

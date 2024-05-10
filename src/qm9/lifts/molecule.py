@@ -41,7 +41,8 @@ def supercell_lift(graph: Data) -> set[Cell]:
     if num_nodes < 2:
         return set()
     else:
-        return {(frozenset([node for node in range(num_nodes)]), ())}
+        dummy_features = tuple(range(NUM_FEATURES))
+        return {(frozenset([node for node in range(num_nodes)]), dummy_features)}
 
 
 supercell_lift.num_features = NUM_FEATURES

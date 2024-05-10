@@ -2,6 +2,8 @@ from torch_geometric.data import Data
 
 from .common import Cell
 
+NUM_FEATURES = 0
+
 
 def supercell_lift(graph: Data) -> set[Cell]:
     """
@@ -26,6 +28,11 @@ def supercell_lift(graph: Data) -> set[Cell]:
     ------
     ValueError
         If the input graph does not contain a feature matrix 'x'.
+
+    Attributes
+    ----------
+    num_features : int
+        The number of features for each node.
     """
 
     if (not hasattr(graph, "x")) or (graph.x is None):
@@ -35,3 +42,6 @@ def supercell_lift(graph: Data) -> set[Cell]:
         return set()
     else:
         return {(frozenset([node for node in range(num_nodes)]), ())}
+
+
+supercell_lift.num_features = NUM_FEATURES

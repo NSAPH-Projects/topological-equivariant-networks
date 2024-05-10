@@ -2,6 +2,8 @@ from torch_geometric.data import Data
 
 from .common import Cell
 
+NUM_FEATURES = 8
+
 
 def edge_lift(graph: Data) -> set[Cell]:
     """
@@ -30,6 +32,11 @@ def edge_lift(graph: Data) -> set[Cell]:
     -----
     The function directly works with the PyTorch Geometric Data object. Edges are inferred from the
     edge_index attribute.
+
+    Attributes
+    ----------
+    num_features : int
+        The number of features for each edge/bond.
     """
 
     if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
@@ -44,3 +51,6 @@ def edge_lift(graph: Data) -> set[Cell]:
     }
 
     return {(edge, ()) for edge in edges}
+
+
+edge_lift.num_features = NUM_FEATURES

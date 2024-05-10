@@ -5,6 +5,8 @@ from torch_geometric.data import Data
 
 from .common import Cell
 
+NUM_FEATURES = 0
+
 
 def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[Cell]:
     """
@@ -26,6 +28,11 @@ def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[C
     set[Cell]
         A set of Cells, where each Cell represents a simplex in the Rips complex. Each simplex is a
         frozenset of vertex indices accompanied by a 0-dimensional feature vector.
+
+    Attributes
+    ----------
+    num_features : int
+        The number of features for each node.
 
     Notes
     -----
@@ -53,3 +60,6 @@ def rips_lift(graph: Data, dim: int, dis: float, fc_nodes: bool = True) -> set[C
     simplexes = {(simplex, ()) for simplex in simplexes}
 
     return simplexes
+
+
+rips_lift.num_features = NUM_FEATURES

@@ -4,6 +4,8 @@ from torch_geometric.data import Data
 
 from .common import Cell
 
+NUM_FEATURES = 4
+
 
 def ring_lift(graph: Data) -> set[Cell]:
     """
@@ -28,6 +30,11 @@ def ring_lift(graph: Data) -> set[Cell]:
     ------
     ValueError
         If the input graph does not contain an edge index 'edge_index'.
+
+    Attributes
+    ----------
+    num_features : int
+        The number of features for each node.
     """
 
     if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
@@ -48,3 +55,6 @@ def ring_lift(graph: Data) -> set[Cell]:
     # Add feature vectors
     minimal_cycles = {(cycle, ()) for cycle in minimal_cycles}
     return minimal_cycles
+
+
+ring_lift.num_features = NUM_FEATURES

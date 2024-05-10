@@ -5,6 +5,8 @@ from torch_geometric.data import Data
 
 from .common import Cell
 
+NUM_FEATURES = 6
+
 
 def functional_group_lift(graph: Data) -> set[Cell]:
     """
@@ -33,6 +35,11 @@ def functional_group_lift(graph: Data) -> set[Cell]:
         If the input `graph` does not have a valid SMILES attribute or if the SMILES string cannot
         be converted into an RDKit molecule.
 
+    Attributes
+    ----------
+    num_features : int
+        The number of features for each functional group.
+
     Examples
     --------
     >>> graph = Data(smiles='CC(=O)OC1=CC=CC=C1C(=O)O')
@@ -55,6 +62,8 @@ def functional_group_lift(graph: Data) -> set[Cell]:
     except AttributeError:
         return set()
 
+
+functional_group_lift.num_features = NUM_FEATURES
 
 # The code below was taken from https://github.com/rdkit/rdkit/blob/master/Contrib/IFG/ifg.py
 # and serves to identify functional groups within a molecule.

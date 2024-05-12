@@ -1,5 +1,7 @@
 from argparse import Namespace
+from collections import defaultdict
 from functools import partial
+from typing import DefaultDict
 
 from torch_geometric.data import Data
 
@@ -29,6 +31,7 @@ class Lifter:
         # TODO: check inputs: a lift with hetero features may not be used with cardinality
 
         self.lifters = get_lifters(args, lifter_registry)
+        self.num_features_dict = get_num_features_dict(self.lifters)
         self.dim = args.dim
 
     def lift(self, graph: Data) -> dict[frozenset[int], list[list[float] | None]]:
@@ -226,6 +229,30 @@ def get_lifters(
                 "cardinality-based rank cannot be combined with heterogeneous features!"
             )
     return lifters
+
+
+def get_num_features_dict(lifters: list[tuple[callable, int | str]]) -> DefaultDict[int, int]:
+    """
+    Calculate the number of features for each rank in the given list of lifters.
+
+    Parameters
+    ----------
+    lifters : list[tuple[callable, int | str]]
+        A list of lifters, where each lifter is represented as a tuple containing a callable lifter
+        function and a ranking logic (either an integer or a string).
+
+    Returns
+    -------
+    DefaultDict[int, int]
+        A dictionary where the keys represent the ranking logic and the values represent the
+        corresponding number of features. The default return value is 0.
+
+    """
+    num_features_dict = defaultdict(int)
+    for lifter_fct, ranking_logic in lifters:
+        if isinstance(ranking_logic, int):
+            num_features_dict[ranking_logic] += lifter_fct.num_features
+    return num_features_dict
 
 
 def parse_ranking_logic(lifter_str: str) -> str | int:

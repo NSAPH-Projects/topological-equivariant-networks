@@ -212,7 +212,7 @@ class CombinatorialComplexData(Data):
             # cast the x_i
             if "x_" in key:
                 if len(value) == 0:
-                    rank = int(key.split("_")[1])
+                    rank = key.split("_")[1]
                     num_features = data["num_features_dict"][rank]
                     attr_value = torch.empty((0, num_features), dtype=self.attribute_dtype["x_"])
                 else:

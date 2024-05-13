@@ -197,11 +197,10 @@ class CombinatorialComplexData(Data):
 
         Notes
         -----
-        This method currently only supports QM9 with no heterogeneous features and is not safe.
-        It needs the following information to support heterogeneous features and to be safe:
-
-        - For each rank, the number of features per node (to address the case of no rank-2 cells).
-        - Relevant dataset arguments to determine the required keys in `data`.
+        In addition to the attributes listed under CombinatorialComplexData, this method also
+        assumes that the input dictionary contains a dictionary under the key "num_features_dict".
+        This dictionary should hold the number of heterogeneous features for each rank, and aids
+        to initialize tensors with the correct size.
 
         """
 

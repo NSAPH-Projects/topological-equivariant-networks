@@ -4,7 +4,7 @@ import os
 import pickle
 import random
 from argparse import Namespace
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import torch
 from rdkit import Chem
@@ -386,29 +386,6 @@ def extract_ring_features(mol: Chem.Mol) -> Dict[str, any]:
         features["rings"].append(ring_details)
 
     return features
-
-
-def molecule_from_data(data: any) -> Optional[Chem.Mol]:
-    """
-    Create an RDKit molecule object from data containing a SMILES string.
-
-    Parameters
-    ----------
-    data : any
-        Data object containing a SMILES string.
-
-    Returns
-    -------
-    Optional[Chem.Mol]
-        An RDKit molecule object or None if conversion fails.
-    """
-    if hasattr(data, "smiles") and data.smiles:
-        mol = Chem.MolFromSmiles(data.smiles)
-        if mol is not None:
-            mol = Chem.AddHs(mol)
-            AllChem.EmbedMolecule(mol, AllChem.ETKDG())
-            return mol
-    return None
 
 
 def featurize_dataset(dataset: List[any]) -> Tuple[List[any], List[any], List[any]]:

@@ -291,33 +291,6 @@ def generate_dataset_dir_name(args, relevant_args) -> str:
     return short_hash
 
 
-def extract_bond_features(mol: Chem.Mol) -> List[Dict[str, any]]:
-    """
-    Extract bond features from a molecule.
-
-    Parameters:
-        mol (Chem.Mol): RDKit molecule object.
-
-    Returns:
-        List[Dict[str, any]]: A list of dictionaries containing bond features such as bond type,
-                              whether the bond is conjugated, if it's in a ring, and its stereochemistry.
-    """
-    mol = Chem.AddHs(mol)
-    AllChem.EmbedMolecule(mol, AllChem.ETKDG())
-
-    bond_features = []
-    for bond in mol.GetBonds():
-        features = {
-            "bond_type": str(bond.GetBondType()),
-            "is_conjugated": bond.GetIsConjugated(),
-            "is_in_ring": bond.IsInRing(),
-            "stereo": str(bond.GetStereo()),
-        }
-        bond_features.append(features)
-
-    return bond_features
-
-
 def extract_fg_features(mol: Chem.Mol) -> Dict[str, int]:
     """
     Extract counts of various functional groups from a molecule.

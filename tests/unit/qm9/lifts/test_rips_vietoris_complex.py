@@ -1,3 +1,5 @@
+from argparse import Namespace
+
 import pytest
 import torch
 from torch_geometric.data import Data
@@ -6,8 +8,9 @@ from torch_geometric.datasets import QM9
 from combinatorial_data.combinatorial_data_utils import (
     CombinatorialComplexTransform as NewTransform,
 )
-from combinatorial_data.ranker import get_ranker
+from combinatorial_data.lifter import Lifter
 from legacy.simplicial_data.rips_lift import rips_lift as old_rips_lift
+from qm9.lifts.registry import lifter_registry
 from qm9.lifts.rips_vietoris_complex import rips_lift
 from utils import get_adjacency_types, merge_adjacencies
 
@@ -40,15 +43,23 @@ def test_rips_transform(dim: int, dis: float):
             output = rips_lift(graph, dim=dim, dis=dis)
             return {t[0] for t in output}
 
-        ranker = get_ranker(["rips"])
         adjacencies = get_adjacency_types(
             max_dim=dim + 1, connectivity="self_and_next", neighbor_types=["+1"], visible_dims=None
         )
         processed_adjacencies = merge_adjacencies(adjacencies)
 
-        simplicial_transform = NewTransform(
+        """simplicial_transform = NewTransform(
             lifters=fixed_rips_lift,
             ranker=ranker,
+            dim=dim + 1,
+            adjacencies=adjacencies,
+            processed_adjacencies=processed_adjacencies,
+            merge_neighbors=True,
+        )"""
+        args = Namespace(lifters=["rips:c"], dim=dim, dis=dis)
+        lifter = Lifter(args, lifter_registry)
+        simplicial_transform = NewTransform(
+            lifter=lifter,
             dim=dim + 1,
             adjacencies=adjacencies,
             processed_adjacencies=processed_adjacencies,
@@ -58,9 +69,9 @@ def test_rips_transform(dim: int, dis: float):
 
         # Check if x_dict are the same
         for i in range(dim + 1):
-            if not (torch.numel(old_x_dict[i]) == 0 and torch.numel(cc[f"x_{i}"]) == 0):
+            if not (torch.numel(old_x_dict[i]) == 0 and torch.numel(cc[f"cell_{i}"]) == 0):
                 assert torch.equal(
-                    old_x_dict[i], cc[f"x_{i}"]
+                    old_x_dict[i], cc[f"cell_{i}"]
                 ), f"old_x_dict[{i}] != new_x_dict[{i}]"
 
         # Check if adjs and invs are the same

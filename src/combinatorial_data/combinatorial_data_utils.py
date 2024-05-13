@@ -219,6 +219,7 @@ class CombinatorialComplexData(Data):
                     attr_value = torch.empty((0, num_features), dtype=self.attribute_dtype["x_"])
                 else:
                     attr_value = torch.tensor(value, dtype=self.attribute_dtype["x_"])
+                setattr(self, key, attr_value)
 
             # cast the cell_i
             elif "cell_" in key:

@@ -19,9 +19,14 @@ def molecule_from_data(data: any) -> Optional[Chem.Mol]:
         An RDKit molecule object or None if conversion fails.
     """
     if hasattr(data, "smiles") and data.smiles:
-        mol = Chem.MolFromSmiles(data.smiles)
-        if mol is not None:
+        try:
+            mol = Chem.MolFromSmiles(data.smiles, sanitize=True)
+            if mol is None:
+                raise ValueError("Molecule could not be created from SMILES string.")
             mol = Chem.AddHs(mol)
             AllChem.EmbedMolecule(mol, AllChem.ETKDG())
-            return mol
+        except ValueError:
+            mol = Chem.MolFromSmiles(data.smiles, sanitize=False)
+
+        return mol
     return None

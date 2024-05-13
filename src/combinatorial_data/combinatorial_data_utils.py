@@ -118,7 +118,7 @@ class CombinatorialComplexData(Data):
 
     attribute_dtype = MappingProxyType(
         {
-            "x_": torch.float64,
+            "x_": torch.float32,
             "cell_": torch.float64,
             "mem_": torch.bool,
             "adj_": torch.int64,

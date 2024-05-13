@@ -124,7 +124,13 @@ if __name__ == "__main__":
         default="identity:c functional_group:2 ring:2",
         required=True,
     )
-    parser.add_argument("--initial_features", type=str, default="node", help="features to use")
+    parser.add_argument(
+        "--initial_features",
+        nargs="+",
+        type=str,
+        default=["node"],
+        help="features to use",
+    )
     parser.add_argument(
         "--connectivity",
         type=str,
@@ -194,6 +200,6 @@ if __name__ == "__main__":
         parsed_args.processed_adjacencies = parsed_args.adjacencies
 
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    parsed_args.initial_features = sorted(parsed_args.initial_features)
     set_seed(parsed_args.seed)
     main(parsed_args)

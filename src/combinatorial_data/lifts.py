@@ -169,6 +169,11 @@ def node_lift(graph: Data) -> set[frozenset[int]]:
     return nodes
 
 
+################################################################
+# SYNTHETIC TASKS
+################################################################
+
+
 def path_lift(graph: Data, max_path_length: int) -> set[frozenset[int]]:
     """
     Identify all paths in a graph with lengths up to max_path_length, optimized for efficiency.
@@ -215,6 +220,151 @@ def path_lift(graph: Data, max_path_length: int) -> set[frozenset[int]]:
 
     return paths
 
+def synth1_lift(graph: Data, max_path_length: int) -> set[frozenset[int]]:
+    """
+    Identify one single rank-1 cell that includes all nodes in the graph.
+
+    Parameters
+    ----------
+    graph : torch.Tensor
+        The input graph represented as a PyTorch tensor.
+    max_path_length : int
+        The maximum length of the paths to be found.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A set of paths, each path is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
+    """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+    
+    single_cell = set()
+    num_nodes = graph.x.shape[0]
+
+    single_cell.add(frozenset(list(range(num_nodes))))
+    return single_cell
+
+def synth2_lift(graph: Data, max_path_length: int) -> set[frozenset[int]]:
+    """
+    Identify two  rank-1 cells with different cardinality and non-overlapping.
+    TODO: currently we have the hard-coded version (two pre-specified paths for the 6-node chains).  
+
+
+    Parameters
+    ----------
+    graph : torch.Tensor
+        The input graph represented as a PyTorch tensor.
+    max_path_length : int
+        The maximum length of the paths to be found.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A set of paths, each path is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
+    """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+    
+    two_cells = set()
+    two_cells.add(frozenset([0,1,2,3]))
+    two_cells.add(frozenset([4,5]))
+    return two_cells
+
+def synth3_lift(graph: Data, max_path_length: int) -> set[frozenset[int]]:
+    """
+    Identify two  rank-1 cells with overlapping node subsets.
+    TODO: currently we have the hard-coded version (two pre-specified paths for the 6-node chains).  
+
+
+    Parameters
+    ----------
+    graph : torch.Tensor
+        The input graph represented as a PyTorch tensor.
+    max_path_length : int
+        The maximum length of the paths to be found.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A set of paths, each path is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
+    """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+    
+    two_cells = set()
+    two_cells.add(frozenset([0,1,2,3]))
+    two_cells.add(frozenset([2,3,4,5]))
+    return two_cells
+
+
+def path_lift(graph: Data, max_path_length: int) -> set[frozenset[int]]:
+    """
+    Identify all paths in a graph with lengths up to max_path_length, optimized for efficiency.
+
+    This function finds all paths of lengths ranging from 2 to max_path_length in a given graph,
+    with optimizations to improve time and memory performance.
+
+    Parameters
+    ----------
+    graph : torch.Tensor
+        The input graph represented as a PyTorch tensor.
+    max_path_length : int
+        The maximum length of the paths to be found.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A set of paths, each path is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
+    """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+
+    # Convert to networkx graph
+    G = pyg_utils.to_networkx(graph, to_undirected=True)
+    paths = set()
+    for source_node in G.nodes():
+        paths.add(frozenset([source_node]))
+        # Use deque for more efficient popping from left
+        queue = deque([(source_node, [source_node])])
+        while queue:
+            current_node, path = queue.popleft()
+            if 1 < len(path) <= max_path_length:
+                paths.add(frozenset(path))
+            if len(path) < max_path_length:
+                for neighbor in G.neighbors(current_node):
+                    if neighbor not in path:
+                        queue.append((neighbor, path + [neighbor]))
+
+    print(graph)
+    print(G)
+    print(paths)
+    asds
+    return paths
 
 def supercell_lift(graph: Data) -> set[frozenset[int]]:
     """
@@ -349,6 +499,10 @@ lifter_registry = {
     "rips": rips_lift,
     "supercell": supercell_lift,
     "path": path_lift,
+    "synth1": synth1_lift,
+    "synth2": synth2_lift,
+    "synth3": synth3_lift,
+
 }
 
 
@@ -378,6 +532,13 @@ def get_lifters(args) -> list[callable]:
             lifters.append(partial(rips_lift, dim=args.dim, dis=args.dis))
         elif lifter == "path":
             lifters.append(partial(path_lift, max_path_length=args.max_path_length))
+        elif lifter == "synth1":
+            lifters.append(partial(synth1_lift, max_path_length=args.max_path_length))
+        elif lifter == "synth2":
+            lifters.append(partial(synth2_lift, max_path_length=args.max_path_length))
+        elif lifter == "synth3":
+            lifters.append(partial(synth3_lift, max_path_length=args.max_path_length))
+
         else:
             lifters.append(lifter_registry[lifter])
     return lifters

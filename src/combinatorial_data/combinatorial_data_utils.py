@@ -43,7 +43,7 @@ class CustomCollater(Collater):
         """
         Pre-collate logic to pad tensors within each sample based on naming patterns.
 
-        In particular, tensors that are named f'x_{i}' for some integer i are padded to have the
+        In particular, tensors that are named f'cell_{i}' for some integer i are padded to have the
         same number of columns, and tensors that are named f'inv_{i}_{j}' for some integers i, j are
         padded to have the same number of rows. The variable number of columns/rows can arise if
         cells with the same rank may consist of a variable number of nodes. The padding value is -1
@@ -65,7 +65,7 @@ class CustomCollater(Collater):
 
         for data in batch:
             for attr_name in data.keys():
-                if re.match(r"x_\d+", attr_name):
+                if re.match(r"cell_\d+", attr_name):
                     tensor = getattr(data, attr_name)
                     max_cols[attr_name] = max(max_cols.get(attr_name, 0), tensor.size(1))
                 elif re.match(r"inv_\d+_\d+", attr_name):
@@ -103,6 +103,8 @@ class CombinatorialComplexData(Data):
     pos : torch.FloatTensor
         Positions of rank 0 cells (atoms). Expected to have shape (num_atoms, 3).
     x_i : torch.FloatTensor
+        Features of cells of rank i, where i is a non-negative integer.
+    cell_i : torch.FloatTensor
         Node indices associated with cells of rank i, where i is a non-negative integer.
     adj_i_j : torch.LongTensor
         Adjacency tensors representing the relationships (edges) between cells of rank i and j,
@@ -140,19 +142,19 @@ class CombinatorialComplexData(Data):
         -------
         any
             The increment value for the attribute `key`. Returns a tensor for `adj_i_j` attributes,
-            the number of nodes for `inv_i_j` and `x_i` attributes, or calls the superclass's
+            the number of nodes for `inv_i_j` and `cell_i` attributes, or calls the superclass's
             `__inc__` method for other attributes.
         """
-        num_nodes = getattr(self, "x_0").size(0)
+        num_nodes = getattr(self, "cell_0").size(0)
         # The adj_i_j attribute holds cell indices, increment each dim by the number of cells of
         # corresponding rank
         if re.match(r"adj_(\d+_\d+|\d+_\d+_\d+)", key):
             i, j = key.split("_")[1:3]
             return torch.tensor(
-                [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
+                [[getattr(self, f"cell_{i}").size(0)], [getattr(self, f"cell_{j}").size(0)]]
             )
-        # The inv_i_j and x_i attributes hold node indices, they should be incremented
-        elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"x_\d+", key):
+        # The inv_i_j and cell_i attributes hold node indices, they should be incremented
+        elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"cell_\d+", key):
             return num_nodes
         else:
             return super().__inc__(key, value, *args, **kwargs)
@@ -330,7 +332,8 @@ class CombinatorialComplexTransform(BaseTransform):
         - 'x': features of rank 0 cells (atoms)
         - 'pos': positions of rank 0 cells (atoms)
         - 'y': target values
-        - 'x_i': cell indices for each rank i
+        - 'x_i': feature vectors for each rank i
+        - 'cell_i': cell indices for each rank i
         - 'mem_i': cell memberships for each rank i
         - 'adj_adj_type': adjacency matrices for each adjacency type
         - 'inv_adj_type': nodes used for computing geometric features for each adjacency type
@@ -381,8 +384,8 @@ class CombinatorialComplexTransform(BaseTransform):
             num_edges = len(neighbors[0])
             for edge_idx in range(num_edges):
                 idx_a, idx_b = neighbors[0][edge_idx], neighbors[1][edge_idx]
-                cell_a = x_dict[i][idx_a]
-                cell_b = x_dict[j][idx_b]
+                cell_a = cell_dict[i][idx_a]
+                cell_b = cell_dict[j][idx_b]
                 shared = [node for node in cell_a if node in cell_b]
                 only_in_a = [node for node in cell_a if node not in shared]
                 only_in_b = [node for node in cell_b if node not in shared]

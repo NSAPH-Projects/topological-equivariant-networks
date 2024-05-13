@@ -196,7 +196,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     index = targets.index(target_map[args.target_name])
 
     # Create DataLoader kwargs
-    follow_batch = [f"x_{i}" for i in range(args.dim + 1)] + ["x"]
+    follow_batch = [f"cell_{i}" for i in range(args.dim + 1)] + ["x"]
     dataloader_kwargs = {
         "batch_size": args.batch_size,
         "num_workers": args.num_workers,

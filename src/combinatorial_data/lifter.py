@@ -215,6 +215,7 @@ def get_lifters(
         method_str = parts[0]
         if method_str == "rips":
             lifter = partial(lifter_registry[method_str], dim=args.dim, dis=args.dis)
+            lifter.num_features = lifter_registry[method_str].num_features
         else:
             lifter = lifter_registry[method_str]
 

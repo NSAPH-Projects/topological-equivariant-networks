@@ -34,7 +34,7 @@ class Lifter:
         self.num_features_dict = get_num_features_dict(self.lifters)
         self.dim = args.dim
 
-    def lift(self, graph: Data) -> dict[frozenset[int], list[list[float] | None]]:
+    def lift(self, graph: Data) -> dict[int, dict[Cell, list[bool]]]:
         """
         Apply lifters to a data point, process their outputs, and track contributions.
 

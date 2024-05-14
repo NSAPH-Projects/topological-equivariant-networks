@@ -24,6 +24,7 @@ class TEN(nn.Module):
         initial_features: str,
         visible_dims: list[int] | None,
         task_type: str,
+        equivariant: bool = False,
         compute_invariants: callable = compute_invariants,
     ) -> None:
         super().__init__()
@@ -34,6 +35,7 @@ class TEN(nn.Module):
         self.max_dim = max_dim
         self.adjacencies = adjacencies
         self.task_type = task_type
+        self.equivariant = equivariant
         if visible_dims is not None:
             self.visible_dims = visible_dims
         else:
@@ -109,11 +111,20 @@ class TEN(nn.Module):
 
         # embed features and E(n) invariant information
         x = {dim: self.feature_embedding(feature) for dim, feature in x.items()}
-        inv = self.compute_invariants(x_ind, graph.pos, adj, inv_ind, device)
+        
+        if not self.equivariant:
+            inv = self.compute_invariants(x_ind, graph.pos, adj, inv_ind, device)
+        else:
+            pos = graph.pos
 
         # message passing
+
         for layer in self.layers:
-            x = layer(x, adj, inv)
+            if not self.equivariant:
+                x, _ = layer(x, adj, graph.pos, inv)
+            else:
+                inv = self.compute_invariants(x_ind, pos, adj, inv_ind, device)
+                x, pos = layer(x, adj, pos, inv)
 
         # read out
         x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}

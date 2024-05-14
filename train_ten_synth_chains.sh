@@ -10,28 +10,29 @@
 # Scenario 1 on Slack
 
 # Load modules
-module load ncf/1.0.0-fasrc01
-module load miniconda3/py310_22.11.1-1-linux_x64-ncf
-module load cuda/12.2.0-fasrc01
+# module load ncf/1.0.0-fasrc01
+# module load miniconda3/py310_22.11.1-1-linux_x64-ncf
+# module load cuda/12.2.0-fasrc01
 
-# Activate conda env
-source ~/.bashrc
-conda activate ten
+# # Activate conda env
+# source ~/.bashrc
+# conda activate ten
 
 # Train EGNN
-python src/main.py --dataset "synthetic_chains" \
-                   --task_type "classification" \
-                   --lifters "path:c" \
-                   --max_path_length 3 \
-                   --connectivity "self" \
-                   --visible_dims 0 1 2 3 \
-                   --neighbor_types "-1" \
-                   --epochs 1000 \
-                   --batch_size 2 \
-                   --weight_decay 1e-16 \
-                   --lr 5e-4 \
-                   --num_layers 1 \
-                   --num_hidden 128 \
-                   --model_name "ten" \
-                   --dim 3 \
-                   --splits "egnn" \
+python src/main.py \
+    --dataset synthetic_chains \
+    --task_type classification \
+    --lifters "atom:0" "synth1:1" \
+    --chain_length 4 \
+    --max_path_length 1 \
+    --visible_dims 0 1 \
+    --dim 1 \
+    --num_layers 1 \
+    --connectivity "self" \
+    --neighbor_types +1 \
+    --epochs 200 \
+    --batch_size 2 \
+    --weight_decay 1e-16 \
+    --lr 5e-4 \
+    --num_hidden 128 \
+    --model_name ten

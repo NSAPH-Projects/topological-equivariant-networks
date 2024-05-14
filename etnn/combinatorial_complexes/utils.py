@@ -13,10 +13,10 @@ from torch_geometric.loader.dataloader import Collater
 from torch_geometric.transforms import BaseTransform
 
 from etnn.combinatorial_complexes.lifter import Lifter
-from etnn.qm9.lifts.common import Cell
 
 
-class CustomCollater(Collater):
+
+class CombinatorialComplexCollater(Collater):
 
     def __call__(self, batch: list[Data]) -> Batch:
         """
@@ -242,11 +242,6 @@ class CombinatorialComplexData(Data):
                 if len(value) == 0:
                     attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["cell_"])
                 else:
-                    # attr_value = torch.tensor(
-                    #     pad_lists_to_same_length(value),
-                    #     dtype=cls.attribute_dtype["cell_"],
-                    # )
-                    # use nested tensor
                     attr_value = nt.nested_tensor(value, dtype=cls.attribute_dtype["cell_"])
                     attr_value = nt.to_padded_tensor(attr_value, padding=torch.nan)
 
@@ -565,7 +560,7 @@ def incidence_matrix(cc, rank, to_rank):
 
 
 def create_combinatorial_complex(
-    cell_dict: dict[int, Iterable[Cell]]
+    cell_dict: dict[int, Iterable["Cell"]]
 ) -> CombinatorialComplex:
     """
     Create a combinatorial complex from a dictionary of cells.
@@ -626,7 +621,7 @@ def create_combinatorial_complex(
 
 
 def extract_cell_and_membership_data(
-    input_dict: dict[int, dict[Cell, list[bool]]]
+    input_dict: dict[int, dict["Cell", list[bool]]]
 ) -> tuple[dict[int, list[list[int]]], dict[int, list[list[bool]]]]:
     """
     Extract cell and membership data from the input dictionary.

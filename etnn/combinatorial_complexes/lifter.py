@@ -1,14 +1,17 @@
 from argparse import Namespace
+from collections import defaultdict
 from functools import partial
+from typing import DefaultDict
 
 from torch_geometric.data import Data
 
-from etnn.qm9.lifts.common import Cell
 
 
 class Lifter:
 
-    def __init__(self, args: Namespace, lifter_registry: dict[str, callable]) -> "Lifter":
+    def __init__(
+        self, args: Namespace, lifter_registry: dict[str, callable]
+    ) -> "Lifter":
         """
         Initialize the Lifter object.
 
@@ -29,9 +32,10 @@ class Lifter:
         # TODO: check inputs: a lift with hetero features may not be used with cardinality
 
         self.lifters = get_lifters(args, lifter_registry)
+        self.num_features_dict = get_num_features_dict(self.lifters)
         self.dim = args.dim
 
-    def lift(self, graph: Data) -> dict[frozenset[int], list[list[float] | None]]:
+    def lift(self, graph: Data) -> dict[int, dict["Cell", list[bool]]]:
         """
         Apply lifters to a data point, process their outputs, and track contributions.
 
@@ -88,7 +92,7 @@ class Lifter:
 
     def aggregate_lifter_outputs(
         self, node_idc: frozenset[int], feature_vectors: list[list[float] | None]
-    ) -> tuple[Cell, int]:
+    ) -> tuple["Cell", int]:
         """
         Aggregate the outputs of the lifters based on the given node IDs and feature vectors.
 
@@ -127,7 +131,7 @@ class Lifter:
         for i, (lifter, lifter_rank) in enumerate(self.lifters):
             if lifter_rank == rank:
                 if feature_vectors[i] is None:
-                    lifter_fts = [0] * lifter.num_features
+                    lifter_fts = [0.0] * lifter.num_features
                 else:
                     lifter_fts = feature_vectors[i]
                 combined_feature_vec.extend(lifter_fts)
@@ -167,7 +171,9 @@ class Lifter:
         which is not allowed in TopoNetX.
         """
         if len(memberships) != len(self.lifters):
-            raise ValueError("The length of `memberships` does not match the number of lifters.")
+            raise ValueError(
+                "The length of `memberships` does not match the number of lifters."
+            )
 
         ranks = []
         for idx, is_member in enumerate(memberships):
@@ -212,6 +218,7 @@ def get_lifters(
         method_str = parts[0]
         if method_str == "rips":
             lifter = partial(lifter_registry[method_str], dim=args.dim, dis=args.dis)
+            lifter.num_features = lifter_registry[method_str].num_features
         else:
             lifter = lifter_registry[method_str]
 
@@ -226,6 +233,32 @@ def get_lifters(
                 "cardinality-based rank cannot be combined with heterogeneous features!"
             )
     return lifters
+
+
+def get_num_features_dict(
+    lifters: list[tuple[callable, int | str]]
+) -> DefaultDict[int, int]:
+    """
+    Calculate the number of features for each rank in the given list of lifters.
+
+    Parameters
+    ----------
+    lifters : list[tuple[callable, int | str]]
+        A list of lifters, where each lifter is represented as a tuple containing a callable lifter
+        function and a ranking logic (either an integer or a string).
+
+    Returns
+    -------
+    DefaultDict[int, int]
+        A dictionary where the keys represent the ranking logic and the values represent the
+        corresponding number of features. The default return value is 0.
+
+    """
+    num_features_dict = defaultdict(int)
+    for lifter_fct, ranking_logic in lifters:
+        if isinstance(ranking_logic, int):
+            num_features_dict[ranking_logic] += lifter_fct.num_features
+    return num_features_dict
 
 
 def parse_ranking_logic(lifter_str: str) -> str | int:
@@ -274,10 +307,14 @@ def parse_ranking_logic(lifter_str: str) -> str | int:
     try:
         rank = int(rank_str)
     except ValueError:
-        raise ValueError(f"Invalid rank '{rank_str}' specified for lifter '{parts[0]}'.")
+        raise ValueError(
+            f"Invalid rank '{rank_str}' specified for lifter '{parts[0]}'."
+        )
 
     # Negative ranks are not allowed
     if rank < 0:
-        raise ValueError(f"Negative cell ranks are not allowed, but '{lifter_str}' was requested.")
+        raise ValueError(
+            f"Negative cell ranks are not allowed, but '{lifter_str}' was requested."
+        )
 
     return rank

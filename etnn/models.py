@@ -4,8 +4,8 @@ from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 
-from tgnn.layers import ETNNLayer
-from tgnn.utils import compute_centroids, compute_invariants
+from etnn.layers import ETNNLayer
+from etnn.utils import compute_centroids, compute_invariants
 
 
 class TGNN(nn.Module):
@@ -177,7 +177,7 @@ class TGNN(nn.Module):
 
 
 if __name__ == "__main__":
-    from tgnn.pm25 import SpatialCC
+    from etnn.pm25 import SpatialCC
 
     dataset = SpatialCC(root="data", force_reload=True)
 

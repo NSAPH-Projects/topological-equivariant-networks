@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-# from torch_scatter import scatter_add
-
 
 class ETNNLayer(nn.Module):
     """

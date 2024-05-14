@@ -164,3 +164,6 @@ cython_debug/
 datasets/
 job_outputs/
 wandb/
+
+# Mac
+**/.DS_Store

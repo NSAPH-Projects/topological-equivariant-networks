@@ -1,0 +1,38 @@
+defaults:
+  - _self_
+
+# General training parameters
+epochs: 1000 # number of epochs
+batch_size: 96 # batch size
+num_workers: 0 # num workers
+
+# Model parameters
+compile: false # if the model should be compiled
+model_name: empsn # model
+max_com: "1_2" # model type
+num_hidden: 77 # hidden features
+num_layers: 7 # number of layers
+act_fn: silu # activation function
+lifters: "identity:c functional_group:2 ring:2" # list of lifters to apply and their ranking logic
+initial_features: node # features to use
+connectivity: self_and_next # connectivity pattern between ranks
+neighbor_types: ["+1"] # How adjacency between cells of same rank is defined.
+merge_neighbors: false # if all the neighbors of different types should be represented as a single adjacency matrix
+visible_dims: null # specifies which ranks to explicitly represent as nodes
+normalize_invariants: false # if the invariant features should be normalized (via batch normalization)
+
+# Optimizer parameters
+lr: 0.0005 # learning rate
+weight_decay: 1e-16 # weight decay
+clip_gradient: false # gradient clipping
+clip_amount: 1.0 # gradient clipping amount
+num_lr_cycles: 3 # number of learning rate cycles
+
+# Dataset parameters
+dataset: qm9 # dataset
+target_name: H # regression task
+dim: 2 # ASC dimension
+dis: 4.0 # radius Rips complex
+num_samples: null # num samples to train on
+seed: 42 # random seed
+splits: egnn # split type

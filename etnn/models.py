@@ -10,7 +10,7 @@ from etnn.utils import compute_centroids, compute_invariants
 
 class ETNN(nn.Module):
     """
-    Topological E(n) Equivariant Networks (TEN)
+    E(n) Equivariant Topological Neural Networks
     """
 
     def __init__(

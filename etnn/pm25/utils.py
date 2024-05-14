@@ -1,7 +1,7 @@
 import torch
 import json
 from torch_geometric.data import InMemoryDataset
-from etnn.combinatorial_data.combinatorial_data_utils import (
+from etnn.combinatorial_complexes import (
     CombinatorialComplexData,
     CombinatorialComplexTransform,
     CustomCollater,

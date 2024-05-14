@@ -12,7 +12,7 @@ from torch_geometric.data import Batch, Data
 from torch_geometric.loader.dataloader import Collater
 from torch_geometric.transforms import BaseTransform
 
-from etnn.combinatorial_data.lifter import Lifter
+from etnn.combinatorial_complexes.lifter import Lifter
 from etnn.qm9.lifts.common import Cell
 
 

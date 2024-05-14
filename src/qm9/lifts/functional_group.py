@@ -10,29 +10,15 @@ from qm9.molecule_utils import molecule_from_data
 from .common import Cell
 
 functional_group_patterns = {
-    "hydroxyl": "[OH]",
-    "carbonyl": "[CX3]=[OX1]",
-    "amine": "[NX3;H2,H1,H0;!$(NC=O)]",
     "carboxyl": "C(=O)O",
     "nitro": "[N+](=O)[O-]",
-    "sulfonamide": "S(=O)(=O)N",
-    "aldehyde": "[CX3H](=O)",
     "ketone": "[CX3](=O)[C]",
     "ester": "[CX3](=O)[OX2H0][#6]",
     "ether": "[OD2]([#6])[#6]",
     "amide": "[NX3][CX3](=[OX1])[#6]",
-    "nitrile": "[NX1]#[CX2]",
-    "thiol": "[SH]",
-    "thioether": "[SX2]([#6])[#6]",
-    "halide": "[F,Cl,Br,I]",
     "benzene": "c1ccccc1",
     "aniline": "Nc1ccccc1",
     "phenol": "Oc1ccccc1",
-    "sulfonic_acid": "[SX4](=O)(=O)([O-])[OH]",
-    "sulfoxide": "[#16X3+1]([#8-])[#6]",
-    "sulfone": "[SX4](=O)(=O)[#6]",
-    "phosphoric_acid_ester": "[PX4](=O)([O-])[OX2H0][#6]",
-    "phosphine": "[PX3]",
     "carbamate": "[NX3][CX3](=[OX1])[OX2H0]",
 }
 

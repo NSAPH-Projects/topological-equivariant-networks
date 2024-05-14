@@ -1,1 +1,5 @@
-from .utils import CustomCollater, CombinatorialComplexData, CombinatorialComplexTransform
+from .utils import (
+    CombinatorialComplexCollater,
+    CombinatorialComplexData,
+    CombinatorialComplexTransform,
+)

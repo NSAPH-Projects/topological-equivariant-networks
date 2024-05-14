@@ -167,6 +167,3 @@ wandb/
 
 # Mac
 **/.DS_Store
-
-# data
-data/processed

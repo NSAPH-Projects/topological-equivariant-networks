@@ -4,7 +4,7 @@ from torch_geometric.data import InMemoryDataset
 from etnn.combinatorial_complexes import (
     CombinatorialComplexData,
     CombinatorialComplexTransform,
-    CustomCollater,
+    CombinatorialComplexCollater,
 )
 
 
@@ -54,7 +54,13 @@ def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData
 
 
 if __name__ == "__main__":
+    from torch.utils.data import DataLoader
+    from etnn.combinatorial_complexes import CombinatorialComplexCollater
+
     # quick test
     dataset = SpatialCC(root="data", force_reload=True)
-    for batch in dataset:
+    follow_batch = ["cell_0", "cell_1", "cell_2"]
+    collate_fn = CombinatorialComplexCollater(dataset, follow_batch=follow_batch)
+    loader = DataLoader(dataset, collate_fn=collate_fn)
+    for batch in loader:
         pass

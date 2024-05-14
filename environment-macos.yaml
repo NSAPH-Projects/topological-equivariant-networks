@@ -1,4 +1,4 @@
-name: tgnn
+name: etnn
 channels:
   - pytorch
   - anaconda
@@ -23,5 +23,6 @@ dependencies:
   - tqdm=4.66.1
   - wandb=0.15.12
   - pip:
+    - ipykernel
     - torch_geometric>=2.4
     - git+https://github.com/pyt-team/TopoNetX@cede811485aefcff1d013dbb94942e8f92ac5d05

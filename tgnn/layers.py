@@ -3,6 +3,7 @@ from typing import Dict, List
 import torch
 import torch.nn as nn
 from torch import Tensor
+
 # from torch_scatter import scatter_add
 
 
@@ -31,7 +32,7 @@ class ETNNLayer(nn.Module):
         # messages
         self.message_passing = nn.ModuleDict(
             {
-                adj: SimplicialEGNNLayer(num_hidden, self.num_features_map[adj])
+                adj: ETNNMessagerLayer(num_hidden, self.num_features_map[adj])
                 for adj in adjacencies
             }
         )
@@ -52,7 +53,9 @@ class ETNNLayer(nn.Module):
         # pass the different messages of all adjacency types
         mes = {
             adj_type: self.message_passing[adj_type](
-                x=(x[adj_type[0]], x[adj_type[2]]), index=adj[adj_type], edge_attr=inv[adj_type]
+                x=(x[adj_type[0]], x[adj_type[2]]),
+                index=adj[adj_type],
+                edge_attr=inv[adj_type],
             )
             for adj_type in self.adjacencies
         }
@@ -60,7 +63,8 @@ class ETNNLayer(nn.Module):
         # find update states through concatenation, update and add residual connection
         h = {
             dim: torch.cat(
-                [feature] + [adj_mes for adj_type, adj_mes in mes.items() if adj_type[2] == dim],
+                [feature]
+                + [adj_mes for adj_type, adj_mes in mes.items() if adj_type[2] == dim],
                 dim=1,
             )
             for dim, feature in x.items()
@@ -71,7 +75,7 @@ class ETNNLayer(nn.Module):
         return x
 
 
-class SimplicialEGNNLayer(nn.Module):
+class ETNNMessagerLayer(nn.Module):
     def __init__(self, num_hidden, num_inv):
         super().__init__()
         self.message_mlp = nn.Sequential(
@@ -90,6 +94,11 @@ class SimplicialEGNNLayer(nn.Module):
 
         messages = self.message_mlp(state)
         edge_weights = self.edge_inf_mlp(messages)
-        messages_aggr = torch.scatter_add(messages * edge_weights, index_rec, dim=0)
+        messages_aggr = torch.scatter_add(
+            input=torch.zeros((x.shape[0], messages.shape[1]), device=x.device),
+            src=messages * edge_weights,
+            index=index_rec,
+            dim=0,
+        )
 
         return messages_aggr

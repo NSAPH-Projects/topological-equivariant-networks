@@ -1,9 +1,11 @@
+import json
 import re
 from collections.abc import Iterable
 from types import MappingProxyType
 
 import numpy as np
 import torch
+import torch.nested as nt
 from scipy.sparse import csc_matrix
 from toponetx.classes import CombinatorialComplex
 from torch_geometric.data import Batch, Data
@@ -190,7 +192,8 @@ class CombinatorialComplexData(Data):
         else:
             return 0
 
-    def from_json(self, data: dict[str, any]) -> "CombinatorialComplexData":
+    @classmethod
+    def from_json(cls, json_path: str) -> "CombinatorialComplexData":
         """
         Convert a dictionary of data to a CombinatorialComplexData object.
 
@@ -212,9 +215,13 @@ class CombinatorialComplexData(Data):
         to initialize tensors with the correct size.
 
         """
+        with open(json_path, "r") as f:
+            data = json.load(f)
 
-        for key in ["x", "pos", "y"]:
-            setattr(self, key, torch.tensor(data[key]))
+        mapping = {}
+
+        for key in ["pos", "y"]:
+            mapping[key] = torch.tensor(data[key])
 
         for key, value in data.items():
 
@@ -224,54 +231,55 @@ class CombinatorialComplexData(Data):
                     rank = key.split("_")[1]
                     num_features = data["num_features_dict"][rank]
                     attr_value = torch.empty(
-                        (0, num_features), dtype=self.attribute_dtype["x_"]
+                        (0, num_features), dtype=cls.attribute_dtype["x_"]
                     )
                 else:
-                    attr_value = torch.tensor(value, dtype=self.attribute_dtype["x_"])
-                setattr(self, key, attr_value)
+                    attr_value = torch.tensor(value, dtype=cls.attribute_dtype["x_"])
+                mapping[key] = attr_value
 
             # cast the cell_i
             elif "cell_" in key:
                 if len(value) == 0:
-                    attr_value = torch.empty(
-                        (0, 0), dtype=self.attribute_dtype["cell_"]
-                    )
+                    attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["cell_"])
                 else:
-                    attr_value = torch.tensor(
-                        pad_lists_to_same_length(value),
-                        dtype=self.attribute_dtype["cell_"],
-                    )
-                setattr(self, key, attr_value)
+                    # attr_value = torch.tensor(
+                    #     pad_lists_to_same_length(value),
+                    #     dtype=cls.attribute_dtype["cell_"],
+                    # )
+                    # use nested tensor
+                    attr_value = nt.nested_tensor(value, dtype=cls.attribute_dtype["cell_"])
+                    attr_value = nt.to_padded_tensor(attr_value, padding=torch.nan)
+
+                mapping[key] = attr_value
 
             # cast the mem_i
             elif "mem_" in key:
                 num_lifters = len(data["mem_0"][0])
                 if len(value) == 0:
                     attr_value = torch.empty(
-                        (0, num_lifters), dtype=self.attribute_dtype["mem_"]
+                        (0, num_lifters), dtype=cls.attribute_dtype["mem_"]
                     )
                 else:
-                    attr_value = torch.tensor(value, dtype=self.attribute_dtype["mem_"])
-                setattr(self, key, attr_value)
+                    attr_value = torch.tensor(value, dtype=cls.attribute_dtype["mem_"])
+                mapping[key] = attr_value
 
             # cast the adj_i_j[_foo]
             elif "adj_" in key:
-                setattr(
-                    self, key, torch.tensor(value, dtype=self.attribute_dtype["adj_"])
-                )
+                attr_value = torch.tensor(value, dtype=cls.attribute_dtype["adj_"])
+                mapping[key] = attr_value
 
             # cast the inv_i_j[_foo]
             elif "inv_" in key:
                 if len(value) == 0:
-                    attr_value = torch.empty((0, 0), dtype=self.attribute_dtype["inv_"])
+                    attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["inv_"])
                 else:
                     attr_value = torch.tensor(
                         pad_lists_to_same_length(value),
-                        dtype=self.attribute_dtype["inv_"],
+                        dtype=cls.attribute_dtype["inv_"],
                     ).t()
-                setattr(self, key, attr_value)
+                mapping[key] = attr_value
 
-        return self
+        return CombinatorialComplexData(**mapping)
 
 
 class CombinatorialComplexTransform(BaseTransform):

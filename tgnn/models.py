@@ -25,6 +25,7 @@ class TGNN(nn.Module):
         visible_dims: list[int] | None,
         normalize_invariants: bool,
         compute_invariants: callable = compute_invariants,
+        global_pool: bool = True,
     ) -> None:
         super().__init__()
 
@@ -86,8 +87,6 @@ class TGNN(nn.Module):
         device = graph.pos.device
         cell_ind = {str(i): getattr(graph, f"cell_{i}") for i in self.visible_dims}
 
-        mem = {i: getattr(graph, f"mem_{i}") for i in self.visible_dims}
-
         adj = {
             adj_type: getattr(graph, f"adj_{adj_type}")
             for adj_type in self.adjacencies
@@ -110,7 +109,8 @@ class TGNN(nn.Module):
                         cell_ind[str(i)], graph.x
                     )
                 elif feature_type == "mem":
-                    features[feature_type][str(i)] = mem[i].float()
+                    mem_i = getattr(graph, f"mem_{i}")
+                    features[feature_type][str(i)] = mem_i.float()
                 elif feature_type == "hetero":
                     features[feature_type][str(i)] = getattr(graph, f"x_{i}")
 
@@ -157,17 +157,48 @@ class TGNN(nn.Module):
             for dim, indices in cell_batch.items()
         }
 
-        x = {
-            dim: global_add_pool(x[dim], cell_batch[dim]) for dim, feature in x.items()
-        }
-        state = torch.cat(
-            tuple([feature for dim, feature in x.items()]),
-            dim=1,
-        )
-        out = self.post_pool(state)
-        out = torch.squeeze(out)
+        if self.global_pool:
+            x = {
+                dim: global_add_pool(x[dim], cell_batch[dim]) for dim, feature in x.items()
+            }
+            state = torch.cat(
+                tuple([feature for dim, feature in x.items()]),
+                dim=1,
+            )
+            out = self.post_pool(state)
+            out = torch.squeeze(out)
+        else:
+            out = x
 
         return out
 
     def __str__(self):
         return f"TGNN ({self.type})"
+
+
+if __name__ == "__main__":
+    from tgnn.pm25 import SpatialCC
+
+    dataset = SpatialCC(root="data", force_reload=True)
+
+    data = next(iter(dataset))
+
+    num_features_per_rank = {
+        int(k.split("_")[1]): v.shape[1] for k, v in data.items() if "x_" in k
+    }
+    max_dim = max(num_features_per_rank.keys())
+
+    model = TGNN(
+        num_features_per_rank=num_features_per_rank,
+        num_hidden=8,
+        num_out=1,
+        num_layers=4,
+        max_dim=max_dim,
+        adjacencies=["0_0", "0_1", "1_1", "1_2", "2_2"],
+        initial_features=["hetero"],
+        visible_dims=[0, 1, 2],
+        normalize_invariants=True,
+        global_pool=False,
+    )
+    out = model(data)
+    print(out.shape)

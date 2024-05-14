@@ -8,10 +8,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
-from torch_scatter import scatter_add
+# from torch_scatter import scatter_add
 
 
-from tgnn.models import TGNN
+# from tgnn.models import TGNN
 
 
 def get_adjacency_types(
@@ -251,7 +251,10 @@ class MessageLayer(nn.Module):
 
         messages = self.message_mlp(state)
         edge_weights = self.edge_inf_mlp(messages)
-        messages_aggr = scatter_add(messages * edge_weights, index_rec, dim=0)
+        dest = torch.zeros(x.size(0), messages.size(1), device=x.device)
+        messages_aggr = torch.scatter_add(
+            dest, src=messages * edge_weights, index=index_rec, dim=0
+        )
 
         return messages_aggr
 

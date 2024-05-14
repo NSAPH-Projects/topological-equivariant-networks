@@ -8,7 +8,7 @@ from etnn.layers import ETNNLayer
 from etnn.utils import compute_centroids, compute_invariants
 
 
-class TGNN(nn.Module):
+class ETNN(nn.Module):
     """
     Topological E(n) Equivariant Networks (TEN)
     """
@@ -188,7 +188,7 @@ if __name__ == "__main__":
     }
     max_dim = max(num_features_per_rank.keys())
 
-    model = TGNN(
+    model = ETNN(
         num_features_per_rank=num_features_per_rank,
         num_hidden=8,
         num_out=1,

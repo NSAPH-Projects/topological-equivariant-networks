@@ -28,7 +28,7 @@ class SpatialCC(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return ["spatial_data.pt"]
+        return ["spatial_cc.pt"]
 
     def process(self):
         # Read data into huge `Data` list.

@@ -43,7 +43,7 @@ class CustomCollater(Collater):
         """
         Pre-collate logic to pad tensors within each sample based on naming patterns.
 
-        In particular, tensors that are named f'x_{i}' for some integer i are padded to have the
+        In particular, tensors that are named f'cell_{i}' for some integer i are padded to have the
         same number of columns, and tensors that are named f'inv_{i}_{j}' for some integers i, j are
         padded to have the same number of rows. The variable number of columns/rows can arise if
         cells with the same rank may consist of a variable number of nodes. The padding value is -1
@@ -65,12 +65,16 @@ class CustomCollater(Collater):
 
         for data in batch:
             for attr_name in data.keys():
-                if re.match(r"x_\d+", attr_name):
+                if re.match(r"cell_\d+", attr_name):
                     tensor = getattr(data, attr_name)
-                    max_cols[attr_name] = max(max_cols.get(attr_name, 0), tensor.size(1))
+                    max_cols[attr_name] = max(
+                        max_cols.get(attr_name, 0), tensor.size(1)
+                    )
                 elif re.match(r"inv_\d+_\d+", attr_name):
                     tensor = getattr(data, attr_name)
-                    max_rows[attr_name] = max(max_rows.get(attr_name, 0), tensor.size(0))
+                    max_rows[attr_name] = max(
+                        max_rows.get(attr_name, 0), tensor.size(0)
+                    )
 
         for data in batch:
             for attr_name in data.keys():
@@ -103,6 +107,8 @@ class CombinatorialComplexData(Data):
     pos : torch.FloatTensor
         Positions of rank 0 cells (atoms). Expected to have shape (num_atoms, 3).
     x_i : torch.FloatTensor
+        Features of cells of rank i, where i is a non-negative integer.
+    cell_i : torch.FloatTensor
         Node indices associated with cells of rank i, where i is a non-negative integer.
     adj_i_j : torch.LongTensor
         Adjacency tensors representing the relationships (edges) between cells of rank i and j,
@@ -116,7 +122,8 @@ class CombinatorialComplexData(Data):
 
     attribute_dtype = MappingProxyType(
         {
-            "x_": torch.float64,
+            "x_": torch.float32,
+            "cell_": torch.float64,
             "mem_": torch.bool,
             "adj_": torch.int64,
             "inv_": torch.float64,
@@ -139,19 +146,22 @@ class CombinatorialComplexData(Data):
         -------
         any
             The increment value for the attribute `key`. Returns a tensor for `adj_i_j` attributes,
-            the number of nodes for `inv_i_j` and `x_i` attributes, or calls the superclass's
+            the number of nodes for `inv_i_j` and `cell_i` attributes, or calls the superclass's
             `__inc__` method for other attributes.
         """
-        num_nodes = getattr(self, "x_0").size(0)
+        num_nodes = getattr(self, "cell_0").size(0)
         # The adj_i_j attribute holds cell indices, increment each dim by the number of cells of
         # corresponding rank
         if re.match(r"adj_(\d+_\d+|\d+_\d+_\d+)", key):
             i, j = key.split("_")[1:3]
             return torch.tensor(
-                [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
+                [
+                    [getattr(self, f"cell_{i}").size(0)],
+                    [getattr(self, f"cell_{j}").size(0)],
+                ]
             )
-        # The inv_i_j and x_i attributes hold node indices, they should be incremented
-        elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"x_\d+", key):
+        # The inv_i_j and cell_i attributes hold node indices, they should be incremented
+        elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"cell_\d+", key):
             return num_nodes
         else:
             return super().__inc__(key, value, *args, **kwargs)
@@ -180,8 +190,7 @@ class CombinatorialComplexData(Data):
         else:
             return 0
 
-    @classmethod
-    def from_dict(cls, data: dict[str, any]) -> "CombinatorialComplexData":
+    def from_json(self, data: dict[str, any]) -> "CombinatorialComplexData":
         """
         Convert a dictionary of data to a CombinatorialComplexData object.
 
@@ -197,58 +206,72 @@ class CombinatorialComplexData(Data):
 
         Notes
         -----
-        This method currently only supports QM9 with no heterogeneous features and is not safe.
-        It needs the following information to support heterogeneous features and to be safe:
-
-        - For each rank, the number of features per node (to address the case of no rank-2 cells).
-        - Relevant dataset arguments to determine the required keys in `data`.
+        In addition to the attributes listed under CombinatorialComplexData, this method also
+        assumes that the input dictionary contains a dictionary under the key "num_features_dict".
+        This dictionary should hold the number of heterogeneous features for each rank, and aids
+        to initialize tensors with the correct size.
 
         """
-        mapping = {}
 
-        for key in ["pos", "y"]:
-            if key in data:
-                mapping[key] = torch.tensor(data[key])
+        for key in ["x", "pos", "y"]:
+            setattr(self, key, torch.tensor(data[key]))
 
         for key, value in data.items():
 
             # cast the x_i
             if "x_" in key:
                 if len(value) == 0:
-                    attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["x_"])
+                    rank = key.split("_")[1]
+                    num_features = data["num_features_dict"][rank]
+                    attr_value = torch.empty(
+                        (0, num_features), dtype=self.attribute_dtype["x_"]
+                    )
+                else:
+                    attr_value = torch.tensor(value, dtype=self.attribute_dtype["x_"])
+                setattr(self, key, attr_value)
+
+            # cast the cell_i
+            elif "cell_" in key:
+                if len(value) == 0:
+                    attr_value = torch.empty(
+                        (0, 0), dtype=self.attribute_dtype["cell_"]
+                    )
                 else:
                     attr_value = torch.tensor(
-                        pad_lists_to_same_length(value), dtype=cls.attribute_dtype["x_"]
+                        pad_lists_to_same_length(value),
+                        dtype=self.attribute_dtype["cell_"],
                     )
-                mapping[key] = attr_value
+                setattr(self, key, attr_value)
 
             # cast the mem_i
             elif "mem_" in key:
                 num_lifters = len(data["mem_0"][0])
                 if len(value) == 0:
                     attr_value = torch.empty(
-                        (0, num_lifters), dtype=cls.attribute_dtype["mem_"]
+                        (0, num_lifters), dtype=self.attribute_dtype["mem_"]
                     )
                 else:
-                    attr_value = torch.tensor(value, dtype=cls.attribute_dtype["mem_"])
-                mapping[key] = attr_value
+                    attr_value = torch.tensor(value, dtype=self.attribute_dtype["mem_"])
+                setattr(self, key, attr_value)
 
             # cast the adj_i_j[_foo]
             elif "adj_" in key:
-                attr_value = torch.tensor(value, dtype=cls.attribute_dtype["adj_"])
-                mapping[key] = attr_value
+                setattr(
+                    self, key, torch.tensor(value, dtype=self.attribute_dtype["adj_"])
+                )
 
             # cast the inv_i_j[_foo]
             elif "inv_" in key:
                 if len(value) == 0:
-                    attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["inv_"])
+                    attr_value = torch.empty((0, 0), dtype=self.attribute_dtype["inv_"])
                 else:
                     attr_value = torch.tensor(
-                        pad_lists_to_same_length(value), dtype=cls.attribute_dtype["inv_"]
+                        pad_lists_to_same_length(value),
+                        dtype=self.attribute_dtype["inv_"],
                     ).t()
-                mapping[key] = attr_value
+                setattr(self, key, attr_value)
 
-        return cls(**mapping)
+        return self
 
 
 class CombinatorialComplexTransform(BaseTransform):
@@ -285,7 +308,7 @@ class CombinatorialComplexTransform(BaseTransform):
             The converted combinatorial complex data object.
         """
         cc_dict = self.graph_to_ccdict(graph)
-        return CombinatorialComplexData().load_from_dict(cc_dict)
+        return CombinatorialComplexData().from_json(cc_dict)
 
     def graph_to_ccdict(self, graph: Data) -> dict[str, list]:
         """
@@ -312,24 +335,23 @@ class CombinatorialComplexTransform(BaseTransform):
         -----
         The combinatorial complex dictionary is created by performing the following steps:
 
-        1. Compute the cells of the graph using the `lift` method.
-        2. Compute the ranks for each cell using the `rank` method.
-        3. Create a cell dictionary that maps each rank to a dictionary of cells and their
+        1. Compute the cells of the graph using the lifter.
         memberships.
-        4. Extract the cell indices and memberships from the cell dictionary.
-        5. Create the combinatorial complex using the `create_combinatorial_complex` method.
-        6. Compute the adjacencies and incidences of the combinatorial complex.
-        7. Merge matching adjacencies if the `merge_neighbors` flag is set to True.
-        8. Convert the sparse numpy matrices to dense torch tensors.
-        9. Store the nodes for computing geometric features in the inv_dict.
-        10. Convert the graph and other data to a dictionary format.
-        11. Convert tensors in the dictionary to lists.
+        2. Extract the cell indices and memberships from the cell dictionary.
+        3. Create the combinatorial complex using the `create_combinatorial_complex` method.
+        4. Compute the adjacencies and incidences of the combinatorial complex.
+        5. Merge matching adjacencies if the `merge_neighbors` flag is set to True.
+        6. Convert the sparse numpy matrices to dense torch tensors.
+        7. Store the nodes for computing geometric features in the inv_dict.
+        8. Convert the graph and other data to a dictionary format.
+        9. Convert tensors in the dictionary to lists.
 
         The resulting combinatorial complex dictionary contains the following keys:
         - 'x': features of rank 0 cells (atoms)
         - 'pos': positions of rank 0 cells (atoms)
         - 'y': target values
-        - 'x_i': cell indices for each rank i
+        - 'x_i': feature vectors for each rank i
+        - 'cell_i': cell indices for each rank i
         - 'mem_i': cell memberships for each rank i
         - 'adj_adj_type': adjacency matrices for each adjacency type
         - 'inv_adj_type': nodes used for computing geometric features for each adjacency type
@@ -338,13 +360,13 @@ class CombinatorialComplexTransform(BaseTransform):
         """
 
         # compute cells
-        cell_dict = self.lifter.lift(graph)
+        cc_dict = self.lifter.lift(graph)
 
         # compute cell indices and memberships
-        x_dict, mem_dict = extract_cell_and_membership_data(cell_dict)
+        cell_dict, x_dict, mem_dict = extract_cell_and_membership_data(cc_dict)
 
         # create the combinatorial complex
-        cc = create_combinatorial_complex(cell_dict)
+        cc = create_combinatorial_complex(cc_dict)
 
         # compute adjancencies and incidences
         adj_dict = dict()
@@ -380,8 +402,8 @@ class CombinatorialComplexTransform(BaseTransform):
             num_edges = len(neighbors[0])
             for edge_idx in range(num_edges):
                 idx_a, idx_b = neighbors[0][edge_idx], neighbors[1][edge_idx]
-                cell_a = x_dict[i][idx_a]
-                cell_b = x_dict[j][idx_b]
+                cell_a = cell_dict[i][idx_a]
+                cell_b = cell_dict[j][idx_b]
                 shared = [node for node in cell_a if node in cell_b]
                 only_in_a = [node for node in cell_a if node not in shared]
                 only_in_b = [node for node in cell_b if node not in shared]
@@ -390,11 +412,11 @@ class CombinatorialComplexTransform(BaseTransform):
 
         cc_dict = graph.to_dict()
 
+        for k, v in cell_dict.items():
+            cc_dict[f"cell_{k}"] = v
+
         for k, v in x_dict.items():
             cc_dict[f"x_{k}"] = v
-
-        for k, v in y_dict.items():
-            cc_dict[f"y_{k}"] = v
 
         for k, v in mem_dict.items():
             cc_dict[f"mem_{k}"] = v
@@ -404,6 +426,11 @@ class CombinatorialComplexTransform(BaseTransform):
 
         for k, v in inv_dict.items():
             cc_dict[f"inv_{k}"] = v
+
+        # store the number of features for each rank for tensor reconstruction
+        cc_dict["num_features_dict"] = {}
+        for rank in range(self.dim + 1):
+            cc_dict["num_features_dict"][rank] = self.lifter.num_features_dict[rank]
 
         for att in ["edge_attr", "edge_index"]:
             if att in cc_dict.keys():
@@ -456,7 +483,9 @@ def adjacency_matrix(cc: CombinatorialComplex, rank: int, via_rank: int) -> csc_
     if rank < 0:
         raise ValueError(f"rank must be a non-negative integer, but was {rank}.")
     if via_rank < 0:
-        raise ValueError(f"via_rank must be a non-negative integer, but was {via_rank}.")
+        raise ValueError(
+            f"via_rank must be a non-negative integer, but was {via_rank}."
+        )
 
     # compute the adjacency matrix
     kwargs = dict(rank=rank, via_rank=via_rank, index=False)
@@ -518,14 +547,18 @@ def incidence_matrix(cc, rank, to_rank):
         matrix = cc.incidence_matrix(rank=to_rank, to_rank=rank).T
 
     # triggered if adj_type = i_j, i != j and i is an empty rank
-    num_cells_i, num_cells_j = len(cc.skeleton(rank=rank)), len(cc.skeleton(rank=to_rank))
+    num_cells_i, num_cells_j = len(cc.skeleton(rank=rank)), len(
+        cc.skeleton(rank=to_rank)
+    )
     if matrix.shape != (num_cells_i, num_cells_j):
         matrix = csc_matrix((num_cells_i, num_cells_j), dtype=np.float64)
 
     return matrix
 
 
-def create_combinatorial_complex(cell_dict: dict[int, Iterable[Cell]]) -> CombinatorialComplex:
+def create_combinatorial_complex(
+    cell_dict: dict[int, Iterable[Cell]]
+) -> CombinatorialComplex:
     """
     Create a combinatorial complex from a dictionary of cells.
 
@@ -597,20 +630,24 @@ def extract_cell_and_membership_data(
 
     Returns
     -------
-    x_dict : dict[int, list[list[int]]]
+    cell_dict : dict[int, list[list[int]]]
         A dictionary mapping ranks to a list of sorted cells.
+    x_dict : dict[int, list[list[float]]]
+        A dictionary mapping ranks to a list of feature vectors.
     mem_dict : dict[int, list[list[bool]]]
         A dictionary mapping ranks to a list of membership values.
-
     """
-    x_dict, mem_dict = {}, {}
+    cell_dict, x_dict, mem_dict = {}, {}, {}
     for rank, cell_lifter_map in input_dict.items():
-        x_dict[rank] = [sorted(cell[0]) for cell in cell_lifter_map.keys()]
+        cell_dict[rank] = [sorted(cell[0]) for cell in cell_lifter_map.keys()]
+        x_dict[rank] = [cell[1] for cell in cell_lifter_map.keys()]
         mem_dict[rank] = list(cell_lifter_map.values())
-    return x_dict, mem_dict
+    return cell_dict, x_dict, mem_dict
 
 
-def merge_neighbors(adj: dict[str, torch.Tensor]) -> tuple[dict[str, torch.Tensor], list[str]]:
+def merge_neighbors(
+    adj: dict[str, torch.Tensor]
+) -> tuple[dict[str, torch.Tensor], list[str]]:
     """
     Merge matching adjacency relationships in the adjacency dictionary.
 
@@ -684,7 +721,8 @@ def pad_lists_to_same_length(
 
     # Pad each list to match the maximum length
     padded_list = [
-        inner_list + [pad_value] * (max_length - len(inner_list)) for inner_list in list_of_lists
+        inner_list + [pad_value] * (max_length - len(inner_list))
+        for inner_list in list_of_lists
     ]
 
     return padded_list

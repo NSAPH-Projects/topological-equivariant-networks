@@ -3,7 +3,7 @@ from functools import partial
 
 from torch_geometric.data import Data
 
-from ten.qm9.lifts.common import Cell
+from tgnn.qm9.lifts.common import Cell
 
 
 class Lifter:

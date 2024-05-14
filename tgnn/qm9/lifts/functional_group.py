@@ -1,152 +1,199 @@
 from collections import namedtuple
 
+import torch
 from rdkit import Chem
 from torch_geometric.data import Data
+from torch_geometric.utils import one_hot
+
+from qm9.molecule_utils import molecule_from_data
 
 from .common import Cell
 
-NUM_FEATURES = 6
+functional_group_patterns = {
+    "hydroxyl": "[OH]",
+    "carbonyl": "[CX3]=[OX1]",
+    "amine": "[NX3;H2,H1,H0;!$(NC=O)]",
+    "carboxyl": "C(=O)O",
+    "nitro": "[N+](=O)[O-]",
+    "sulfonamide": "S(=O)(=O)N",
+    "aldehyde": "[CX3H](=O)",
+    "ketone": "[CX3](=O)[C]",
+    "ester": "[CX3](=O)[OX2H0][#6]",
+    "ether": "[OD2]([#6])[#6]",
+    "amide": "[NX3][CX3](=[OX1])[#6]",
+    "nitrile": "[NX1]#[CX2]",
+    "thiol": "[SH]",
+    "thioether": "[SX2]([#6])[#6]",
+    "halide": "[F,Cl,Br,I]",
+    "benzene": "c1ccccc1",
+    "aniline": "Nc1ccccc1",
+    "phenol": "Oc1ccccc1",
+    "sulfonic_acid": "[SX4](=O)(=O)([O-])[OH]",
+    "sulfoxide": "[#16X3+1]([#8-])[#6]",
+    "sulfone": "[SX4](=O)(=O)[#6]",
+    "phosphoric_acid_ester": "[PX4](=O)([O-])[OX2H0][#6]",
+    "phosphine": "[PX3]",
+    "carbamate": "[NX3][CX3](=[OX1])[OX2H0]",
+}
+
+# Functional group features
+feature_spaces = {
+    "conjugation": [False, True],
+    "acidity": ["neutral", "high", "basic", "weakly acidic"],
+    "hydrophobicity": ["hydrophilic", "moderate", "hydrophobic"],
+    "electrophilicity": ["low", "moderate", "high"],
+    "nucleophilicity": ["low", "moderate", "high"],
+    "polarity": ["low", "moderate", "high"],
+}
+
+functional_group_features = {
+    "carboxyl": {
+        "conjugation": feature_spaces["conjugation"].index(True),
+        "acidity": feature_spaces["acidity"].index("high"),
+        "hydrophobicity": feature_spaces["hydrophobicity"].index("hydrophilic"),
+        "electrophilicity": feature_spaces["electrophilicity"].index("moderate"),
+        "nucleophilicity": feature_spaces["nucleophilicity"].index("moderate"),
+        "polarity": feature_spaces["polarity"].index("high"),
+    },
+    "nitro": {
+        "conjugation": feature_spaces["conjugation"].index(False),
+        "acidity": feature_spaces["acidity"].index("neutral"),
+        "hydrophobicity": feature_spaces["hydrophobicity"].index("moderate"),
+        "electrophilicity": feature_spaces["electrophilicity"].index("high"),
+        "nucleophilicity": feature_spaces["nucleophilicity"].index("low"),
+        "polarity": feature_spaces["polarity"].index("high"),
+    },
+    "ketone": {
+        "conjugation": feature_spaces["conjugation"].index(True),
+        "acidity": feature_spaces["acidity"].index("neutral"),
+        "hydrophobicity": feature_spaces["hydrophobicity"].index("moderate"),
+        "electrophilicity": feature_spaces["electrophilicity"].index("high"),
+        "nucleophilicity": feature_spaces["nucleophilicity"].index("low"),
+        "polarity": feature_spaces["polarity"].index("high"),
+    },
+    "ester": {
+        "conjugation": feature_spaces["conjugation"].index(True),
+        "acidity": feature_spaces["acidity"].index("neutral"),
+        "hydrophobicity": feature_spaces["hydrophobicity"].index("moderate"),
+        "electrophilicity": feature_spaces["electrophilicity"].index("moderate"),
+        "nucleophilicity": feature_spaces["nucleophilicity"].index("moderate"),
+        "polarity": feature_spaces["polarity"].index("high"),
+    },
+    "ether": {
+        "conjugation": feature_spaces["conjugation"].index(False),
+        "acidity": feature_spaces["acidity"].index("neutral"),
+        "hydrophobicity": feature_spaces["hydrophobicity"].index("moderate"),
+        "electrophilicity": feature_spaces["electrophilicity"].index("low"),
+        "nucleophilicity": feature_spaces["nucleophilicity"].index("low"),
+        "polarity": feature_spaces["polarity"].index("moderate"),
+    },
+    "amide": {
+        "conjugation": feature_spaces["conjugation"].index(True),
+        "acidity": feature_spaces["acidity"].index("neutral"),
+        "hydrophobicity": feature_spaces["hydrophobicity"].index("moderate"),
+        "electrophilicity": feature_spaces["electrophilicity"].index("moderate"),
+        "nucleophilicity": feature_spaces["nucleophilicity"].index("moderate"),
+        "polarity": feature_spaces["polarity"].index("high"),
+    },
+    "benzene": {
+        "conjugation": feature_spaces["conjugation"].index(True),
+        "acidity": feature_spaces["acidity"].index("neutral"),
+        "hydrophobicity": feature_spaces["hydrophobicity"].index("moderate"),
+        "electrophilicity": feature_spaces["electrophilicity"].index("low"),
+        "nucleophilicity": feature_spaces["nucleophilicity"].index("low"),
+        "polarity": feature_spaces["polarity"].index("moderate"),
+    },
+    "aniline": {
+        "conjugation": feature_spaces["conjugation"].index(True),
+        "acidity": feature_spaces["acidity"].index("basic"),
+        "hydrophobicity": feature_spaces["hydrophobicity"].index("moderate"),
+        "electrophilicity": feature_spaces["electrophilicity"].index("low"),
+        "nucleophilicity": feature_spaces["nucleophilicity"].index("high"),
+        "polarity": feature_spaces["polarity"].index("moderate"),
+    },
+    "phenol": {
+        "conjugation": feature_spaces["conjugation"].index(True),
+        "acidity": feature_spaces["acidity"].index("weakly acidic"),
+        "hydrophobicity": feature_spaces["hydrophobicity"].index("moderate"),
+        "electrophilicity": feature_spaces["electrophilicity"].index("low"),
+        "nucleophilicity": feature_spaces["nucleophilicity"].index("high"),
+        "polarity": feature_spaces["polarity"].index("moderate"),
+    },
+    "carbamate": {
+        "conjugation": feature_spaces["conjugation"].index(False),
+        "acidity": feature_spaces["acidity"].index("neutral"),
+        "hydrophobicity": feature_spaces["hydrophobicity"].index("moderate"),
+        "electrophilicity": feature_spaces["electrophilicity"].index("moderate"),
+        "nucleophilicity": feature_spaces["nucleophilicity"].index("moderate"),
+        "polarity": feature_spaces["polarity"].index("high"),
+    },
+}
+
+# Cast all indices to tensors
+for pattern_name, feature_dict in functional_group_features.items():
+    for feature_name, feature_value in feature_dict.items():
+        feature_dict[feature_name] = torch.tensor([feature_value])
 
 
 def functional_group_lift(graph: Data) -> set[Cell]:
     """
-    Identify functional groups within a molecule and returns them as lists of atom indices.
-
-    This function first checks if the input `graph` contains a SMILES attribute. If present, it
-    converts the SMILES string into an RDKit molecule object and then identifies functional groups
-    within this molecule. Each functional group is represented as a list of atom indices. If the
-    input does not contain a valid SMILES attribute, the function raises an AttributeError. If the
-    molecule cannot be processed, it returns an empty list.
+    Identify and return the functional groups present in a given molecule.
 
     Parameters
     ----------
-    graph : torch_geometric.data.Data
-        A data structure containing a SMILES representation of the molecule.
+    graph : Data
+        The input molecule graph.
 
     Returns
     -------
     set[Cell]
-        A set of Cells, where each Cell contains the atom indices of a functional group in
-        the molecule and the feature vector of the functional group.
-
-    Raises
-    ------
-    AttributeError
-        If the input `graph` does not have a valid SMILES attribute or if the SMILES string cannot
-        be converted into an RDKit molecule.
-
-    Attributes
-    ----------
-    num_features : int
-        The number of features for each functional group.
-
-    Examples
-    --------
-    >>> graph = Data(smiles='CC(=O)OC1=CC=CC=C1C(=O)O')
-    >>> functional_group_lift(graph)
-    [[1, 2, 3], [8, 9, 10, 11, 12, 13, 14]]
+        A set of tuples representing the identified functional groups.
+        Each tuple contains the node indices of the atoms in the functional group
+        and the corresponding feature vector.
     """
-    if not hasattr(graph, "smiles"):
-        raise AttributeError(
-            "The given graph does not have a SMILES attribute! You are either not "
-            "using the QM9 dataset or you haven't preprocessed the dataset using rdkit!"
-        )
-    try:
-        molecule = Chem.MolFromSmiles(graph.smiles)
-        functional_groups = identify_functional_groups(molecule)
-        functional_groups = {
-            frozenset(fg.atomIds) for fg in functional_groups if len(fg.atomIds) >= 3
-        }
-        # Add 0-dimensional feature vectors to each functional group
-        dummy_features = tuple(range(NUM_FEATURES))
-        functional_groups = {(fg, dummy_features) for fg in functional_groups}
-        return functional_groups
-    except AttributeError:
+    mol, is_sanitized = molecule_from_data(graph, return_sanitized=True)
+    if not is_sanitized:
         return set()
+    cells = set()
+    for pattern_name, smart in functional_group_patterns.items():
+        pattern = Chem.MolFromSmarts(smart)
+        matches = mol.GetSubstructMatches(pattern)
+        for match in matches:
+            # We only consider functional groups with at least 3 atoms
+            if len(match) < 3:
+                continue
+            node_idc = frozenset(match)
+            feature_vector = get_pattern_features(pattern_name)
+            cells.add((node_idc, feature_vector))
+    return cells
 
 
-functional_group_lift.num_features = NUM_FEATURES
+def get_pattern_features(pattern_name: str) -> tuple[float]:
+    """
+    Get the feature vector for a given functional group pattern.
 
-# The code below was taken from https://github.com/rdkit/rdkit/blob/master/Contrib/IFG/ifg.py
-# and serves to identify functional groups within a molecule.
+    Parameters
+    ----------
+    pattern_name : str
+        The name of the functional group pattern.
 
-#  Original authors: Richard Hall and Guillaume Godin
-#  This file is part of the RDKit.
-#  The contents are covered by the terms of the BSD license
-#  which is included in the file license.txt, found at the root
-#  of the RDKit source tree.
-
-
-# Richard hall 2017
-# IFG main code
-# Guillaume Godin 2017
-# refine output function
-# astex_ifg: identify functional groups a la Ertl, J. Cheminform (2017) 9:36
-
-
-def merge(mol, marked, aset):
-    bset = set()
-    for idx in aset:
-        atom = mol.GetAtomWithIdx(idx)
-        for nbr in atom.GetNeighbors():
-            jdx = nbr.GetIdx()
-            if jdx in marked:
-                marked.remove(jdx)
-                bset.add(jdx)
-    if not bset:
-        return
-    merge(mol, marked, bset)
-    aset.update(bset)
+    Returns
+    -------
+    tuple[float]
+        The feature vector for the functional group pattern.
+    """
+    feature_dict = functional_group_features[pattern_name]
+    vector_list = []
+    for feature_name, feature_value in feature_dict.items():
+        feature_vector = one_hot(
+            feature_value, num_classes=len(feature_spaces[feature_name])
+        ).flatten()
+        vector_list.append(feature_vector)
+    vector_tensor = torch.cat(vector_list, dim=0)
+    vector_tuple = tuple(vector_tensor.tolist())
+    return vector_tuple
 
 
-# atoms connected by non-aromatic double or triple bond to any heteroatom
-# c=O should not match (see fig1, box 15).  I think using A instead of * should sort that out?
-PATT_DOUBLE_TRIPLE = Chem.MolFromSmarts("A=,#[!#6]")
-# atoms in non aromatic carbon-carbon double or triple bonds
-PATT_CC_DOUBLE_TRIPLE = Chem.MolFromSmarts("C=,#C")
-# acetal carbons, i.e. sp3 carbons connected to tow or more oxygens, nitrogens or sulfurs; these O,
-# N or S atoms must have only single bonds
-PATT_ACETAL = Chem.MolFromSmarts("[CX4](-[O,N,S])-[O,N,S]")
-# all atoms in oxirane, aziridine and thiirane rings
-PATT_OXIRANE_ETC = Chem.MolFromSmarts("[O,N,S]1CC1")
-
-PATT_TUPLE = (PATT_DOUBLE_TRIPLE, PATT_CC_DOUBLE_TRIPLE, PATT_ACETAL, PATT_OXIRANE_ETC)
-
-
-def identify_functional_groups(mol):
-    marked = set()
-    # mark all heteroatoms in a molecule, including halogens
-    for atom in mol.GetAtoms():
-        if atom.GetAtomicNum() not in (6, 1):  # would we ever have hydrogen?
-            marked.add(atom.GetIdx())
-
-    # mark the four specific types of carbon atom
-    for patt in PATT_TUPLE:
-        for path in mol.GetSubstructMatches(patt):
-            for atomindex in path:
-                marked.add(atomindex)
-
-    # merge all connected marked atoms to a single FG
-    groups = []
-    while marked:
-        grp = set([marked.pop()])
-        merge(mol, marked, grp)
-        groups.append(grp)
-
-    # extract also connected unmarked carbon atoms
-    ifg = namedtuple("IFG", ["atomIds", "atoms", "type"])
-    ifgs = []
-    for g in groups:
-        uca = set()
-        for atomidx in g:
-            for n in mol.GetAtomWithIdx(atomidx).GetNeighbors():
-                if n.GetAtomicNum() == 6:
-                    uca.add(n.GetIdx())
-        ifgs.append(
-            ifg(
-                atomIds=tuple(list(g)),
-                atoms=Chem.MolFragmentToSmiles(mol, g, canonical=True),
-                type=Chem.MolFragmentToSmiles(mol, g.union(uca), canonical=True),
-            )
-        )
-    return ifgs
+functional_group_lift.num_features = sum(
+    len(feature_space) for feature_space in feature_spaces.values()
+)

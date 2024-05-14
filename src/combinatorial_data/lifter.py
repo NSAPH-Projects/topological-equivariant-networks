@@ -130,7 +130,7 @@ class Lifter:
         for i, (lifter, lifter_rank) in enumerate(self.lifters):
             if lifter_rank == rank:
                 if feature_vectors[i] is None:
-                    lifter_fts = [0] * lifter.num_features
+                    lifter_fts = [0.0] * lifter.num_features
                 else:
                     lifter_fts = feature_vectors[i]
                 combined_feature_vec.extend(lifter_fts)

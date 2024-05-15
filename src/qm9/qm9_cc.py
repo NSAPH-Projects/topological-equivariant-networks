@@ -151,7 +151,6 @@ class QM9_CC(InMemoryDataset):
         force_reload: bool = False,
     ) -> None:
         super().__init__(root, transform, pre_transform, pre_filter, force_reload=force_reload)
-        self.load(self.processed_paths[0])
 
     def mean(self, target: int) -> float:
         y = torch.cat([self.get(i).y for i in range(len(self))], dim=0)
@@ -247,7 +246,7 @@ class QM9_CC(InMemoryDataset):
 
         suppl = Chem.SDMolSupplier(self.raw_paths[0], removeHs=False, sanitize=False)
 
-        data_list = []
+        self.data_list = []
         for i, mol in enumerate(tqdm(suppl)):
             if i in skip:
                 continue
@@ -324,6 +323,4 @@ class QM9_CC(InMemoryDataset):
             if self.pre_transform is not None:
                 data = self.pre_transform(data)
 
-            data_list.append(data)
-
-        self.data = data_list
+            self.data_list.append(data)

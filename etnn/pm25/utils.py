@@ -47,7 +47,10 @@ class SpatialCC(InMemoryDataset):
 def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
     for key, tensor in data.items():
         if "x_" in key:
-            tensor = (tensor - tensor.mean()) / tensor.std()
+            # Standardize the features per columns
+            mean = tensor.mean(dim=0, keepdim=True)
+            std = tensor.std(dim=0, keepdim=True)
+            tensor = (tensor - mean) / std
             data[key] = tensor
     return data
 

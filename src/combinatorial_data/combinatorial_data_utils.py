@@ -424,6 +424,9 @@ class CombinatorialComplexTransform(BaseTransform):
             if torch.is_tensor(v):
                 cc_dict[k] = v.tolist()
 
+        # remove the molecule from the dictionary
+        cc_dict.pop("mol")
+
         return cc_dict
 
 

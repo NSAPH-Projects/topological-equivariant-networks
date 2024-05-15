@@ -91,7 +91,7 @@ def atom_lift(graph: Data) -> set[Cell]:
         The number of features for each atom.
     """
     # Convert graph to RDKit molecule
-    molecule = molecule_from_data(graph)
+    molecule = graph.mol
 
     # Create atoms
     atoms = set()

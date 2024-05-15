@@ -137,9 +137,7 @@ def functional_group_lift(graph: Data) -> set[Cell]:
         Each tuple contains the node indices of the atoms in the functional group
         and the corresponding feature vector.
     """
-    mol, is_sanitized = molecule_from_data(graph, return_sanitized=True)
-    if not is_sanitized:
-        return set()
+    mol = graph.mol
     cells = set()
     for pattern_name, smart in functional_group_patterns.items():
         pattern = Chem.MolFromSmarts(smart)

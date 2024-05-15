@@ -93,7 +93,7 @@ def bond_lift(graph: Data) -> set[Cell]:
 
     """
     cells = set()
-    mol = molecule_from_data(graph)
+    mol = graph.mol
     for bond in mol.GetBonds():
         node_idc = frozenset([bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()])
         cells.add((node_idc, compute_bond_features(bond)))

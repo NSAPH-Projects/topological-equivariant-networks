@@ -102,7 +102,7 @@ def ring_lift(graph: Data) -> set[Cell]:
 
     """
     cells = set()
-    mol = molecule_from_data(graph)
+    mol = graph.mol
     ring_info = mol.GetRingInfo()
     for ring in ring_info.AtomRings():
         node_idc = frozenset(ring)

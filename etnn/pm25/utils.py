@@ -7,7 +7,6 @@ from etnn.combinatorial_complexes import (
     CombinatorialComplexCollater,
 )
 
-
 class SpatialCC(InMemoryDataset):
     def __init__(
         self,
@@ -40,14 +39,17 @@ class SpatialCC(InMemoryDataset):
             data_list = [data for data in data_list if self.pre_filter(data)]
 
         if self.pre_transform is not None:
-            data_list = [self.pre_transform(data) for data in data_list]
+            if self.pre_transform == "standardize":
+                data_list = [standardize_cc(data) for data in data_list]
 
         self.save(data_list, self.processed_paths[0])
 
-
 def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
-    pass
-
+    for key, tensor in data.items():
+        if "x_" in key:
+            tensor = (tensor - tensor.mean()) / tensor.std()
+            data[key] = tensor
+    return data
 
 def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData:
     pass
@@ -58,7 +60,7 @@ if __name__ == "__main__":
     from etnn.combinatorial_complexes import CombinatorialComplexCollater
 
     # quick test
-    dataset = SpatialCC(root="data", force_reload=True)
+    dataset = SpatialCC(root="data", pre_transform="standardize", force_reload=True)
     follow_batch = ["cell_0", "cell_1", "cell_2"]
     collate_fn = CombinatorialComplexCollater(dataset, follow_batch=follow_batch)
     loader = DataLoader(dataset, collate_fn=collate_fn)

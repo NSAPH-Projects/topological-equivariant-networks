@@ -100,14 +100,14 @@ def lift_qm9_to_cc(args: Namespace) -> list[dict]:
         processed_adjacencies=args.processed_adjacencies,
         merge_neighbors=args.merge_neighbors,
     )
-    qm9_cc = QM9_CC("./datasets/QM9", pre_transform=transform.graph_to_ccdict)
+    qm9_cc = QM9_CC("./datasets/QM9_CC", pre_transform=transform.graph_to_ccdict)
     # qm9_cc = []
     # for graph in tqdm(qm9, desc="Lifting QM9 samples"):
     #    qm9_cc.append(transform.graph_to_ccdict(graph))
     return qm9_cc
 
 
-def save_lifted_qm9(storage_path: str, samples: list[dict]) -> None:
+def save_lifted_qm9(storage_path: str, lifted_qm9: QM9_CC) -> None:
     """
     Save the lifted QM9 samples to individual JSON files.
 
@@ -123,6 +123,7 @@ def save_lifted_qm9(storage_path: str, samples: list[dict]) -> None:
     None
     """
 
+    samples = lifted_qm9.data_list
     if os.path.exists(storage_path):
         raise FileExistsError(f"Path '{storage_path}' already exists.")
     os.makedirs(storage_path, exist_ok=True)
@@ -148,7 +149,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         "dim",
         "dis",
     ]
-    data_path = "./datasets/QM9_" + generate_dataset_dir_name(args, relevant_args)
+    data_path = "./datasets/QM9_CC_" + generate_dataset_dir_name(args, relevant_args)
 
     # Check if data path already exists
     if not os.path.exists(data_path):

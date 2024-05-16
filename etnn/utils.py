@@ -12,7 +12,7 @@ from torch_geometric.loader import DataLoader
 # from torch_scatter import scatter_add
 
 
-# from tgnn.models import TGNN
+# from etnn.models import ETNN
 
 
 def get_adjacency_types(
@@ -194,7 +194,7 @@ def get_model(args: Namespace) -> nn.Module:
     else:
         raise ValueError(f"Do not recognize dataset {args.dataset}.")
 
-    model = TGNN(
+    model = ETNN(
         num_features_per_rank=num_features_per_rank,
         num_hidden=args.num_hidden,
         num_out=num_out,

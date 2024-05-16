@@ -199,7 +199,7 @@ class ETNN(nn.Module):
         return out
 
     def __str__(self):
-        return f"TGNN ({self.type})"
+        return f"ETNN ({self.type})"
 
 
 if __name__ == "__main__":

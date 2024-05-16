@@ -43,5 +43,5 @@ do
         lr=$lr2
     fi
     # Call the specified script with the current target
-    sbatch --export=ALL,TARGET_NAME=$target,LR=$lr,CLIP_GRADIENT=$clip_gradient $script_name
+    sbatch --exclude=holygpu8a22501 --export=ALL,TARGET_NAME=$target,LR=$lr,CLIP_GRADIENT=$clip_gradient $script_name
 done

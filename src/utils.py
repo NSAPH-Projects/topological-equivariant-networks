@@ -260,6 +260,7 @@ def get_model(args: Namespace) -> nn.Module:
             initial_features=args.initial_features,
             visible_dims=args.visible_dims,
             task_type=args.task_type,
+            equivariant=args.equivariant
         )
     else:
         raise ValueError(f"Model type {args.model_name} not recognized.")

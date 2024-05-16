@@ -28,11 +28,12 @@ python src/main.py \
     --visible_dims 0 1 \
     --dim 1 \
     --num_layers 1 \
-    --connectivity "self" \
+    --connectivity "all_to_all" \
     --neighbor_types +1 \
     --epochs 200 \
     --batch_size 2 \
     --weight_decay 1e-16 \
     --lr 5e-4 \
     --num_hidden 128 \
-    --model_name ten
+    --model_name ten \
+    --equivariant

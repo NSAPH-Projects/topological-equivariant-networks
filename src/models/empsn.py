@@ -179,15 +179,18 @@ class EMPSNLayer(nn.Module):
                 nn.Linear(num_hidden, num_hidden),
             )
         
-        self.pos_update = nn.Linear(num_hidden, 3)
+        self.pos_update = nn.Linear(num_hidden, 1)
     
     def get_pos_delta(self, pos, mes, adj):
 
-        i, j = adj['0_0_1']
-        pos_delta = (pos[i] - pos[j]) * self.pos_update(mes['0_0_1'][i])   # shape of pos_delta = mes['0_0_1'] is [num_edges, num_hidden]
+        sender, receiver = adj['0_0_1']
+        pos_diff = pos[sender] - pos[receiver]
+        pos_upd = self.pos_update(mes['0_0_1'][receiver])
+        pos_delta = pos_diff * pos_upd
         # collect the pos_delta for each node: going from [num_edges, num_hidden] to [num_nodes, num_hidden]
-        pos_delta = scatter_add(pos_delta, i, dim=0, dim_size=pos.shape[0])
-        return pos_delta
+        new_pos_delta = scatter_add(pos_delta, sender, dim=0, dim_size=pos.shape[0])
+        return new_pos_delta
+    
     
     def forward(
         self, x: Dict[str, Tensor], adj: Dict[str, Tensor], pos, inv: Dict[str, Tensor]
@@ -211,7 +214,7 @@ class EMPSNLayer(nn.Module):
         h = {dim: self.update[dim](feature) for dim, feature in h.items()}
         x = {dim: feature + h[dim] for dim, feature in x.items()}
 
-        pos += self.get_pos_delta(pos, mes, adj).to(device=pos.device)
+        pos = pos + self.get_pos_delta(pos, mes, adj).to(device=pos.device)
         return x, pos
 
 

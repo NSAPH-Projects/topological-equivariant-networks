@@ -5,7 +5,7 @@ import time
 import torch
 from tqdm import tqdm
 
-import wandb
+# import wandb
 from qm9.utils import calc_mean_mad
 from utils import (
     get_adjacency_types,
@@ -27,8 +27,8 @@ def main(args):
     print(model)
 
     # Setup wandb
-    wandb.init(entity="ten-harvard", project=f"{args.dataset.upper()}-{args.target_name}")
-    wandb.config.update(vars(args))
+    # wandb.init(entity="ten-harvard", project=f"{args.dataset.upper()}-{args.target_name}")
+    # wandb.config.update(vars(args))
 
     # # Get loaders
     train_loader, val_loader, test_loader = get_loaders(args)
@@ -45,6 +45,7 @@ def main(args):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max)
     best_val_metric, best_model = metric["worst_value"], None
 
+    # torch.autograd.set_detect_anomaly(True)
     for _ in tqdm(range(args.epochs)):
         epoch_start_time, epoch_metric_train, epoch_metric_val = time.time(), 0, 0
 
@@ -88,16 +89,16 @@ def main(args):
         epoch_end_time = time.time()  # End timing the epoch
         epoch_duration = epoch_end_time - epoch_start_time  # Calculate the duration
 
-        wandb.log(
-            {
-                f"Train {metric['name']}": epoch_metric_train,
-                f"Validation {metric['name']}": epoch_metric_val,
-                "Epoch Duration": epoch_duration,
-                "Learning Rate": scheduler.get_last_lr()[0],
-                "Logit_0": pred[1 - pos_idx].item(),
-                "Logit_1": pred[pos_idx].item(),
-            }
-        )
+        # wandb.log(
+        #     {
+        #         f"Train {metric['name']}": epoch_metric_train,
+        #         f"Validation {metric['name']}": epoch_metric_val,
+        #         "Epoch Duration": epoch_duration,
+        #         "Learning Rate": scheduler.get_last_lr()[0],
+        #         "Logit_0": pred[1 - pos_idx].item(),
+        #         "Logit_1": pred[pos_idx].item(),
+        #     }
+        # )
 
     test_metric = 0
     best_model.eval()
@@ -111,11 +112,11 @@ def main(args):
     test_metric /= len(test_loader)
     print(f"Test {metric['name']}: {test_metric}")
 
-    wandb.log(
-        {
-            f"Test {metric['name']}": test_metric,
-        }
-    )
+    # wandb.log(
+    #     {
+    #         f"Test {metric['name']}": test_metric,
+    #     }
+    # )
 
 
 if __name__ == "__main__":
@@ -164,6 +165,12 @@ if __name__ == "__main__":
         default=False,
         help="""if all the neighbors of different types should be represented as a single adjacency
              matrix""",
+    )
+    parser.add_argument(
+    "--equivariant",
+    action="store_true",
+    default=False,
+    help="""specifies whether to enable the equivariant mode of the model""",
     )
     parser.add_argument(
         "--visible_dims",

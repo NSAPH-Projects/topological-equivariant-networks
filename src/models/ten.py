@@ -24,7 +24,7 @@ class TEN(nn.Module):
         initial_features: str,
         visible_dims: list[int] | None,
         task_type: str,
-        equivariant: bool = False,
+        equivariant: bool = True,
         compute_invariants: callable = compute_invariants,
     ) -> None:
         super().__init__()
@@ -112,19 +112,19 @@ class TEN(nn.Module):
         # embed features and E(n) invariant information
         x = {dim: self.feature_embedding(feature) for dim, feature in x.items()}
         
-        if not self.equivariant:
-            inv = self.compute_invariants(x_ind, graph.pos, adj, inv_ind, device)
-        else:
-            pos = graph.pos
 
-        # message passing
+        # compute geometric invariants based on the node positions 
+        inv = self.compute_invariants(x_ind, graph.pos, adj, inv_ind, device)
+
+        if self.equivariant:
+            pos = graph.pos
 
         for layer in self.layers:
             if not self.equivariant:
                 x, _ = layer(x, adj, graph.pos, inv)
             else:
-                inv = self.compute_invariants(x_ind, pos, adj, inv_ind, device)
                 x, pos = layer(x, adj, pos, inv)
+                inv = self.compute_invariants(x_ind, pos.clone().detach(), adj, inv_ind, device)
 
         # read out
         x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}

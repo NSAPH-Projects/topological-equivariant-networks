@@ -123,7 +123,7 @@ class TEN(nn.Module):
             if not self.equivariant:
                 x, _ = layer(x, adj, graph.pos, inv)
             else:
-                x, pos = layer(x, adj, pos, inv)
+                x, pos = layer(x, adj, pos, inv,equivariant=True)
                 inv = self.compute_invariants(x_ind, pos.clone().detach(), adj, inv_ind, device)
 
         # read out
@@ -150,7 +150,7 @@ class TEN(nn.Module):
         )
         out = self.post_pool(state)
         out = torch.squeeze(out)
-
+        print(out)
         return out
 
     def __str__(self):

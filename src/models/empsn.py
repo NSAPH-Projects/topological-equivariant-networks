@@ -191,9 +191,9 @@ class EMPSNLayer(nn.Module):
         new_pos_delta = scatter_add(pos_delta, sender, dim=0, dim_size=pos.shape[0])
         return new_pos_delta
     
-    
+
     def forward(
-        self, x: Dict[str, Tensor], adj: Dict[str, Tensor], pos, inv: Dict[str, Tensor]
+        self, x: Dict[str, Tensor], adj: Dict[str, Tensor], pos, inv: Dict[str, Tensor], equivariant: bool = False
     ) -> Dict[str, Tensor]:
         # pass the different messages of all adjacency types
         mes = {
@@ -214,7 +214,9 @@ class EMPSNLayer(nn.Module):
         h = {dim: self.update[dim](feature) for dim, feature in h.items()}
         x = {dim: feature + h[dim] for dim, feature in x.items()}
 
-        pos = pos + self.get_pos_delta(pos, mes, adj).to(device=pos.device)
+        if equivariant:
+            pos = pos + self.get_pos_delta(pos, mes, adj).to(device=pos.device)
+
         return x, pos
 
 

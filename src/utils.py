@@ -182,7 +182,15 @@ def merge_adjacencies(adjacencies: list[str]) -> list[str]:
 def get_model(args: Namespace) -> nn.Module:
     """Return model based on name."""
     if args.dataset == "qm9":
-        num_features_per_rank = {0: 35, 1: 28, 2: 30, 3: 20}
+        if set(args.initial_features) == set(["mem", "hetero"]):
+            num_features_per_rank = {0: 20, 1: 24, 2: 27, 3: 5}
+        elif set(args.initial_features) == set(["node"]):
+            num_features_per_rank = {0: 15, 1: 15, 2: 15, 3: 15}
+        else:
+            raise ValueError(
+                f"num_features undefined for initial features {args.initial_features}."
+            )
+
         num_out = 1
     else:
         raise ValueError(f"Do not recognize dataset {args.dataset}.")

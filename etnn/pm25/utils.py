@@ -42,7 +42,7 @@ class SpatialCC(InMemoryDataset):
         if self.pre_transform is not None:
             data_list = [self.pre_transform(data) for data in data_list]
 
-        self.save(data_list, self.processed_paths[0])
+        self.save(data_list * 2, self.processed_paths[0])
 
 
 def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
@@ -61,6 +61,6 @@ if __name__ == "__main__":
     dataset = SpatialCC(root="data", force_reload=True)
     follow_batch = ["cell_0", "cell_1", "cell_2"]
     collate_fn = CombinatorialComplexCollater(dataset, follow_batch=follow_batch)
-    loader = DataLoader(dataset, collate_fn=collate_fn)
+    loader = DataLoader(dataset, collate_fn=collate_fn, batch_size=2)
     for batch in loader:
         pass

@@ -93,9 +93,9 @@ class ETNNMessagerLayer(nn.Module):
         messages = self.message_mlp(state)
         edge_weights = self.edge_inf_mlp(messages)
         messages_aggr = torch.scatter_add(
-            input=torch.zeros((x.shape[0], messages.shape[1]), device=x.device),
+            input=torch.zeros((x_rec.shape[0], messages.shape[1]), device=x_rec.device),
             src=messages * edge_weights,
-            index=index_rec,
+            index=index_rec[:, None],
             dim=0,
         )
 

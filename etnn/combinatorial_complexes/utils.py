@@ -15,7 +15,6 @@ from torch_geometric.transforms import BaseTransform
 from etnn.combinatorial_complexes.lifter import Lifter
 
 
-
 class CombinatorialComplexCollater(Collater):
 
     def __call__(self, batch: list[Data]) -> Batch:
@@ -67,12 +66,7 @@ class CombinatorialComplexCollater(Collater):
 
         for data in batch:
             for attr_name in data.keys():
-                if re.match(r"cell_\d+", attr_name):
-                    tensor = getattr(data, attr_name)
-                    max_cols[attr_name] = max(
-                        max_cols.get(attr_name, 0), tensor.size(1)
-                    )
-                elif re.match(r"inv_\d+_\d+", attr_name):
+                if re.match(r"inv_\d+_\d+", attr_name):
                     tensor = getattr(data, attr_name)
                     max_rows[attr_name] = max(
                         max_rows.get(attr_name, 0), tensor.size(0)
@@ -122,12 +116,13 @@ class CombinatorialComplexData(Data):
         pair.
     """
 
-    attribute_dtype = MappingProxyType(
+    attr_dtype = MappingProxyType(
         {
             "x_": torch.float32,
-            "cell_": torch.float64,
+            "cell_": torch.long,
+            "lengths_": torch.long,
             "mem_": torch.bool,
-            "adj_": torch.int64,
+            "adj_": torch.long,
             "inv_": torch.float64,
         }
     )
@@ -151,20 +146,16 @@ class CombinatorialComplexData(Data):
             the number of nodes for `inv_i_j` and `cell_i` attributes, or calls the superclass's
             `__inc__` method for other attributes.
         """
-        num_nodes = getattr(self, "cell_0").size(0)
         # The adj_i_j attribute holds cell indices, increment each dim by the number of cells of
         # corresponding rank
         if re.match(r"adj_(\d+_\d+|\d+_\d+_\d+)", key):
             i, j = key.split("_")[1:3]
-            return torch.tensor(
-                [
-                    [getattr(self, f"cell_{i}").size(0)],
-                    [getattr(self, f"cell_{j}").size(0)],
-                ]
-            )
+            num_cells_i = len(getattr(self, f"lengths_{i}"))
+            num_cells_j = len(getattr(self, f"lengths_{j}"))
+            return torch.tensor([[num_cells_i], [num_cells_j]])
         # The inv_i_j and cell_i attributes hold node indices, they should be incremented
         elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"cell_\d+", key):
-            return num_nodes
+            return len(self.lengths_0)
         else:
             return super().__inc__(key, value, *args, **kwargs)
 
@@ -231,46 +222,51 @@ class CombinatorialComplexData(Data):
                     rank = key.split("_")[1]
                     num_features = data["num_features_dict"][rank]
                     attr_value = torch.empty(
-                        (0, num_features), dtype=cls.attribute_dtype["x_"]
+                        (0, num_features), dtype=cls.attr_dtype["x_"]
                     )
                 else:
-                    attr_value = torch.tensor(value, dtype=cls.attribute_dtype["x_"])
+                    attr_value = torch.tensor(value, dtype=cls.attr_dtype["x_"])
                 mapping[key] = attr_value
 
             # cast the cell_i
             elif "cell_" in key:
                 if len(value) == 0:
-                    attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["cell_"])
+                    attr_value = torch.empty((0, 0), dtype=cls.attr_dtype["cell_"])
                 else:
-                    attr_value = nt.nested_tensor(value, dtype=cls.attribute_dtype["cell_"])
-                    attr_value = nt.to_padded_tensor(attr_value, padding=torch.nan)
-
-                mapping[key] = attr_value
+                    # attr_value = nt.nested_tensor(value, dtype=cls.attr_dtype["cell_"])
+                    # attr_value = nt.to_padded_tensor(attr_value, padding=torch.nan)
+                    mapping[key] = torch.cat(
+                        [torch.tensor(v, dtype=cls.attr_dtype["cell_"]) for v in value],
+                        dim=0,
+                    )
+                    mapping[key.replace("cell_", "lengths_")] = torch.tensor(
+                        [len(c) for c in value], dtype=torch.long
+                    )
 
             # cast the mem_i
             elif "mem_" in key:
                 num_lifters = len(data["mem_0"][0])
                 if len(value) == 0:
                     attr_value = torch.empty(
-                        (0, num_lifters), dtype=cls.attribute_dtype["mem_"]
+                        (0, num_lifters), dtype=cls.attr_dtype["mem_"]
                     )
                 else:
-                    attr_value = torch.tensor(value, dtype=cls.attribute_dtype["mem_"])
+                    attr_value = torch.tensor(value, dtype=cls.attr_dtype["mem_"])
                 mapping[key] = attr_value
 
             # cast the adj_i_j[_foo]
             elif "adj_" in key:
-                attr_value = torch.tensor(value, dtype=cls.attribute_dtype["adj_"])
+                attr_value = torch.tensor(value, dtype=cls.attr_dtype["adj_"])
                 mapping[key] = attr_value
 
             # cast the inv_i_j[_foo]
             elif "inv_" in key:
                 if len(value) == 0:
-                    attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["inv_"])
+                    attr_value = torch.empty((0, 0), dtype=cls.attr_dtype["inv_"])
                 else:
                     attr_value = torch.tensor(
                         pad_lists_to_same_length(value),
-                        dtype=cls.attribute_dtype["inv_"],
+                        dtype=cls.attr_dtype["inv_"],
                     ).t()
                 mapping[key] = attr_value
 
@@ -800,4 +796,4 @@ def sparse_to_dense(sparse_matrix: csc_matrix) -> torch.Tensor:
     dense_array = np.array([rows, cols])
 
     # Convert the NumPy array to a PyTorch tensor
-    return torch.from_numpy(dense_array).type(torch.int64)
+    return torch.from_numpy(dense_array).type(torch.long)

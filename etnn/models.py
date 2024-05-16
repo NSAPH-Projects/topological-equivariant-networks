@@ -26,6 +26,9 @@ class ETNN(nn.Module):
         normalize_invariants: bool,
         compute_invariants: callable = compute_invariants,
         global_pool: bool = True,
+        equivariant_update: bool = False,
+        num_pre_pool_layers: int = 2,
+        num_post_pool_layer: int = 2,
     ) -> None:
         super().__init__()
 
@@ -35,6 +38,7 @@ class ETNN(nn.Module):
         self.max_dim = max_dim
         self.adjacencies = adjacencies
         self.normalize_invariants = normalize_invariants
+        self.global_pool = global_pool
 
         if visible_dims is not None:
             self.visible_dims = visible_dims
@@ -69,23 +73,44 @@ class ETNN(nn.Module):
         )
 
         self.pre_pool = nn.ModuleDict()
+
         for dim in visible_dims:
+            out_dim = num_hidden if not global_pool else num_out
             self.pre_pool[str(dim)] = nn.Sequential(
-                nn.Linear(num_hidden, num_hidden),
-                nn.SiLU(),
-                nn.Linear(num_hidden, num_hidden),
+                *[
+                    nn.Sequential(
+                        nn.Linear(num_hidden, num_hidden),
+                        nn.SiLU(),
+                    )
+                    for _ in range(num_pre_pool_layers - 1)
+                ],
+                nn.Linear(num_hidden, out_dim),
             )
-        self.post_pool = nn.Sequential(
-            nn.Sequential(
-                nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
-                nn.SiLU(),
-                nn.Linear(num_hidden, num_out),
+
+        if global_pool:
+            self.post_pool = nn.Sequential(
+                nn.Sequential(
+                    *[
+                        nn.Sequential(
+                            nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
+                            nn.SiLU(),
+                        )
+                        for _ in range(num_post_pool_layer - 1)
+                    ],
+                    nn.Linear(num_hidden, num_out),
+                )
             )
-        )
 
     def forward(self, graph: Data) -> Tensor:
         device = graph.pos.device
-        cell_ind = {str(i): getattr(graph, f"cell_{i}") for i in self.visible_dims}
+
+        # make nested tensor for cell_ind
+        # cell_ind = {str(i): getattr(graph, f"cell_{i}") for i in self.visible_dims}
+        cell_ind = {}
+        for r in self.visible_dims:
+            lengths = getattr(graph, f"lengths_{r}")
+            cat_cells = getattr(graph, f"cell_{r}")
+            cell_ind[str(r)] = torch.split(cat_cells, lengths.tolist())
 
         adj = {
             adj_type: getattr(graph, f"adj_{adj_type}")
@@ -105,9 +130,10 @@ class ETNN(nn.Module):
             features[feature_type] = {}
             for i in self.visible_dims:
                 if feature_type == "node":
-                    features[feature_type][str(i)] = compute_centroids(
-                        cell_ind[str(i)], graph.x
-                    )
+                    # features[feature_type][str(i)] = compute_centroids(
+                    #     cell_ind[str(i)], graph.x
+                    # )
+                    raise NotImplementedError
                 elif feature_type == "mem":
                     mem_i = getattr(graph, f"mem_{i}")
                     features[feature_type][str(i)] = mem_i.float()
@@ -143,23 +169,23 @@ class ETNN(nn.Module):
         # read out
         x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}
 
-        # create one dummy node with all features equal to zero for each graph and each rank
-        batch_size = graph.y.shape[0]
-        x = {
-            dim: torch.cat(
-                (feature, torch.zeros(batch_size, feature.shape[1]).to(device)),
-                dim=0,
-            )
-            for dim, feature in x.items()
-        }
-        cell_batch = {
-            dim: torch.cat((indices, torch.tensor(range(batch_size)).to(device)))
-            for dim, indices in cell_batch.items()
-        }
-
         if self.global_pool:
+            # create one dummy node with all features equal to zero for each graph and each rank
+            batch_size = graph.y.shape[0]
             x = {
-                dim: global_add_pool(x[dim], cell_batch[dim]) for dim, feature in x.items()
+                dim: torch.cat(
+                    (feature, torch.zeros(batch_size, feature.shape[1]).to(device)),
+                    dim=0,
+                )
+                for dim, feature in x.items()
+            }
+            cell_batch = {
+                dim: torch.cat((indices, torch.tensor(range(batch_size)).to(device)))
+                for dim, indices in cell_batch.items()
+            }
+            x = {
+                dim: global_add_pool(x[dim], cell_batch[dim])
+                for dim, feature in x.items()
             }
             state = torch.cat(
                 tuple([feature for dim, feature in x.items()]),
@@ -178,11 +204,24 @@ class ETNN(nn.Module):
 
 if __name__ == "__main__":
     from etnn.pm25 import SpatialCC
+    from etnn.combinatorial_complexes import CombinatorialComplexCollater
+    from torch.utils.data import DataLoader
+    import time
 
     dataset = SpatialCC(root="data", force_reload=True)
+    follow_batch = ["cell_0", "cell_1", "cell_2"]
+    collate_fn = CombinatorialComplexCollater(dataset, follow_batch=follow_batch)
+    loader = DataLoader(
+        dataset,
+        collate_fn=collate_fn,
+        num_workers=0,
+        persistent_workers=True,
+        batch_size=1,
+    )
 
-    data = next(iter(dataset))
-
+    # get a sample data point to infer the complex properties
+    # TODO: this metadata should be stored in the SpatialCC object
+    data = next(iter(loader))
     num_features_per_rank = {
         int(k.split("_")[1]): v.shape[1] for k, v in data.items() if "x_" in k
     }
@@ -193,6 +232,7 @@ if __name__ == "__main__":
         num_hidden=8,
         num_out=1,
         num_layers=4,
+        num_post_pool_layer=1,
         max_dim=max_dim,
         adjacencies=["0_0", "0_1", "1_1", "1_2", "2_2"],
         initial_features=["hetero"],
@@ -200,5 +240,8 @@ if __name__ == "__main__":
         normalize_invariants=True,
         global_pool=False,
     )
-    out = model(data)
-    print(out.shape)
+
+    for batch in loader:
+        start = time.time()
+        out = model(batch)
+        print("Time taken precompile: ", time.time() - start)

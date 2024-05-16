@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
+
 # from torch_scatter import scatter_add
 
 
@@ -471,38 +472,78 @@ def compute_invariants(
     new_features = {}
     mean_cell_positions = {}
     max_pairwise_distances = {}
+
     for rank_pair, cell_pairs in adj.items():
 
         # Compute mean cell positions memoized
         sender_rank, receiver_rank = rank_pair.split("_")[:2]
+
         for rank in [sender_rank, receiver_rank]:
-            if rank not in mean_cell_positions:
-                mean_cell_positions[rank] = compute_centroids(feat_ind[rank], pos)
-            if rank not in max_pairwise_distances:
-                max_pairwise_distances[rank] = compute_max_pairwise_distances(
-                    feat_ind[rank], pos
-                )
+            max_dim = max([len(x) for x in feat_ind[rank]])
+            if max_dim == 1:
+                if rank not in mean_cell_positions:
+                    feats = torch.cat(feat_ind[rank])
+                    mean_cell_positions[rank] = pos[feats]
+                if rank not in max_pairwise_distances:
+                    max_pairwise_distances[rank] = torch.zeros(
+                        len(feat_ind[rank]), device=pos.device
+                    )
+            else:
+                if rank not in mean_cell_positions:
+                    mean_cell_positions[rank] = torch.stack(
+                        [pos[f].mean(dim=0) for f in feat_ind[rank]]
+                    )
+                if rank not in max_pairwise_distances:
+                    max_pairwise_distances[rank] = torch.stack(
+                        [
+                            torch.norm(pos[f][:, None] - pos[f], dim=2).max()
+                            for f in feat_ind[rank]
+                        ]
+                    )
 
         # Compute mean distances
         indexed_sender_centroids = mean_cell_positions[sender_rank][cell_pairs[0]]
         indexed_receiver_centroids = mean_cell_positions[receiver_rank][cell_pairs[1]]
         differences = indexed_sender_centroids - indexed_receiver_centroids
-        distances = torch.sqrt((differences**2).sum(dim=1, keepdim=True))
+        centroid_dists = torch.sqrt((differences**2).sum(dim=1))
 
-        # Retrieve maximum pairwise distances
+        # Compute diameter
         max_dist_sender = max_pairwise_distances[sender_rank][cell_pairs[0]]
         max_dist_receiver = max_pairwise_distances[receiver_rank][cell_pairs[1]]
 
-        # Compute Hausdorff distances
-        sender_cells = feat_ind[sender_rank][cell_pairs[0]]
-        receiver_cells = feat_ind[receiver_rank][cell_pairs[1]]
-        hausdorff_distances = compute_hausdorff_distances(
-            sender_cells, receiver_cells, pos
-        )
+        # Compute haussdorf distances
+        max_dim_sender = max(len(x) for x in feat_ind[sender_rank])
+        max_dim_receiver = max(len(x) for x in feat_ind[receiver_rank])
+
+        hausdorff_dists_sender = torch.zeros_like(centroid_dists)
+        hausdorff_dists_receiver = torch.zeros_like(centroid_dists)
+
+        if max_dim_sender == 1 and max_dim_receiver == 1:
+            feats_sender = torch.cat(feat_ind[sender_rank])
+            feats_receiver = torch.cat(feat_ind[receiver_rank])
+            pos_sender = pos[feats_sender[cell_pairs[0]]]
+            pos_receiver = pos[feats_receiver[cell_pairs[1]]]
+            dists = torch.norm(pos_sender - pos_receiver, dim=1)
+            hausdorff_dists_sender = dists
+            hausdorff_dists_receiver = dists
+        else:
+            for j in range(cell_pairs.shape[1]):
+                pos_sender = pos[feat_ind[sender_rank][cell_pairs[0, j]]]
+                pos_receiver = pos[feat_ind[receiver_rank][cell_pairs[1, j]]]
+                distmat_cross = torch.norm(pos_sender[:, None] - pos_receiver, dim=2)
+                hausdorff_dists_sender[j] = distmat_cross.min(dim=1)[0].max()
+                hausdorff_dists_receiver[j] = distmat_cross.min(dim=0)[0].max()
 
         # Combine all features
-        new_features[rank_pair] = torch.cat(
-            [distances, max_dist_sender, max_dist_receiver, hausdorff_distances], dim=1
+        new_features[rank_pair] = torch.stack(
+            [
+                centroid_dists,
+                max_dist_sender,
+                max_dist_receiver,
+                hausdorff_dists_sender,
+                hausdorff_dists_receiver,
+            ],
+            dim=1,
         )
 
     return new_features
@@ -682,4 +723,5 @@ def compute_centroids(
     sum_features = torch.sum(nodes_features, dim=1)
     cell_cardinalities = torch.sum(cells_int != -1, dim=1, keepdim=True)
     centroids = sum_features / cell_cardinalities
+
     return centroids

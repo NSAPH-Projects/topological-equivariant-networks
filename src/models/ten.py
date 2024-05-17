@@ -25,6 +25,7 @@ class TEN(nn.Module):
         visible_dims: list[int] | None,
         normalize_invariants: bool,
         compute_invariants: callable = compute_invariants,
+        lean: bool = True,
     ) -> None:
         super().__init__()
 
@@ -34,6 +35,7 @@ class TEN(nn.Module):
         self.max_dim = max_dim
         self.adjacencies = adjacencies
         self.normalize_invariants = normalize_invariants
+        self.lean = lean
 
         if visible_dims is not None:
             self.visible_dims = visible_dims
@@ -55,22 +57,20 @@ class TEN(nn.Module):
         self.layers = nn.ModuleList(
             [
                 EMPSNLayer(
-                    self.adjacencies,
-                    self.visible_dims,
-                    num_hidden,
-                    self.num_inv_fts_map,
+                    self.adjacencies, self.visible_dims, num_hidden, self.num_inv_fts_map, self.lean
                 )
                 for _ in range(num_layers)
             ]
         )
 
         self.pre_pool = nn.ModuleDict()
+
         for dim in visible_dims:
-            self.pre_pool[str(dim)] = nn.Sequential(
-                nn.Linear(num_hidden, num_hidden),
-                nn.SiLU(),
-                nn.Linear(num_hidden, num_hidden),
-            )
+            pre_pool_layers = [nn.Linear(num_hidden, num_hidden), nn.SiLU()]
+            if not self.lean:
+                pre_pool_layers.append(nn.Linear(num_hidden, num_hidden))
+            self.pre_pool[str(dim)] = nn.Sequential(*pre_pool_layers)
+
         self.post_pool = nn.Sequential(
             nn.Sequential(
                 nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),

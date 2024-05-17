@@ -22,16 +22,18 @@ class EMPSNLayer(nn.Module):
         visible_dims: list[int],
         num_hidden: int,
         num_features_map: dict[str, int],
+        lean: bool = True,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
         self.num_features_map = num_features_map
         self.visible_dims = visible_dims
+        self.lean = lean
 
         # messages
         self.message_passing = nn.ModuleDict(
             {
-                adj: SimplicialEGNNLayer(num_hidden, self.num_features_map[adj])
+                adj: SimplicialEGNNLayer(num_hidden, self.num_features_map[adj], lean=lean)
                 for adj in adjacencies
             }
         )
@@ -40,11 +42,10 @@ class EMPSNLayer(nn.Module):
         self.update = nn.ModuleDict()
         for dim in self.visible_dims:
             factor = 1 + sum([adj_type[2] == str(dim) for adj_type in adjacencies])
-            self.update[str(dim)] = nn.Sequential(
-                nn.Linear(factor * num_hidden, num_hidden),
-                nn.SiLU(),
-                nn.Linear(num_hidden, num_hidden),
-            )
+            update_layers = [nn.Linear(factor * num_hidden, num_hidden)]
+            if not self.lean:
+                update_layers.extend([nn.SiLU(), nn.Linear(num_hidden, num_hidden)])
+            self.update[str(dim)] = nn.Sequential(*update_layers)
 
     def forward(
         self, x: Dict[str, Tensor], adj: Dict[str, Tensor], inv: Dict[str, Tensor]
@@ -72,14 +73,13 @@ class EMPSNLayer(nn.Module):
 
 
 class SimplicialEGNNLayer(nn.Module):
-    def __init__(self, num_hidden, num_inv):
+    def __init__(self, num_hidden, num_inv, lean: bool = True):
         super().__init__()
-        self.message_mlp = nn.Sequential(
-            nn.Linear(2 * num_hidden + num_inv, num_hidden),
-            nn.SiLU(),
-            nn.Linear(num_hidden, num_hidden),
-            nn.SiLU(),
-        )
+        self.lean = lean
+        message_mlp_layers = [nn.Linear(2 * num_hidden + num_inv, num_hidden), nn.SiLU()]
+        if not self.lean:
+            message_mlp_layers.extend([nn.Linear(num_hidden, num_hidden), nn.SiLU()])
+        self.message_mlp = nn.Sequential(*message_mlp_layers)
         self.edge_inf_mlp = nn.Sequential(nn.Linear(num_hidden, 1), nn.Sigmoid())
 
     def forward(self, x, index, edge_attr):

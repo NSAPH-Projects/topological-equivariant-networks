@@ -170,6 +170,14 @@ if __name__ == "__main__":
         default=False,
         help="if the invariant features should be normalized (via batch normalization)",
     )
+
+    parser.add_argument(
+        "--lean",
+        action="store_true",
+        default=False,
+        help="""if a lean architecture should be used. drops up to half of the layers depending on
+             the number of message passing layers""",
+    )
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
     parser.add_argument("--min_lr", type=float, default=0, help="learning rate")

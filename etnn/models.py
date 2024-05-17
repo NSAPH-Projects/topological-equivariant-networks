@@ -25,16 +25,19 @@ class ETNN(nn.Module):
         num_layers: int,
         adjacencies: list[str],
         num_invariants = 5,
+        depth_etnn_layers = 1,
         compute_invariants: callable = compute_invariants,
         equivariant: bool = False,
         num_readout_layers: int = 2,
         jit: bool = False,
+        haussdorf: bool = False,
     ) -> None:
         super().__init__()
         # self.num_inv_fts_map = self.compute_invariants.num_features_map
         self.adjacencies = adjacencies
         self.equivariant = equivariant
         self.compute_invariants = compute_invariants
+        self.haussdorf = haussdorf
 
         self.visible_dims = list(num_features_per_rank.keys())
         self.num_inv_fts_map = {k: num_invariants for k in adjacencies}
@@ -54,6 +57,7 @@ class ETNN(nn.Module):
                     num_hidden,
                     self.num_inv_fts_map,
                     equivariant=self.equivariant,
+                    num_layers=depth_etnn_layers,
                 )
                 for _ in range(num_layers)
             ]
@@ -110,7 +114,7 @@ class ETNN(nn.Module):
 
         # message passing
         pos = graph.pos
-        inv = self.compute_invariants(cell_ind, pos, adj)
+        inv = self.compute_invariants(cell_ind, pos, adj, haussdorf)
         # inv = compute_invariants2(cell_ind, pos, adj, agg_indices)
 
         for layer in self.layers:
@@ -118,7 +122,7 @@ class ETNN(nn.Module):
                 x, _ = layer(x, adj, pos, inv)
             else:
                 x, pos = layer(x, adj, pos, inv)
-                inv = self.compute_invariants(cell_ind, pos, adj)
+                inv = self.compute_invariants(cell_ind, pos, adj, haussdorf)
                 # inv = compute_invariants2(cell_ind, pos, adj, agg_indices)
 
         # read out

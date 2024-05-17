@@ -1,3 +1,5 @@
+import numpy as np
+import pandas as pd
 import torch
 import json
 from torch_geometric.data import InMemoryDataset
@@ -6,6 +8,7 @@ from etnn.combinatorial_complexes import (
     CombinatorialComplexTransform,
     CombinatorialComplexCollater,
 )
+
 
 class SpatialCC(InMemoryDataset):
     def __init__(
@@ -35,29 +38,50 @@ class SpatialCC(InMemoryDataset):
         data = CombinatorialComplexData.from_json(path)
         data_list = [data]
 
+        # Add road, tract indictor in the data
+        tract_indicator = pd.read_csv(f"{self.raw_dir}/{self.raw_file_names[1]}")
+        data.road = torch.tensor(tract_indicator.road.values).to(data.pos.device)
+        data.tract = torch.tensor(tract_indicator.tract.values).to(data.pos.device)
+
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
 
         if self.pre_transform is not None:
-            if self.pre_transform == "standardize":
-                data_list = [standardize_cc(data) for data in data_list]
+            data_list = [self.pre_transform(data) for data in data_list]
 
         self.save(data_list, self.processed_paths[0])
+
 
 def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
     for key, tensor in data.items():
         if "x_" in key:
-            #loop per column
+            # loop per column
             for i in range(tensor.shape[1]):
                 # if dummy variable, skip
-                if tensor[:,i].unique().shape[0] == 2:
+                if tensor[:, i].unique().shape[0] == 2:
                     continue
                 else:
-                    tensor[:,i] = (tensor[:,i] - tensor[:,i].mean()) / tensor[:,i].std()
+                    tensor[:, i] = (tensor[:, i] - tensor[:, i].mean()) / tensor[
+                        :, i
+                    ].std()
         if "pos" in key:
             # normalize to 0-1 range per columns
-            data[key] = (tensor - tensor.min(0)) / (tensor.max(0) - tensor.min(0))
+            data[key] = (tensor - tensor.amin(0)) / (tensor.amax(0) - tensor.amin(0))
     return data
+
+
+def create_mask(
+    data: CombinatorialComplexData, rate: float = 0.1
+) -> CombinatorialComplexData:
+    tract = data.tract.cpu().numpy()
+    unique_vals = np.unique(tract)
+    m = int(rate * len(unique_vals))
+    mask_vals = np.random.choice(unique_vals, m, replace=False)
+    masked = np.isin(tract, mask_vals)
+    data.mask = torch.tensor(masked).float().to(data.pos.device)
+
+    return data
+
 
 def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData:
     pass
@@ -67,8 +91,16 @@ if __name__ == "__main__":
     from torch.utils.data import DataLoader
     from etnn.combinatorial_complexes import CombinatorialComplexCollater
 
+    # pretransform compose
+    from torch_geometric.transforms import Compose
+
     # quick test
-    dataset = SpatialCC(root="data", pre_transform="standardize", force_reload=True)
+    dataset = SpatialCC(
+        root="data",
+        transform=create_mask,
+        pre_transform=standardize_cc,
+        force_reload=True,
+    )
     follow_batch = ["cell_0", "cell_1", "cell_2"]
     collate_fn = CombinatorialComplexCollater(dataset, follow_batch=follow_batch)
     loader = DataLoader(dataset, collate_fn=collate_fn, batch_size=2)

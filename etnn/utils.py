@@ -524,9 +524,10 @@ def compute_invariants(
     feat_ind: dict[str, list[Tensor]],
     pos: torch.FloatTensor,
     adj: dict[str, torch.LongTensor],
+    haussdorf: bool = True,
     # inv_ind: dict[str, torch.FloatTensor] = None,
     # device: torch.device = None,
-) -> dict[str, torch.FloatTensor]:
+) -> dict[str, Tensor]:
     """
     Compute geometric invariants between pairs of cells specified in `adj`.
 
@@ -629,141 +630,46 @@ def compute_invariants(
         max_dim_sender = max(len(x) for x in feat_ind[send_rank])
         max_dim_receiver = max(len(x) for x in feat_ind[rec_rank])
 
-        # this part is a bit tedious since we want to solve independently the easy cases
-        # for better performance
-        n_cells = cell_pairs.shape[1]
 
-        if max_dim_sender == 1 and max_dim_receiver == 1:
-            feats_sender = torch.cat([feat_ind[send_rank][c] for c in cell_pairs[0]])
-            feats_receiver = torch.cat([feat_ind[rec_rank][c] for c in cell_pairs[1]])
-            pos_sender = pos[feats_sender]
-            pos_receiver = pos[feats_receiver]
-            # cells have equal size, just get the positions and compute the distance
-            # hausdorff is the trivially equal to the distance
-            dists = torch.norm(pos_sender - pos_receiver, dim=1)
-            hausdorff_dists_sender = dists
-            hausdorff_dists_receiver = dists
-        # elif max_dim_sender == 1:
-        #     feats_sender = torch.cat([feat_ind[send_rank][c] for c in cell_pairs[0]])
-        #     feats_receiver = torch.cat([feat_ind[rec_rank][c] for c in cell_pairs[1]])
-        #     pos_sender = pos[feats_sender]
-        #     pos_receiver = pos[feats_receiver]
-        #     # now length receiver > sender, but we can interleave
-        #     len_rec = [len(feat_ind[rec_rank][c]) for c in cell_pairs[1]]
-        #     len_rec = torch.tensor(len_rec, device=pos.device)
-        #     pos_sender = pos_sender.repeat_interleave(len_rec, dim=0)
-        #     # distances are now comparable
-        #     dists = torch.norm(pos_sender - pos_receiver, dim=1)
-        #     # now obtain the min for each sender
-        #     index_sender = torch.arange(cell_pairs.shape[1], device=pos.device)
-        #     index_sender = index_sender.repeat_interleave(len_rec)
-        #     dist_min_per_sender = scatter_min(dists, index_sender, dim_size=n_cells)
-        #     hausdorff_dists_sender = dist_min_per_sender
-        #     hausdorff_dists_receiver = dist_min_per_sender
-        # elif max_dim_receiver == 1:
-        #     # converse case when length sender > receiver
-        #     feats_sender = torch.cat([feat_ind[send_rank][c] for c in cell_pairs[0]])
-        #     feats_receiver = torch.cat([feat_ind[rec_rank][c] for c in cell_pairs[1]])
-        #     pos_sender = pos[feats_sender]
-        #     pos_receiver = pos[feats_receiver]
-        #     len_send = [len(feat_ind[send_rank][c]) for c in cell_pairs[0]]
-        #     len_send = torch.tensor(len_send, device=pos.device)
-        #     pos_receiver = pos_receiver.repeat(len_send, 1)
-        #     # distances are now comparable
-        #     dists = torch.norm(pos_sender - pos_receiver, dim=1)
-        #     # now obtain the min for each receiver
-        #     index_receiver = torch.arange(cell_pairs.shape[1], device=pos.device)
-        #     index_receiver = index_receiver.repeat(len_send)
-        #     dist_min_per_receiver = scatter_min(dists, index_receiver, dim_size=n_cells)
-        #     hausdorff_dists_sender = dist_min_per_receiver
-        #     hausdorff_dists_receiver = dist_min_per_receiver
+        if haussdorf:
+            # easy case/graph
+            if max_dim_sender == 1 and max_dim_receiver == 1:
+                feats_sender = torch.cat([feat_ind[send_rank][c] for c in cell_pairs[0]])
+                feats_receiver = torch.cat([feat_ind[rec_rank][c] for c in cell_pairs[1]])
+                pos_sender = pos[feats_sender]
+                pos_receiver = pos[feats_receiver]
+                # cells have equal size, just get the positions and compute the distance
+                # hausdorff is the trivially equal to the distance
+                dists = torch.norm(pos_sender - pos_receiver, dim=1)
+                hausdorff_dists_sender = dists
+                hausdorff_dists_receiver = dists
+            # general case
+            else:
+                hausdorff_dists_sender = torch.zeros_like(centroid_dists)
+                hausdorff_dists_receiver = torch.zeros_like(centroid_dists)
+                for j in range(cell_pairs.shape[1]):
+                    pos_sender = pos[feat_ind[send_rank][cell_pairs[0, j]]]
+                    pos_receiver = pos[feat_ind[rec_rank][cell_pairs[1, j]]]
+                    distmat_cross = torch.norm(pos_sender[:, None] - pos_receiver, dim=2)
+                    hausdorff_dists_sender[j] = distmat_cross.min(dim=1)[0].max()
+                    hausdorff_dists_receiver[j] = distmat_cross.min(dim=0)[0].max()
+
+            # Combine all features
+            new_features[rank_pair] = torch.stack(
+                [
+                    centroid_dists,
+                    max_dist_sender,
+                    max_dist_receiver,
+                    hausdorff_dists_sender,
+                    hausdorff_dists_receiver,
+                ],
+                dim=1,
+            )
         else:
-            #     list_left = [
-            #         feat_ind[send_rank][c].detach().cpu().numpy() for c in cell_pairs[0]
-            #     ]
-            #     list_right = [
-            #         feat_ind[rec_rank][c].detach().cpu().numpy() for c in cell_pairs[1]
-            #     ]
-            #     hausdorff_dists_sender, hausdorff_dists_receiver = haussdorff(
-            #         list_left, list_right, pos
-            #     )
-
-            hausdorff_dists_sender = torch.zeros_like(centroid_dists)
-            hausdorff_dists_receiver = torch.zeros_like(centroid_dists)
-            for j in range(cell_pairs.shape[1]):
-                pos_sender = pos[feat_ind[send_rank][cell_pairs[0, j]]]
-                pos_receiver = pos[feat_ind[rec_rank][cell_pairs[1, j]]]
-                distmat_cross = torch.norm(pos_sender[:, None] - pos_receiver, dim=2)
-                hausdorff_dists_sender[j] = distmat_cross.min(dim=1)[0].max()
-                hausdorff_dists_receiver[j] = distmat_cross.min(dim=0)[0].max()
-            # # make a list of all possible sender/receiver indices for accumulation
-            # index_sender = []
-            # index_receiver = []
-            # index_cell = []
-            # offset_sender = 0
-            # offset_receiver = 0
-            # for j in range(cell_pairs.shape[1]):
-            #     cells_0 = feat_ind[send_rank][cell_pairs[0, j]]
-            #     cells_1 = feat_ind[rec_rank][cell_pairs[1, j]]
-            #     index_sender_j = offset_sender + torch.arange(len(cells_0))
-            #     index_sender_j = index_sender_j.repeat_interleave(len(cells_1))
-            #     index_receiver_j = offset_receiver + torch.arange(len(cells_1))
-            #     index_receiver_j = index_receiver_j.repeat(len(cells_0))
-            #     index_sender.append(index_sender_j)
-            #     index_receiver.append(index_receiver_j)
-            #     index_cell.extend([j] * (len(cells_0) * len(cells_1)))
-            #     offset_sender += len(cells_0)
-            #     offset_receiver += len(cells_1)
-            # index_sender = torch.cat(index_sender).to(device)
-            # index_receiver = torch.cat(index_receiver).to(device)
-            # index_cell = torch.tensor(index_cell, device=device)
-
-            # # overwrite feats sender making  a list of all possible sender/receiv distances
-            # feats_sender = []
-            # feats_receiver = []
-            # for j in range(cell_pairs.shape[1]):
-            #     cells_0 = feat_ind[send_rank][cell_pairs[0, j]]
-            #     cells_1 = feat_ind[rec_rank][cell_pairs[1, j]]
-            #     all_combos = itertools.product(cells_0, cells_1)
-            #     feats_sender.extend([x[0] for x in all_combos])
-            #     feats_receiver.extend([x[1] for x in all_combos])
-            # feats_sender = torch.tensor(feats_sender, device=device)
-            # feats_receiver = torch.tensor(feats_receiver, device=device)
-
-            # # now positions are same size, get distances
-            # pos_sender = pos[feats_sender]
-            # pos_receiver = pos[feats_receiver]
-            # dists = torch.norm(pos_sender - pos_receiver, dim=1)
-
-            # # take the min for each sender/receiver pair
-            # # after fist scatter min, we need a second scatter max
-            # hausdorff_dists_sender = scatter_min(dists, index_sender)
-            # index_scatter_max = torch.arange(len(cell_pairs[0]), device=device)
-            # lengths_aux = [len(feat_ind[send_rank][c]) for c in cell_pairs[0]]
-            # index_scatter_max = index_scatter_max.repeat_interleave(lengths_aux)
-            # hausdorff_dists_sender = scatter_max(
-            #     hausdorff_dists_sender, index_scatter_max
-            # )
-
-            # hausdorff_dists_receiver = scatter_min(dists, index_receiver)
-            # index_scatter_max = torch.arange(len(cell_pairs[1]), device=device)
-            # lengths_aux = [len(feat_ind[rec_rank][c]) for c in cell_pairs[1]]
-            # index_scatter_max = index_scatter_max.repeat(lengths_aux)
-            # hausdorff_dists_receiver = scatter_max(
-            #     hausdorff_dists_receiver, index_scatter_max
-            # )
-
-        # Combine all features
-        new_features[rank_pair] = torch.stack(
-            [
-                centroid_dists,
-                max_dist_sender,
-                max_dist_receiver,
-                hausdorff_dists_sender,
-                hausdorff_dists_receiver,
-            ],
-            dim=1,
-        )
+            # Combine all features
+            new_features[rank_pair] = torch.stack(
+                [centroid_dists, max_dist_sender, max_dist_receiver], dim=1
+            )
 
     return new_features
 

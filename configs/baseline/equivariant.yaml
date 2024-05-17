@@ -1,0 +1,8 @@
+#@package _global_
+model:
+  jit: true
+  equivariant: true
+  num_hidden: 32
+  num_layers: 4
+  num_readout_layers: 2
+  depth_etnn_layers: 1

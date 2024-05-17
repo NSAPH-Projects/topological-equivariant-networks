@@ -1,40 +1,91 @@
 import argparse
 import copy
 import time
+from typing import Literal
 
 import torch
-from tqdm import tqdm
-
+import torch.nn.functional as F
 import wandb
+import hydra
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+import lightning.pytorch as pl
+from lightning.pytorch.loggers import WandbLogger
 
-from utils import (
-    get_adjacency_types,
-    get_loaders,
-    get_model,
-    merge_adjacencies,
-    set_seed,
-)
+from omegaconf import DictConfig
+
+from etnn.combinatorial_complexes import CombinatorialComplexCollater
+from etnn.pm25 import SpatialCC
+from etnn.models import ETNN
 
 
-def main(cfg):
-    # # Generate model
-    model = get_model(cfg).to(cfg.device)
-    if cfg.compile:
-        model = torch.compile(model)
-    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Number of parameters: {num_params}")
-    print(model)
+class TrainingModule(pl.LightningModule):
 
-    # Setup wandb
-    wandb.init(entity="ten-harvard", project=f"QM9-{cfg.target_name}")
-    wandb.config.update(vars(cfg))
+    def __init__(
+        self,
+        model: ETNN,
+        criterion: Literal["mse", "mae"],
+        optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler.LRScheduler,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+        self.model = model
+        self.criterion = criterion
+        self.optimizer = optimizer
+        self.scheduler = scheduler
 
-    # # Get loaders
-    train_loader, val_loader, test_loader = get_loaders(cfg)
-    mean, mad = calc_mean_mad(train_loader)
-    mean, mad = mean.to(cfg.device), mad.to(cfg.device)
+    def training_step(self, batch, _):
+        # currently only loss at dim 0, but could use all dimensions with masks
+        outputs = self.model(batch)
+        mask = getattr(batch, f"mask")
+        error = (batch.y_0 - outputs[0]) * (1 - mask)
 
-    # Get optimization objects
+        if self.criterion == "mse":
+            loss = error.pow(2).sum() / mask.sum()
+        elif self.criterion == "mae":
+            loss = error.abs().sum() / mask.sum()
+
+        return loss
+
+    def validation_step(self, batch, _):
+        # currently only loss at dim 0, but could use all dimensions with masks
+        outputs = self.model(batch)
+        mask = getattr(batch, f"mask")
+        error = (batch.y_0 - outputs[0]) * (1 - mask)
+
+        if self.criterion == "mse":
+            loss = error.pow(2).sum() / mask.sum()
+        elif self.criterion == "mae":
+            loss = error.abs().sum() / mask.sum()
+
+        return loss
+
+    def configure_optimizers(self):
+        return [self.optimizer], [self.scheduler]
+
+
+@hydra.main(config_path="configs", config_name="spatialcc", version_base=None)
+def main(cfg: DictConfig):
+    # load data
+    dataset = SpatialCC(root="data", force_reload=True)
+    follow_batch = ["cell_0", "cell_1", "cell_2"]
+    collate_fn = CombinatorialComplexCollater(dataset, follow_batch=follow_batch)
+    loader = DataLoader(dataset, collate_fn=collate_fn)
+    data = next(iter(loader))
+    num_features_per_rank = {
+        int(k.split("_")[1]): v.shape[1] for k, v in data.items() if "x_" in k
+    }
+
+    # load model
+    model = ETNN(
+        **cfg.model,
+        num_features_per_rank=num_features_per_rank,
+        adjacencies=cfg.adjacencies,
+    )
+    model = TrainingModule(model, cfg.criterion, cfg.optimizer, cfg.scheduler)
+
+    # get optimization objects
     criterion = torch.nn.L1Loss(reduction="mean")
     optimizer = torch.optim.Adam(
         model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay

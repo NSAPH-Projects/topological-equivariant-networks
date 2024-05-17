@@ -42,9 +42,11 @@ class EMPSNLayer(nn.Module):
         self.update = nn.ModuleDict()
         for dim in self.visible_dims:
             factor = 1 + sum([adj_type[2] == str(dim) for adj_type in adjacencies])
-            update_layers = [nn.Linear(factor * num_hidden, num_hidden)]
+            update_layers = [nn.Linear(factor * num_hidden, num_hidden), nn.BatchNorm1d(num_hidden)]
             if not self.lean:
-                update_layers.extend([nn.SiLU(), nn.Linear(num_hidden, num_hidden)])
+                update_layers.extend(
+                    [nn.SiLU(), nn.Linear(num_hidden, num_hidden)], nn.BatchNorm1d(num_hidden)
+                )
             self.update[str(dim)] = nn.Sequential(*update_layers)
 
     def forward(
@@ -76,9 +78,15 @@ class SimplicialEGNNLayer(nn.Module):
     def __init__(self, num_hidden, num_inv, lean: bool = True):
         super().__init__()
         self.lean = lean
-        message_mlp_layers = [nn.Linear(2 * num_hidden + num_inv, num_hidden), nn.SiLU()]
+        message_mlp_layers = [
+            nn.Linear(2 * num_hidden + num_inv, num_hidden),
+            nn.BatchNorm1d(num_hidden),
+            nn.SiLU(),
+        ]
         if not self.lean:
-            message_mlp_layers.extend([nn.Linear(num_hidden, num_hidden), nn.SiLU()])
+            message_mlp_layers.extend(
+                [nn.Linear(num_hidden, num_hidden), nn.BatchNorm1d(num_hidden), nn.SiLU()]
+            )
         self.message_mlp = nn.Sequential(*message_mlp_layers)
         self.edge_inf_mlp = nn.Sequential(nn.Linear(num_hidden, 1), nn.Sigmoid())
 

@@ -45,12 +45,17 @@ class TEN(nn.Module):
         # layers
         if self.normalize_invariants:
             self.inv_normalizer = nn.ModuleDict(
-                {adj: nn.BatchNorm1d(self.num_inv_fts_map[adj]) for adj in self.adjacencies}
+                {
+                    adj: nn.BatchNorm1d(self.num_inv_fts_map[adj], affine=False)
+                    for adj in self.adjacencies
+                }
             )
 
         self.feature_embedding = nn.ModuleDict(
             {
-                str(dim): nn.Linear(num_features_per_rank[dim], num_hidden)
+                str(dim): nn.Sequential(
+                    nn.Linear(num_features_per_rank[dim], num_hidden), nn.BatchNorm1d(num_hidden)
+                )
                 for dim in self.visible_dims
             }
         )

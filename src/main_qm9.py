@@ -9,6 +9,8 @@ import wandb
 from qm9.utils import calc_mean_mad
 from utils import get_adjacency_types, get_loaders, get_model, merge_adjacencies, set_seed
 
+torch.set_float32_matmul_precision("high")
+
 
 def main(args):
     # # Generate model
@@ -30,7 +32,9 @@ def main(args):
 
     # Get optimization objects
     criterion = torch.nn.L1Loss(reduction="mean")
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=args.lr, eta_min=args.min_lr, weight_decay=args.weight_decay
+    )
     T_max = args.epochs // args.num_lr_cycles
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max)
     best_val_mae, best_model = float("inf"), None
@@ -168,6 +172,7 @@ if __name__ == "__main__":
     )
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
+    parser.add_argument("--min_lr", type=float, default=0, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-16, help="learning rate")
     parser.add_argument(
         "--clip_gradient", action="store_true", default=False, help="gradient clipping"

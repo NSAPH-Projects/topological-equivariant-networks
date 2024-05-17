@@ -1,11 +1,15 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from torch import Tensor
 from torch_geometric.data import Data
-from torch_geometric.nn import global_add_pool
 
-from etnn.layers import ETNNLayer
-from etnn.utils import compute_centroids, compute_invariants
+# from torch_geometric.nn import global_add_pool
+
+# from torch_scatter import scatter_add
+
+from etnn.layers import ETNNLayer, etnn_block
+from etnn.utils import compute_invariants, compute_invariants2, fast_agg_indices
 
 
 class ETNN(nn.Module):
@@ -19,47 +23,29 @@ class ETNN(nn.Module):
         num_hidden: int,
         num_out: int,
         num_layers: int,
-        max_dim: int,
         adjacencies: list[str],
-        initial_features: str,
-        visible_dims: list[int] | None,
-        normalize_invariants: bool,
+        num_invariants = 5,
         compute_invariants: callable = compute_invariants,
-        global_pool: bool = True,
-        equivariant_update: bool = False,
-        num_pre_pool_layers: int = 2,
-        num_post_pool_layer: int = 2,
+        equivariant: bool = False,
+        num_readout_layers: int = 2,
+        jit: bool = False,
     ) -> None:
         super().__init__()
-
-        self.initial_features = initial_features
-        self.compute_invariants = compute_invariants
-        self.num_inv_fts_map = self.compute_invariants.num_features_map
-        self.max_dim = max_dim
+        # self.num_inv_fts_map = self.compute_invariants.num_features_map
         self.adjacencies = adjacencies
-        self.normalize_invariants = normalize_invariants
-        self.global_pool = global_pool
+        self.equivariant = equivariant
+        self.compute_invariants = compute_invariants
 
-        if visible_dims is not None:
-            self.visible_dims = visible_dims
-        else:
-            self.visible_dims = list(range(max_dim + 1))
+        self.visible_dims = list(num_features_per_rank.keys())
+        self.num_inv_fts_map = {k: num_invariants for k in adjacencies}
+        self.max_dim = max(self.visible_dims)
 
-        # layers
-        if self.normalize_invariants:
-            self.inv_normalizer = nn.ModuleDict(
-                {
-                    adj: nn.BatchNorm1d(self.num_inv_fts_map[adj])
-                    for adj in self.adjacencies
-                }
+        self.feature_embedding = nn.ModuleDict()
+        for dim in self.visible_dims:
+            self.feature_embedding[str(dim)] = nn.Sequential(
+                nn.Linear(num_features_per_rank[dim], num_hidden), nn.SiLU()
             )
 
-        self.feature_embedding = nn.ModuleDict(
-            {
-                str(dim): nn.Linear(num_features_per_rank[dim], num_hidden)
-                for dim in self.visible_dims
-            }
-        )
         self.layers = nn.ModuleList(
             [
                 ETNNLayer(
@@ -67,45 +53,28 @@ class ETNN(nn.Module):
                     self.visible_dims,
                     num_hidden,
                     self.num_inv_fts_map,
+                    equivariant=self.equivariant,
                 )
                 for _ in range(num_layers)
             ]
         )
+        if jit:  # doesn't help much in mac os at least, only like 1% speedup
+            self.layers = torch.jit.script(self.layers)
+            compute_invariants = torch.jit.script(compute_invariants)
 
-        self.pre_pool = nn.ModuleDict()
-
-        for dim in visible_dims:
-            out_dim = num_hidden if not global_pool else num_out
-            self.pre_pool[str(dim)] = nn.Sequential(
-                *[
-                    nn.Sequential(
-                        nn.Linear(num_hidden, num_hidden),
-                        nn.SiLU(),
-                    )
-                    for _ in range(num_pre_pool_layers - 1)
-                ],
-                nn.Linear(num_hidden, out_dim),
-            )
-
-        if global_pool:
-            self.post_pool = nn.Sequential(
-                nn.Sequential(
-                    *[
-                        nn.Sequential(
-                            nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
-                            nn.SiLU(),
-                        )
-                        for _ in range(num_post_pool_layer - 1)
-                    ],
-                    nn.Linear(num_hidden, num_out),
-                )
+        self.readout = nn.ModuleDict()
+        for dim in self.visible_dims:
+            self.readout[str(dim)] = etnn_block(
+                num_hidden,
+                num_hidden,
+                num_out,
+                num_readout_layers,
+                batchnorm=False,
+                last_act=nn.Identity,
             )
 
     def forward(self, graph: Data) -> Tensor:
-        device = graph.pos.device
-
-        # make nested tensor for cell_ind
-        # cell_ind = {str(i): getattr(graph, f"cell_{i}") for i in self.visible_dims}
+        # nest cell indices from cat format
         cell_ind = {}
         for r in self.visible_dims:
             lengths = getattr(graph, f"lengths_{r}")
@@ -115,86 +84,45 @@ class ETNN(nn.Module):
         adj = {
             adj_type: getattr(graph, f"adj_{adj_type}")
             for adj_type in self.adjacencies
-            if hasattr(graph, f"adj_{adj_type}")
-        }
-
-        inv_ind = {
-            adj_type: getattr(graph, f"inv_{adj_type}")
-            for adj_type in self.adjacencies
-            if hasattr(graph, f"inv_{adj_type}")
-        }
-
-        # compute initial features
-        features = {}
-        for feature_type in self.initial_features:
-            features[feature_type] = {}
-            for i in self.visible_dims:
-                if feature_type == "node":
-                    # features[feature_type][str(i)] = compute_centroids(
-                    #     cell_ind[str(i)], graph.x
-                    # )
-                    raise NotImplementedError
-                elif feature_type == "mem":
-                    mem_i = getattr(graph, f"mem_{i}")
-                    features[feature_type][str(i)] = mem_i.float()
-                elif feature_type == "hetero":
-                    features[feature_type][str(i)] = getattr(graph, f"x_{i}")
-
-        x = {
-            str(i): torch.cat(
-                [
-                    features[feature_type][str(i)]
-                    for feature_type in self.initial_features
-                ],
-                dim=1,
-            )
-            for i in self.visible_dims
-        }
-
-        cell_batch = {
-            str(i): getattr(graph, f"cell_{i}_batch") for i in self.visible_dims
         }
 
         # embed features and E(n) invariant information
+        x = {str(i): getattr(graph, f"x_{i}") for i in self.visible_dims}
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
-        inv = self.compute_invariants(cell_ind, graph.pos, adj, inv_ind, device)
-        if self.normalize_invariants:
-            inv = {
-                adj: self.inv_normalizer[adj](feature) for adj, feature in inv.items()
-            }
+
+        # # pre-compute fast agg indices
+        # agg_indices = {}
+        # for key, edges in adj.items():
+        #     cell_send, cell_rec = edges[0], edges[1]
+        #     r1, r2 = key.split("_")[:2]
+        #     list_left = [cell_ind[r1][c].cpu().numpy().tolist() for c in cell_send]
+        #     list_right = [cell_ind[r2][c].cpu().numpy().tolist() for c in cell_rec]
+        #     atoms_left = np.concatenate(list_left)
+        #     atoms_right = np.concatenate(list_right)
+        #     lengths_left = np.array([len(c) for c in list_left])
+        #     lengths_right = np.array([len(c) for c in list_right])
+        #     indices = fast_agg_indices(
+        #         atoms_left, lengths_left, atoms_right, lengths_right
+        #     )
+        #     agg_indices[key] = [
+        #         torch.from_numpy(u).to(graph.pos.device) for u in indices
+        #     ]
+
         # message passing
+        pos = graph.pos
+        inv = self.compute_invariants(cell_ind, pos, adj)
+        # inv = compute_invariants2(cell_ind, pos, adj, agg_indices)
+
         for layer in self.layers:
-            x = layer(x, adj, inv)
+            if not self.equivariant:
+                x, _ = layer(x, adj, pos, inv)
+            else:
+                x, pos = layer(x, adj, pos, inv)
+                inv = self.compute_invariants(cell_ind, pos, adj)
+                # inv = compute_invariants2(cell_ind, pos, adj, agg_indices)
 
         # read out
-        x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}
-
-        if self.global_pool:
-            # create one dummy node with all features equal to zero for each graph and each rank
-            batch_size = graph.y.shape[0]
-            x = {
-                dim: torch.cat(
-                    (feature, torch.zeros(batch_size, feature.shape[1]).to(device)),
-                    dim=0,
-                )
-                for dim, feature in x.items()
-            }
-            cell_batch = {
-                dim: torch.cat((indices, torch.tensor(range(batch_size)).to(device)))
-                for dim, indices in cell_batch.items()
-            }
-            x = {
-                dim: global_add_pool(x[dim], cell_batch[dim])
-                for dim, feature in x.items()
-            }
-            state = torch.cat(
-                tuple([feature for dim, feature in x.items()]),
-                dim=1,
-            )
-            out = self.post_pool(state)
-            out = torch.squeeze(out)
-        else:
-            out = x
+        out = {dim: self.readout[dim](feature) for dim, feature in x.items()}
 
         return out
 
@@ -215,7 +143,6 @@ if __name__ == "__main__":
         dataset,
         collate_fn=collate_fn,
         num_workers=0,
-        persistent_workers=True,
         batch_size=1,
     )
 
@@ -229,19 +156,25 @@ if __name__ == "__main__":
 
     model = ETNN(
         num_features_per_rank=num_features_per_rank,
-        num_hidden=8,
+        num_hidden=4,
         num_out=1,
         num_layers=4,
-        num_post_pool_layer=1,
-        max_dim=max_dim,
+        num_readout_layers=1,
         adjacencies=["0_0", "0_1", "1_1", "1_2", "2_2"],
-        initial_features=["hetero"],
-        visible_dims=[0, 1, 2],
-        normalize_invariants=True,
-        global_pool=False,
+        equivariant=True,
+        jit=False,
     )
 
+    opt = torch.optim.Adam(model.parameters(), lr=1e-3)
+    opt.zero_grad()
     for batch in loader:
         start = time.time()
         out = model(batch)
-        print("Time taken precompile: ", time.time() - start)
+        print("Time taken: ", time.time() - start)
+        loss = 0
+        for key, val in out.items():
+            loss = loss + val.pow(2).mean()
+    loss.backward()
+    opt.step()
+
+    print("Done")

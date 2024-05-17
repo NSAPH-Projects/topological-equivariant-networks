@@ -3,6 +3,7 @@ channels:
   - pytorch
   - anaconda
   - conda-forge
+  - pyg
   - defaults
 dependencies:
   - coverage=7.4.3
@@ -25,4 +26,5 @@ dependencies:
   - pip:
     - ipykernel
     - torch_geometric>=2.4
+    - torch-scatter
     - git+https://github.com/pyt-team/TopoNetX@cede811485aefcff1d013dbb94942e8f92ac5d05

@@ -42,7 +42,7 @@ class SpatialCC(InMemoryDataset):
             if self.pre_transform == "standardize":
                 data_list = [standardize_cc(data) for data in data_list]
 
-        self.save(data_list * 2, self.processed_paths[0])
+        self.save(data_list, self.processed_paths[0])
 
 def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
     for key, tensor in data.items():
@@ -54,6 +54,9 @@ def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
                     continue
                 else:
                     tensor[:,i] = (tensor[:,i] - tensor[:,i].mean()) / tensor[:,i].std()
+        if "pos" in key:
+            # normalize to 0-1 range per columns
+            data[key] = (tensor - tensor.min(0)) / (tensor.max(0) - tensor.min(0))
     return data
 
 def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData:

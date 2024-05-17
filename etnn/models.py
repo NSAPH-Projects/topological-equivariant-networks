@@ -101,28 +101,27 @@ class ETNN(nn.Module):
         x = {str(i): getattr(graph, f"x_{i}") for i in self.visible_dims}
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
 
-        # # pre-compute fast agg indices
-        # agg_indices = {}
-        # for key, edges in adj.items():
-        #     cell_send, cell_rec = edges[0], edges[1]
-        #     r1, r2 = key.split("_")[:2]
-        #     list_left = [cell_ind[r1][c].cpu().numpy().tolist() for c in cell_send]
-        #     list_right = [cell_ind[r2][c].cpu().numpy().tolist() for c in cell_rec]
-        #     atoms_left = np.concatenate(list_left)
-        #     atoms_right = np.concatenate(list_right)
-        #     lengths_left = np.array([len(c) for c in list_left])
-        #     lengths_right = np.array([len(c) for c in list_right])
-        #     indices = fast_agg_indices(
-        #         atoms_left, lengths_left, atoms_right, lengths_right
-        #     )
-        #     agg_indices[key] = [
-        #         torch.from_numpy(u).to(graph.pos.device) for u in indices
-        #     ]
+        # pre-compute fast agg indices
+        agg_indices = {}
+        for key, edges in adj.items():
+            cell_send, cell_rec = edges[0], edges[1]
+            r1, r2 = key.split("_")[:2]
+            list_left = [cell_ind[r1][c].cpu().numpy().tolist() for c in cell_send]
+            list_right = [cell_ind[r2][c].cpu().numpy().tolist() for c in cell_rec]
+            atoms_left = np.concatenate(list_left)
+            atoms_right = np.concatenate(list_right)
+            lengths_left = np.array([len(c) for c in list_left])
+            lengths_right = np.array([len(c) for c in list_right])
+            indices = fast_agg_indices(
+                atoms_left, lengths_left, atoms_right, lengths_right
+            )
+            agg_indices[key] = [
+                torch.from_numpy(u).to(graph.pos.device) for u in indices
+            ]
 
         # message passing
         pos = graph.pos
         inv = self.compute_invariants(cell_ind, pos, adj, self.haussdorf)
-        # inv = compute_invariants2(cell_ind, pos, adj, agg_indices)
 
         for layer in self.layers:
             if not self.equivariant:
@@ -130,7 +129,6 @@ class ETNN(nn.Module):
             else:
                 x, pos = layer(x, adj, pos, inv)
                 inv = self.compute_invariants(cell_ind, pos, adj, self.haussdorf)
-                # inv = compute_invariants2(cell_ind, pos, adj, agg_indices)
 
         # read out
         out = {dim: self.readout[dim](feature) for dim, feature in x.items()}

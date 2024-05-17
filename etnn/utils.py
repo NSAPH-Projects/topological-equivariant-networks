@@ -1,23 +1,14 @@
-import itertools
 import os
 import numba
 import random
 from argparse import Namespace
 from typing import Optional, Tuple
-from collections import defaultdict
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torch import Tensor
 from torch_geometric.loader import DataLoader
-
-# from torch_scatter import scatter_min, scatter_max
-
-# from torch_scatter import scatter_add
-
-
-# from etnn.models import ETNN
 
 
 def scatter_add(
@@ -530,6 +521,7 @@ def compute_invariants(
     pos: torch.FloatTensor,
     adj: dict[str, torch.LongTensor],
     haussdorf: bool = True,
+    max_haussdorf_points: int = 100,
     # inv_ind: dict[str, torch.FloatTensor] = None,
     # device: torch.device = None,
 ) -> dict[str, Tensor]:
@@ -656,8 +648,16 @@ def compute_invariants(
                 hausdorff_dists_sender = torch.zeros_like(centroid_dists)
                 hausdorff_dists_receiver = torch.zeros_like(centroid_dists)
                 for j in range(cell_pairs.shape[1]):
-                    pos_sender = pos[feat_ind[send_rank][cell_pairs[0, j]]]
-                    pos_receiver = pos[feat_ind[rec_rank][cell_pairs[1, j]]]
+                    index_left = feat_ind[send_rank][cell_pairs[0, j]]
+                    index_right = feat_ind[rec_rank][cell_pairs[1, j]]
+                    #
+                    if len(index_left) > max_haussdorf_points:
+                        index_left = torch.random.choice(index_left, max_haussdorf_points)
+                    if len(index_right) > max_haussdorf_points:
+                        index_right = torch.random.choice(index_right, max_haussdorf_points)
+                    #
+                    pos_sender = pos[index_left].detach()
+                    pos_receiver = pos[index_right].detach()
                     distmat_cross = torch.norm(
                         pos_sender[:, None] - pos_receiver, dim=2
                     )

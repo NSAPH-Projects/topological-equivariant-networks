@@ -1,7 +1,8 @@
 defaults:
   - _self_
-  - baseline: invariant
   - task: pm25
+  - baseline: invariant
   - loss_fn: huber
 
 seed: 42
+baseline_name: ${hydra:runtime.choices.baseline}

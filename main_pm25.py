@@ -25,6 +25,7 @@ def main(cfg: DictConfig):
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
         config=OmegaConf.resolve(cfg),
+        id=cfg.baseline_name
     )
 
     # load data
@@ -69,6 +70,7 @@ def main(cfg: DictConfig):
 
             epoch_metrics["train_loss"].append(train_loss.item())
             epoch_metrics["eval_loss"].append(eval_loss.item())
+            epoch_metrics["lr"].append(opt.param_groups[0]["lr"])
 
         # update schedule
         sched.step()

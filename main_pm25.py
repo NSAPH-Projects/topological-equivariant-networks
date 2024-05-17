@@ -28,7 +28,7 @@ class TrainingWrapper(pl.LightningModule):
         # currently only loss at dim 0, but could use all dimensions with masks
         outputs = self.model(batch)
         mask = getattr(batch, f"mask")
-        error = (batch.y_0 - outputs[0]) * (1 - mask)
+        error = (batch.y - outputs[0]) * (1 - mask)
 
         if self.criterion == "mse":
             loss = error.pow(2).sum() / mask.sum()
@@ -44,7 +44,7 @@ class TrainingWrapper(pl.LightningModule):
         # currently only loss at dim 0, but could use all dimensions with masks
         outputs = self.model(batch)
         mask = getattr(batch, f"mask")
-        error = (batch.y_0 - outputs[0]) * (1 - mask)
+        error = (batch.y - outputs[0]) * (1 - mask)
 
         if self.criterion == "mse":
             loss = error.pow(2).sum() / mask.sum()

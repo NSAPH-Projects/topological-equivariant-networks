@@ -128,7 +128,7 @@ class ETNNMessagerLayer(nn.Module):
             2 * num_hidden + num_inv, num_hidden, num_hidden, num_layers
         )
         self.edge_inf_mlp = nn.Sequential(nn.Linear(num_hidden, 1), nn.Sigmoid())
-
+    
     def forward(self, x_send: Tensor, x_rec: Tensor, index: Tensor, edge_attr: Tensor):
         index_send = index[0]
         index_rec = index[1]

@@ -1,31 +1,6 @@
 defaults:
   - _self_
-  - training: spatial-fast
-  - baseline: etnn.models.ETNN
+  - baseline: equivariant
+  - task: spatial
 
 seed: 42
-
-model:
-  _target_: etnn.models.ETNN
-  jit: true
-  # other arguments can be determined by baseline
-
-trainer:
-  _target_: pytorch_lightning.Trainer
-  max_epochs: 100
-  accelerator: auto
-  gradient_clip_val: 10
-
-optimizer:
-  _target_: torch.optim.Adam
-  lr: 0.0003
-  weight_decay: 1e-6
-
-lr_scheduler:
-  _target_: torch.optim.lr_scheduler.OneCycleLR
-  max_lr: 0.001
-  epochs: 100
-  steps_per_epoch: 100
-
-criterion: mse # choose mse/mae
-adjacencies: ["0_0", "0_1", "1_1", "1_2", "2_2"]

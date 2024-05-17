@@ -1,11 +1,10 @@
 import numpy as np
 import pandas as pd
 import torch
-import json
+
 from torch_geometric.data import InMemoryDataset
 from etnn.combinatorial_complexes import (
     CombinatorialComplexData,
-    CombinatorialComplexTransform,
     CombinatorialComplexCollater,
 )
 
@@ -71,12 +70,13 @@ def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
 
 
 def create_mask(
-    data: CombinatorialComplexData, rate: float = 0.1
+    data: CombinatorialComplexData, rate: float = 0.1, seed: int | None = None
 ) -> CombinatorialComplexData:
     tract = data.tract.cpu().numpy()
     unique_vals = np.unique(tract)
     m = int(rate * len(unique_vals))
-    mask_vals = np.random.choice(unique_vals, m, replace=False)
+    rng = np.random.default_rng(seed)
+    mask_vals = rng.choice(unique_vals, m, replace=False)
     masked = np.isin(tract, mask_vals)
     data.mask = torch.tensor(masked).float().to(data.pos.device)
 
@@ -91,9 +91,6 @@ if __name__ == "__main__":
     from torch.utils.data import DataLoader
     from etnn.combinatorial_complexes import CombinatorialComplexCollater
 
-    # pretransform compose
-    from torch_geometric.transforms import Compose
-
     # quick test
     dataset = SpatialCC(
         root="data",
@@ -103,6 +100,6 @@ if __name__ == "__main__":
     )
     follow_batch = ["cell_0", "cell_1", "cell_2"]
     collate_fn = CombinatorialComplexCollater(dataset, follow_batch=follow_batch)
-    loader = DataLoader(dataset, collate_fn=collate_fn, batch_size=2)
+    loader = DataLoader(dataset, collate_fn=collate_fn, batch_size=1)
     for batch in loader:
         pass

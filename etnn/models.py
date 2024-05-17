@@ -24,13 +24,12 @@ class ETNN(nn.Module):
         num_out: int,
         num_layers: int,
         adjacencies: list[str],
-        num_invariants = 5,
         depth_etnn_layers = 1,
         compute_invariants: callable = compute_invariants,
         equivariant: bool = False,
         num_readout_layers: int = 2,
         jit: bool = False,
-        haussdorf: bool = False,
+        haussdorf: bool = True,
     ) -> None:
         super().__init__()
         # self.num_inv_fts_map = self.compute_invariants.num_features_map
@@ -38,9 +37,9 @@ class ETNN(nn.Module):
         self.equivariant = equivariant
         self.compute_invariants = compute_invariants
         self.haussdorf = haussdorf
-
+        self.num_invariants = 5 if haussdorf else 3
         self.visible_dims = list(num_features_per_rank.keys())
-        self.num_inv_fts_map = {k: num_invariants for k in adjacencies}
+        self.num_inv_fts_map = {k: self.num_invariants for k in adjacencies}
         self.max_dim = max(self.visible_dims)
 
         self.feature_embedding = nn.ModuleDict()
@@ -114,7 +113,7 @@ class ETNN(nn.Module):
 
         # message passing
         pos = graph.pos
-        inv = self.compute_invariants(cell_ind, pos, adj, haussdorf)
+        inv = self.compute_invariants(cell_ind, pos, adj, self.haussdorf)
         # inv = compute_invariants2(cell_ind, pos, adj, agg_indices)
 
         for layer in self.layers:
@@ -122,7 +121,7 @@ class ETNN(nn.Module):
                 x, _ = layer(x, adj, pos, inv)
             else:
                 x, pos = layer(x, adj, pos, inv)
-                inv = self.compute_invariants(cell_ind, pos, adj, haussdorf)
+                inv = self.compute_invariants(cell_ind, pos, adj, self.haussdorf)
                 # inv = compute_invariants2(cell_ind, pos, adj, agg_indices)
 
         # read out
@@ -135,7 +134,7 @@ class ETNN(nn.Module):
 
 
 if __name__ == "__main__":
-    from etnn.pm25 import SpatialCC
+    from etnn.pm25.utils import SpatialCC
     from etnn.combinatorial_complexes import CombinatorialComplexCollater
     from torch.utils.data import DataLoader
     import time

@@ -32,14 +32,18 @@ def scatter_add(
     return aux.index_add(dim, index, src)
 
 
-def scatter_min(src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None):
+def scatter_min(
+    src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
+):
     src_shape = list(src.shape)
     src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
     aux = src.new_zeros(src_shape)
     return aux.index_reduce(dim, index, src, reduce="amin", include_self=False)
 
 
-def scatter_max(src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None):
+def scatter_max(
+    src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
+):
     src_shape = list(src.shape)
     src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
     aux = src.new_zeros(src_shape)
@@ -372,7 +376,9 @@ class MessageLayer(nn.Module):
 
         messages = self.message_mlp(state)
         edge_weights = self.edge_inf_mlp(messages)
-        messages_aggr = scatter_add(messages * edge_weights, index=index_rec, dim=0)
+        messages_aggr = scatter_add(
+            messages * edge_weights, index=index_rec, dim=0, dim_size=x_rec.size(0)
+        )
 
         return messages_aggr
 
@@ -519,7 +525,6 @@ compute_invariants_3d.num_features_map = {
 }
 
 
-@torch.jit.script
 def compute_invariants(
     feat_ind: dict[str, list[Tensor]],
     pos: torch.FloatTensor,
@@ -630,12 +635,15 @@ def compute_invariants(
         max_dim_sender = max(len(x) for x in feat_ind[send_rank])
         max_dim_receiver = max(len(x) for x in feat_ind[rec_rank])
 
-
         if haussdorf:
             # easy case/graph
             if max_dim_sender == 1 and max_dim_receiver == 1:
-                feats_sender = torch.cat([feat_ind[send_rank][c] for c in cell_pairs[0]])
-                feats_receiver = torch.cat([feat_ind[rec_rank][c] for c in cell_pairs[1]])
+                feats_sender = torch.cat(
+                    [feat_ind[send_rank][c] for c in cell_pairs[0]]
+                )
+                feats_receiver = torch.cat(
+                    [feat_ind[rec_rank][c] for c in cell_pairs[1]]
+                )
                 pos_sender = pos[feats_sender]
                 pos_receiver = pos[feats_receiver]
                 # cells have equal size, just get the positions and compute the distance
@@ -650,7 +658,9 @@ def compute_invariants(
                 for j in range(cell_pairs.shape[1]):
                     pos_sender = pos[feat_ind[send_rank][cell_pairs[0, j]]]
                     pos_receiver = pos[feat_ind[rec_rank][cell_pairs[1, j]]]
-                    distmat_cross = torch.norm(pos_sender[:, None] - pos_receiver, dim=2)
+                    distmat_cross = torch.norm(
+                        pos_sender[:, None] - pos_receiver, dim=2
+                    )
                     hausdorff_dists_sender[j] = distmat_cross.min(dim=1)[0].max()
                     hausdorff_dists_receiver[j] = distmat_cross.min(dim=0)[0].max()
 

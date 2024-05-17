@@ -170,7 +170,13 @@ if __name__ == "__main__":
         default=False,
         help="if the invariant features should be normalized (via batch normalization)",
     )
-
+    parser.add_argument(
+        "--batch_norm",
+        action="store_true",
+        default=False,
+        help="""if batch normalization should be used in the model. If True, batch normalization
+             is applied after many layers""",
+    )
     parser.add_argument(
         "--lean",
         action="store_true",

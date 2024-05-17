@@ -15,8 +15,8 @@ def etnn_block(
     num_layers=1,
     act=nn.SiLU,
     last_act: nn.Module | None = None,
-    batchnorm: bool = False,
-    batchnorm_always: bool = False,
+    batchnorm: bool = True,
+    batchnorm_always: bool = True,
 ):
     if act is None:
         act = nn.Identity

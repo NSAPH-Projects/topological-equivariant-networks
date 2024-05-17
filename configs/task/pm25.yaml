@@ -8,7 +8,7 @@ model:
   num_hidden: 32
   num_layers: 4
   num_readout_layers: 1
-  jit: true
+  jit: false
 
 loader:
   _target_: torch.utils.data.DataLoader 

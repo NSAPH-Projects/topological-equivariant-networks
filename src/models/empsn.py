@@ -194,8 +194,8 @@ class EMPSNLayer(nn.Module):
     
 
     def forward(
-        self, x: Dict[str, Tensor], adj: Dict[str, Tensor], pos, inv: Dict[str, Tensor],
-        x_ind=None, inv_ind=None, device=None, equivariant: bool = False, compute_invariants=None) -> Dict[str, Tensor]:
+        self, x: Dict[str, Tensor], adj: Dict[str, Tensor], pos, inv: Dict[str, Tensor], device=None,
+       equivariant: bool = False) -> Dict[str, Tensor]:
         # pass the different messages of all adjacency types
         mes = {
             adj_type: self.message_passing[adj_type](
@@ -217,10 +217,9 @@ class EMPSNLayer(nn.Module):
 
         if equivariant:
 
-            inv = compute_invariants(x_ind, pos, adj, inv_ind, device)
-            pos += self.get_pos_delta(pos, mes, adj).to(device=pos.device)
+            pos += self.get_pos_delta(pos, mes, adj).to(device=device)
 
-        return x, pos, inv
+        return x, pos
 
 
 class SimplicialEGNNLayer(nn.Module):

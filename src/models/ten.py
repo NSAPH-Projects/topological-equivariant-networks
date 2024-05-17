@@ -113,17 +113,19 @@ class TEN(nn.Module):
         x = {dim: self.feature_embedding(feature) for dim, feature in x.items()}
         
 
-        # compute geometric invariants based on the node positions 
-        inv = self.compute_invariants(x_ind, graph.pos, adj, inv_ind, device)
 
         if self.equivariant:
             pos = graph.pos
-
+        else:
+            # compute geometric invariants based on the node positions 
+            inv = self.compute_invariants(x_ind, graph.pos, adj, inv_ind, device)
+            
         for layer in self.layers:
             if not self.equivariant:
-                x, _, _ = layer(x, adj, graph.pos, inv)
+                x, _ = layer(x, adj, graph.pos, inv)
             else:
-                x, pos, inv = layer(x, adj, pos, inv, x_ind, inv_ind, device, equivariant=True, compute_invariants=self.compute_invariants)
+                inv = self.compute_invariants(x_ind, graph.pos, adj, inv_ind, device)
+                x, pos = layer(x, adj, pos, inv, device, equivariant=True)
 
         # read out
         x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}

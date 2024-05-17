@@ -121,10 +121,9 @@ class TEN(nn.Module):
 
         for layer in self.layers:
             if not self.equivariant:
-                x, _ = layer(x, adj, graph.pos, inv)
+                x, _, _ = layer(x, adj, graph.pos, inv)
             else:
-                x, pos = layer(x, adj, pos, inv,equivariant=True)
-                inv = self.compute_invariants(x_ind, pos.clone().detach(), adj, inv_ind, device)
+                x, pos, inv = layer(x, adj, pos, inv, x_ind, inv_ind, device, equivariant=True, compute_invariants=self.compute_invariants)
 
         # read out
         x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}
@@ -150,7 +149,6 @@ class TEN(nn.Module):
         )
         out = self.post_pool(state)
         out = torch.squeeze(out)
-        print(out)
         return out
 
     def __str__(self):

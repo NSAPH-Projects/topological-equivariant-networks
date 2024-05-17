@@ -187,14 +187,15 @@ class EMPSNLayer(nn.Module):
         pos_diff = pos[sender] - pos[receiver]
         pos_upd = self.pos_update(mes['0_0_1'][receiver])
         pos_delta = pos_diff * pos_upd
+
         # collect the pos_delta for each node: going from [num_edges, num_hidden] to [num_nodes, num_hidden]
         new_pos_delta = scatter_add(pos_delta, sender, dim=0, dim_size=pos.shape[0])
         return new_pos_delta
     
 
     def forward(
-        self, x: Dict[str, Tensor], adj: Dict[str, Tensor], pos, inv: Dict[str, Tensor], equivariant: bool = False
-    ) -> Dict[str, Tensor]:
+        self, x: Dict[str, Tensor], adj: Dict[str, Tensor], pos, inv: Dict[str, Tensor],
+        x_ind=None, inv_ind=None, device=None, equivariant: bool = False, compute_invariants=None) -> Dict[str, Tensor]:
         # pass the different messages of all adjacency types
         mes = {
             adj_type: self.message_passing[adj_type](
@@ -215,9 +216,11 @@ class EMPSNLayer(nn.Module):
         x = {dim: feature + h[dim] for dim, feature in x.items()}
 
         if equivariant:
-            pos = pos + self.get_pos_delta(pos, mes, adj).to(device=pos.device)
 
-        return x, pos
+            inv = compute_invariants(x_ind, pos, adj, inv_ind, device)
+            pos += self.get_pos_delta(pos, mes, adj).to(device=pos.device)
+
+        return x, pos, inv
 
 
 class SimplicialEGNNLayer(nn.Module):

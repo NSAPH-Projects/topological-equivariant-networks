@@ -32,11 +32,9 @@ def main(args):
 
     # Get optimization objects
     criterion = torch.nn.L1Loss(reduction="mean")
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=args.lr, eta_min=args.min_lr, weight_decay=args.weight_decay
-    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     T_max = args.epochs // args.num_lr_cycles
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max, eta_min=args.min_lr)
     best_val_mae, best_model = float("inf"), None
 
     for _ in tqdm(range(args.epochs)):

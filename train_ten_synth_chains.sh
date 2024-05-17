@@ -22,12 +22,12 @@
 python src/main.py \
     --dataset synthetic_chains \
     --task_type classification \
-    --lifters "atom:0" "synth1:1" \
+    --lifters "atom:0" "synth_edge:1"\
     --chain_length 4 \
     --max_path_length 1 \
-    --visible_dims 0 1 \
-    --dim 1 \
-    --num_layers 1 \
+    --visible_dims 0 1\
+    --dim 1\
+    --num_layers 2 \
     --connectivity "all_to_all" \
     --neighbor_types +1 \
     --epochs 200 \
@@ -37,3 +37,4 @@ python src/main.py \
     --num_hidden 128 \
     --model_name ten \
     --equivariant
+    

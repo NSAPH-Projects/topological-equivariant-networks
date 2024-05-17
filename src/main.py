@@ -15,7 +15,7 @@ from utils import (
     set_seed,
     task_settings,
 )
-
+torch.autograd.set_detect_anomaly(True)
 
 def main(args):
     # # Generate model

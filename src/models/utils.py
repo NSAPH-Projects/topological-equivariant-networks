@@ -233,11 +233,11 @@ def compute_invariants(
         differences = indexed_sender_centroids - indexed_receiver_centroids
         distances = torch.sqrt((differences**2).sum(dim=1, keepdim=True))
 
-        # Retrieve maximum pairwise distances
+        # # Retrieve maximum pairwise distances
         max_dist_sender = max_pairwise_distances[sender_rank][cell_pairs[0]]
         max_dist_receiver = max_pairwise_distances[receiver_rank][cell_pairs[1]]
 
-        # Compute Hausdorff distances
+        # # Compute Hausdorff distances
         sender_cells = feat_ind[sender_rank][cell_pairs[0]]
         receiver_cells = feat_ind[receiver_rank][cell_pairs[1]]
         hausdorff_distances = compute_hausdorff_distances(sender_cells, receiver_cells, pos)
@@ -250,6 +250,7 @@ def compute_invariants(
     return new_features
 
 
+# compute_invariants.num_features_map = defaultdict(lambda: 1)
 compute_invariants.num_features_map = defaultdict(lambda: 5)
 
 
@@ -371,7 +372,12 @@ def compute_intercell_distances(
     sender_mask = ~torch.isnan(sender_cells)
     receiver_mask = ~torch.isnan(receiver_cells)
     valid_combinations_mask = sender_mask.unsqueeze(2) & receiver_mask.unsqueeze(1)
-    dist_matrix[~valid_combinations_mask] = torch.nan
+    # dist_matrix[~valid_combinations_mask] = torch.nan
+    dist_matrix = dist_matrix.masked_fill(~valid_combinations_mask, torch.nan)
+
+
+
+
 
     return dist_matrix
 

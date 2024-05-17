@@ -220,6 +220,38 @@ def path_lift(graph: Data, max_path_length: int) -> set[frozenset[int]]:
 
     return paths
 
+
+def synth_edge_lift(graph: Data, max_path_length: int) -> set[frozenset[int]]:
+    """
+    Identify one single rank-1 cell that includes all nodes in the graph.
+
+    Parameters
+    ----------
+    graph : torch.Tensor
+        The input graph represented as a PyTorch tensor.
+    max_path_length : int
+        The maximum length of the paths to be found.
+
+    Returns
+    -------
+    set[frozenset[int]]
+        A set of paths, each path is represented as a frozenset of node indices.
+
+    Raises
+    ------
+    ValueError
+        If the input graph does not contain an edge index 'edge_index'.
+    """
+
+    if (not hasattr(graph, "edge_index")) or (graph.edge_index is None):
+        raise ValueError("The given graph does not have an edge index 'edge_index'!")
+    
+    edges = set()
+    for i in range(5):
+        edges.add(frozenset([i,i+1]))
+    return edges
+
+
 def synth1_lift(graph: Data, max_path_length: int) -> set[frozenset[int]]:
     """
     Identify one single rank-1 cell that includes all nodes in the graph.
@@ -486,6 +518,8 @@ def get_lifters(args) -> list[callable]:
             lifters.append(partial(synth1_lift, max_path_length=args.max_path_length))
         elif lifter == "synth2":
             lifters.append(partial(synth2_lift, max_path_length=args.max_path_length))
+        elif lifter == "synth_edge":
+            lifters.append(partial(synth_edge_lift, max_path_length=args.max_path_length))
         elif lifter == "synth3":
             lifters.append(partial(synth3_lift, max_path_length=args.max_path_length))
 

@@ -25,7 +25,7 @@ fi
 
 # Activate or create Conda environment
 echo "Creating environment 'ten'"
-conda env create -f environment.yaml
+conda env create --experimental-solver=libmamba -f environment.yaml
 conda activate ten
 
 # Install pre-commit hooks

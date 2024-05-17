@@ -20,7 +20,7 @@ def main(args):
     print(model)
 
     # Setup wandb
-    wandb.init(entity="ten-harvard", project=f"QM9-Super-Saiyan")
+    wandb.init(entity="ten-harvard", project="QM9-Super-Saiyan")
     wandb.config.update(vars(args))
 
     # # Get loaders

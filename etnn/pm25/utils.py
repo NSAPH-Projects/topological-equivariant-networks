@@ -74,12 +74,19 @@ def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
 def create_mask(
     data: CombinatorialComplexData, rate: float = 0.1, seed: int | None = None
 ) -> CombinatorialComplexData:
-    tract = data.tract.cpu().numpy()
-    unique_vals = np.unique(tract)
-    m = int(rate * len(unique_vals))
+    cell_2 = data.cell_2
+    lengths_2 = data.lengths_2
+    cell_ind_2 = torch.split(cell_2, lengths_2.tolist())
+    n = len(lengths_2)
+    m = int(rate * n)
     rng = np.random.default_rng(seed)
-    mask_vals = rng.choice(unique_vals, m, replace=False)
-    masked = np.isin(tract, mask_vals)
+    mask_vals = rng.choice(range(n), m, replace=False)
+    to_mask = []
+    for i in mask_vals:
+        to_mask.extend(cell_ind_2[i].tolist())
+    to_mask = np.array(to_mask)
+    masked = np.ones(len(data.lengths_0))
+    masked[np.array(list(to_mask))] = 0
     data.mask = torch.tensor(masked).float().to(data.pos.device)
 
     return data

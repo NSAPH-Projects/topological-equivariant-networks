@@ -76,6 +76,14 @@ class ETNN(nn.Module):
                 last_act=nn.Identity,
             )
 
+        # initialize all layers
+        for layer in self.layers:
+            for m in layer.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.trunc_normal_(m.weight, std=0.2)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+
     def forward(self, graph: Data) -> Tensor:
         # nest cell indices from cat format
         cell_ind = {}

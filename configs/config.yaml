@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - baseline: equivariant
+  - baseline: invariant
   - task: pm25
   - loss_fn: huber
 

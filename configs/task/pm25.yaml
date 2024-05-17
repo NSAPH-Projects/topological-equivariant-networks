@@ -8,13 +8,14 @@ model:
   num_hidden: 4
   num_layers: 4
   num_readout_layers: 1
+  
   jit: false
 
 loader:
   _target_: torch.utils.data.DataLoader 
-  num_workers: 1
+  num_workers: 0
   batch_size: 1
-  persistent_workers: true
+  persistent_workers: false
   pin_memory: true
 
 collate_fn:
@@ -57,12 +58,12 @@ trainer:
 
 optimizer:
   _target_: torch.optim.Adam
-  lr: 0.0003
+  lr: 0.0001
   weight_decay: 1e-6
 
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.OneCycleLR
-  max_lr: 0.001
+  max_lr: 0.0003
   final_div_factor: 1e2
-  epochs: 100
-  steps_per_epoch: 100
+  epochs: ${trainer.max_epochs}
+  steps_per_epoch: 1

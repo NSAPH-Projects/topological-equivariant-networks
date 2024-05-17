@@ -1,5 +1,3 @@
-from typing import Literal
-
 import hydra
 import numpy as np
 import wandb
@@ -60,7 +58,7 @@ def main(cfg: DictConfig):
             batch = batch.to(dev)
             outputs = model(batch)
             mask = getattr(batch, f"mask")
-            loss_terms = loss_fn(outputs["0"], batch.y)
+            loss_terms = loss_fn(outputs["0"].squeeze(-1), batch.y.squeeze(-1))
             train_loss = (loss_terms * mask).sum() / mask.sum()
             eval_loss = (loss_terms * (1 - mask)).sum() / (1 - mask).sum()
             train_loss.backward()

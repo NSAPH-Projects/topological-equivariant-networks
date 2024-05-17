@@ -74,7 +74,7 @@ def main(cfg: DictConfig):
     D = next(iter(loader))
     num_feats = {k.split("_")[1]: v.shape[1] for k, v in D.items() if "x_" in k}
 
-    # instantiate all objects from config
+    # instantiate model, optimizer, scheduler
     model = instantiate(cfg.model, num_features_per_rank=num_feats)
     optimizer = instantiate(cfg.optimizer, model.parameters())
     lr_scheduler = instantiate(cfg.lr_scheduler, optimizer)

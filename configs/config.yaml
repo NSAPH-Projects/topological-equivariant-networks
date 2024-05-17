@@ -1,6 +1,6 @@
 defaults:
   - _self_
   - baseline: equivariant
-  - task: spatial
+  - task: pm25
 
 seed: 42

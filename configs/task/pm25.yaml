@@ -11,10 +11,14 @@ model:
   jit: false
 
 loader:
-  _target_: torch.utils.data.DataLoader
+  _target_: torch.utils.data.DataLoader 
   num_workers: 1
   batch_size: 1
   persistent_workers: true
+  pin_memory: true
+
+collate_fn:
+  _target_: etnn.combinatorial_complexes.CombinatorialComplexCollater
 
 dataset:
   _target_: etnn.pm25.utils.SpatialCC
@@ -28,25 +32,28 @@ dataset:
     seed: ${seed}   
     _partial_: true
 
-collate_fn:
-  _target_: etnn.combinatorial_complexes.CombinatorialComplexCollater
-  follow_batch: ["cell_0", "cell_1", "cell_2"]
+# logger:
+#   - _target_: lightning.pytorch.loggers.WandbLogger
+#     log_model: all
+#     entity: ten-harvard
+#     project: spatial-cc
+wandb:
+  entity: ten-harvard
+  project: spatial-cc
 
-logger:
-  - _target_: lightning.pytorch.loggers.WandbLogger
-    log_model: all
-    entity: ten-harvard
-    project: spatial-cc
+# trainer:
+#   _target_: lightning.pytorch.Trainer
+#   max_epochs: 100
+#   accelerator: auto
+#   gradient_clip_val: 10
+#   callbacks:
+#     - _target_: lightning.pytorch.callbacks.LearningRateMonitor
+#       logging_interval: epoch
+#   num_sanity_val_steps: 0
 
 trainer:
-  _target_: lightning.pytorch.Trainer
   max_epochs: 100
-  accelerator: auto
-  gradient_clip_val: 10
-  callbacks:
-    - _target_: lightning.pytorch.callbacks.LearningRateMonitor
-      logging_interval: epoch
-  num_sanity_val_steps: 0
+  clip: 1.0
 
 optimizer:
   _target_: torch.optim.Adam
@@ -59,5 +66,3 @@ lr_scheduler:
   final_div_factor: 1e2
   epochs: 100
   steps_per_epoch: 100
-
-criterion: mse # choose mse/mae

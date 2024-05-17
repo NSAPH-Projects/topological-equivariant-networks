@@ -205,6 +205,7 @@ def get_model(args: Namespace) -> nn.Module:
         initial_features=args.initial_features,
         normalize_invariants=args.normalize_invariants,
         visible_dims=args.visible_dims,
+        batch_norm=args.batch_norm,
         lean=args.lean,
     )
     return model

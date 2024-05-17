@@ -22,18 +22,22 @@ class EMPSNLayer(nn.Module):
         visible_dims: list[int],
         num_hidden: int,
         num_features_map: dict[str, int],
+        batch_norm: bool = False,
         lean: bool = True,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
         self.num_features_map = num_features_map
         self.visible_dims = visible_dims
+        self.batch_norm = batch_norm
         self.lean = lean
 
         # messages
         self.message_passing = nn.ModuleDict(
             {
-                adj: SimplicialEGNNLayer(num_hidden, self.num_features_map[adj], lean=lean)
+                adj: SimplicialEGNNLayer(
+                    num_hidden, self.num_features_map[adj], batch_norm=batch_norm, lean=lean
+                )
                 for adj in adjacencies
             }
         )
@@ -42,11 +46,14 @@ class EMPSNLayer(nn.Module):
         self.update = nn.ModuleDict()
         for dim in self.visible_dims:
             factor = 1 + sum([adj_type[2] == str(dim) for adj_type in adjacencies])
-            update_layers = [nn.Linear(factor * num_hidden, num_hidden), nn.BatchNorm1d(num_hidden)]
+            update_layers = [nn.Linear(factor * num_hidden, num_hidden)]
+            if self.batch_norm:
+                update_layers.append(nn.BatchNorm1d(num_hidden))
             if not self.lean:
-                update_layers.extend(
-                    [nn.SiLU(), nn.Linear(num_hidden, num_hidden)], nn.BatchNorm1d(num_hidden)
-                )
+                extra_layers = [nn.SiLU(), nn.Linear(num_hidden, num_hidden)]
+                if self.batch_norm:
+                    extra_layers.append(nn.BatchNorm1d(num_hidden))
+                update_layers.extend(extra_layers)
             self.update[str(dim)] = nn.Sequential(*update_layers)
 
     def forward(
@@ -75,18 +82,25 @@ class EMPSNLayer(nn.Module):
 
 
 class SimplicialEGNNLayer(nn.Module):
-    def __init__(self, num_hidden, num_inv, lean: bool = True):
+    def __init__(self, num_hidden, num_inv, batch_norm: bool = False, lean: bool = True):
         super().__init__()
+        self.batch_norm = batch_norm
         self.lean = lean
         message_mlp_layers = [
             nn.Linear(2 * num_hidden + num_inv, num_hidden),
-            nn.BatchNorm1d(num_hidden),
             nn.SiLU(),
         ]
+        if self.batch_norm:
+            message_mlp_layers.insert(1, nn.BatchNorm1d(num_hidden))
+
         if not self.lean:
-            message_mlp_layers.extend(
-                [nn.Linear(num_hidden, num_hidden), nn.BatchNorm1d(num_hidden), nn.SiLU()]
-            )
+            extra_layers = [
+                nn.Linear(num_hidden, num_hidden),
+                nn.SiLU(),
+            ]
+            if self.batch_norm:
+                extra_layers.insert(1, nn.BatchNorm1d(num_hidden))
+            message_mlp_layers.extend(extra_layers)
         self.message_mlp = nn.Sequential(*message_mlp_layers)
         self.edge_inf_mlp = nn.Sequential(nn.Linear(num_hidden, 1), nn.Sigmoid())
 

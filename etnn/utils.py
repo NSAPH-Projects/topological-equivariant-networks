@@ -652,9 +652,11 @@ def compute_invariants(
                     index_right = feat_ind[rec_rank][cell_pairs[1, j]]
                     #
                     if len(index_left) > max_haussdorf_points:
-                        index_left = torch.random.choice(index_left, max_haussdorf_points)
+                        new_pts_ix = torch.randperm(len(index_left))[:max_haussdorf_points]
+                        index_left = index_left[new_pts_ix]
                     if len(index_right) > max_haussdorf_points:
-                        index_right = torch.random.choice(index_right, max_haussdorf_points)
+                        new_pts_ix = torch.randperm(len(index_right))[:max_haussdorf_points]
+                        index_right = index_right[new_pts_ix]
                     #
                     pos_sender = pos[index_left].detach()
                     pos_receiver = pos[index_right].detach()

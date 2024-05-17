@@ -182,15 +182,22 @@ def merge_adjacencies(adjacencies: list[str]) -> list[str]:
 def get_model(args: Namespace) -> nn.Module:
     """Return model based on name."""
     if args.dataset == "qm9":
-        if set(args.initial_features) == set(["mem", "hetero"]):
-            num_features_per_rank = {0: 20, 1: 24, 2: 27, 3: 5}
-        elif set(args.initial_features) == set(["node"]):
-            num_features_per_rank = {0: 15, 1: 15, 2: 15, 3: 15}
-        else:
-            raise ValueError(
-                f"num_features undefined for initial features {args.initial_features}."
-            )
-
+        num_features_per_rank = {dim: 0 for dim in args.visible_dims}
+        if "node" in args.initial_features:
+            num_node_features = 15
+            num_features_per_rank = {
+                k: v + num_node_features for k, v in num_features_per_rank.items()
+            }
+        if "mem" in args.initial_features:
+            num_lifters = len(args.lifter.lifters)
+            num_features_per_rank = {k: v + num_lifters for k, v in num_features_per_rank.items()}
+        if "hetero" in args.initial_features:
+            num_hetero_features = args.lifter.num_features_dict
+            num_features_per_rank = {
+                k: v + num_hetero_features[k] for k, v in num_features_per_rank.items()
+            }
+        if set(args.initial_features).difference(set(["node", "mem", "hetero"])):
+            raise ValueError(f"Do not recognize initial features {args.initial_features}.")
         num_out = 1
     else:
         raise ValueError(f"Do not recognize dataset {args.dataset}.")

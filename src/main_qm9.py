@@ -6,6 +6,8 @@ import torch
 from tqdm import tqdm
 
 import wandb
+from combinatorial_data.lifter import Lifter
+from qm9.lifts.registry import lifter_registry
 from qm9.utils import calc_mean_mad
 from utils import get_adjacency_types, get_loaders, get_model, merge_adjacencies, set_seed
 
@@ -212,5 +214,7 @@ if __name__ == "__main__":
 
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     parsed_args.initial_features = sorted(parsed_args.initial_features)
+    parsed_args.lifter = Lifter(parsed_args, lifter_registry)
+
     set_seed(parsed_args.seed)
     main(parsed_args)

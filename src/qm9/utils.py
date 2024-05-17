@@ -92,9 +92,8 @@ def lift_qm9_to_cc(args: Namespace) -> list[dict]:
     """
 
     # Create the transform
-    lifter = Lifter(args, lifter_registry)
     transform = CombinatorialComplexTransform(
-        lifter=lifter,
+        lifter=args.lifter,
         dim=args.dim,
         adjacencies=args.adjacencies,
         processed_adjacencies=args.processed_adjacencies,

@@ -6,8 +6,12 @@ import torch
 from tqdm import tqdm
 
 import wandb
+from combinatorial_data.lifter import Lifter
+from qm9.lifts.registry import lifter_registry
 from qm9.utils import calc_mean_mad
 from utils import get_adjacency_types, get_loaders, get_model, merge_adjacencies, set_seed
+
+torch.set_float32_matmul_precision("high")
 
 
 def main(args):
@@ -20,7 +24,7 @@ def main(args):
     print(model)
 
     # Setup wandb
-    wandb.init(entity="ten-harvard", project=f"QM9-{args.target_name}")
+    wandb.init(entity="ten-harvard", project="QM9-Super-Saiyan")
     wandb.config.update(vars(args))
 
     # # Get loaders
@@ -32,7 +36,7 @@ def main(args):
     criterion = torch.nn.L1Loss(reduction="mean")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     T_max = args.epochs // args.num_lr_cycles
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max, eta_min=args.min_lr)
     best_val_mae, best_model = float("inf"), None
 
     for _ in tqdm(range(args.epochs)):
@@ -124,7 +128,13 @@ if __name__ == "__main__":
         default="identity:c functional_group:2 ring:2",
         required=True,
     )
-    parser.add_argument("--initial_features", type=str, default="node", help="features to use")
+    parser.add_argument(
+        "--initial_features",
+        nargs="+",
+        type=str,
+        default=["node"],
+        help="features to use",
+    )
     parser.add_argument(
         "--connectivity",
         type=str,
@@ -160,8 +170,23 @@ if __name__ == "__main__":
         default=False,
         help="if the invariant features should be normalized (via batch normalization)",
     )
+    parser.add_argument(
+        "--batch_norm",
+        action="store_true",
+        default=False,
+        help="""if batch normalization should be used in the model. If True, batch normalization
+             is applied after many layers""",
+    )
+    parser.add_argument(
+        "--lean",
+        action="store_true",
+        default=False,
+        help="""if a lean architecture should be used. drops up to half of the layers depending on
+             the number of message passing layers""",
+    )
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
+    parser.add_argument("--min_lr", type=float, default=0, help="learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-16, help="learning rate")
     parser.add_argument(
         "--clip_gradient", action="store_true", default=False, help="gradient clipping"
@@ -194,6 +219,8 @@ if __name__ == "__main__":
         parsed_args.processed_adjacencies = parsed_args.adjacencies
 
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    parsed_args.initial_features = sorted(parsed_args.initial_features)
+    parsed_args.lifter = Lifter(parsed_args, lifter_registry)
 
     set_seed(parsed_args.seed)
     main(parsed_args)

@@ -8,6 +8,8 @@ import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
 
+from models.ten import TEN
+
 
 def get_adjacency_types(
     max_dim: int, connectivity: str, neighbor_types: list[str], visible_dims: list[int] | None
@@ -180,56 +182,39 @@ def merge_adjacencies(adjacencies: list[str]) -> list[str]:
 def get_model(args: Namespace) -> nn.Module:
     """Return model based on name."""
     if args.dataset == "qm9":
-        num_node_features = 15
-        num_lifters = len(args.lifters)
-        if args.initial_features == "node":
-            num_input = num_node_features
-        elif args.initial_features == "mem":
-            num_input = num_lifters
-        elif args.initial_features == "both":
-            num_input = num_node_features + num_lifters
+        num_features_per_rank = {dim: 0 for dim in args.visible_dims}
+        if "node" in args.initial_features:
+            num_node_features = 15
+            num_features_per_rank = {
+                k: v + num_node_features for k, v in num_features_per_rank.items()
+            }
+        if "mem" in args.initial_features:
+            num_lifters = len(args.lifter.lifters)
+            num_features_per_rank = {k: v + num_lifters for k, v in num_features_per_rank.items()}
+        if "hetero" in args.initial_features:
+            num_hetero_features = args.lifter.num_features_dict
+            num_features_per_rank = {
+                k: v + num_hetero_features[k] for k, v in num_features_per_rank.items()
+            }
+        if set(args.initial_features).difference(set(["node", "mem", "hetero"])):
+            raise ValueError(f"Do not recognize initial features {args.initial_features}.")
         num_out = 1
     else:
         raise ValueError(f"Do not recognize dataset {args.dataset}.")
 
-    if args.model_name == "egnn":
-        from models.egnn import EGNN
-
-        model = EGNN(
-            num_input=num_input,
-            num_hidden=args.num_hidden,
-            num_out=num_out,
-            num_layers=args.num_layers,
-        )
-    elif args.model_name == "empsn":
-        from models.empsn import EMPSN
-
-        model = EMPSN(
-            num_input=num_input,
-            num_hidden=args.num_hidden,
-            num_out=num_out,
-            num_layers=args.num_layers,
-            max_com=args.max_com,
-            initial_features=args.initial_features,
-        )
-
-    elif args.model_name == "ten":
-        from models.ten import TEN
-
-        model = TEN(
-            num_input=num_input,
-            num_hidden=args.num_hidden,
-            num_out=num_out,
-            num_layers=args.num_layers,
-            max_dim=args.dim,
-            adjacencies=args.processed_adjacencies,
-            initial_features=args.initial_features,
-            normalize_invariants=args.normalize_invariants,
-            visible_dims=args.visible_dims,
-        )
-    else:
-        raise ValueError(f"Model type {args.model_name} not recognized.")
-
+    model = TEN(
+        num_features_per_rank=num_features_per_rank,
+        num_hidden=args.num_hidden,
+        num_out=num_out,
+        num_layers=args.num_layers,
+        max_dim=args.dim,
+        adjacencies=args.processed_adjacencies,
+        initial_features=args.initial_features,
+        normalize_invariants=args.normalize_invariants,
+        visible_dims=args.visible_dims,
+        batch_norm=args.batch_norm,
+        lean=args.lean,
+    )
     return model
 
 

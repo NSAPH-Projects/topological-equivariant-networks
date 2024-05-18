@@ -1,5 +1,5 @@
 from collections import defaultdict
-
+from typing import Optional
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -14,6 +14,7 @@ def scatter_add(
     src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
     aux = src.new_zeros(src_shape)
     return aux.index_add(dim, index, src)
+
 
 class MessageLayer(nn.Module):
     def __init__(self, num_hidden, num_inv):

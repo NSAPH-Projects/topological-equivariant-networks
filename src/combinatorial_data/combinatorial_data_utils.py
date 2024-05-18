@@ -1,7 +1,6 @@
 import re
 from collections.abc import Iterable
 from types import MappingProxyType
-from typing import Union
 
 import numpy as np
 import torch
@@ -10,6 +9,9 @@ from toponetx.classes import CombinatorialComplex
 from torch_geometric.data import Batch, Data
 from torch_geometric.loader.dataloader import Collater
 from torch_geometric.transforms import BaseTransform
+
+from combinatorial_data.lifter import Lifter
+from qm9.lifts.common import Cell
 
 
 class CustomCollater(Collater):
@@ -41,7 +43,7 @@ class CustomCollater(Collater):
         """
         Pre-collate logic to pad tensors within each sample based on naming patterns.
 
-        In particular, tensors that are named f'x_{i}' for some integer i are padded to have the
+        In particular, tensors that are named f'cell_{i}' for some integer i are padded to have the
         same number of columns, and tensors that are named f'inv_{i}_{j}' for some integers i, j are
         padded to have the same number of rows. The variable number of columns/rows can arise if
         cells with the same rank may consist of a variable number of nodes. The padding value is -1
@@ -63,7 +65,7 @@ class CustomCollater(Collater):
 
         for data in batch:
             for attr_name in data.keys():
-                if re.match(r"x_\d+", attr_name):
+                if re.match(r"cell_\d+", attr_name):
                     tensor = getattr(data, attr_name)
                     max_cols[attr_name] = max(max_cols.get(attr_name, 0), tensor.size(1))
                 elif re.match(r"inv_\d+_\d+", attr_name):
@@ -80,31 +82,6 @@ class CustomCollater(Collater):
                     setattr(data, attr_name, pad_tensor(tensor, max_rows[attr_name], 0))
 
         return batch
-
-
-class LegacyCombinatorialComplexData(Data):
-    """
-    Abstract combinatorial complex class that generalises the pytorch geometric graph (Data).
-    Adjacency tensors are stacked in the same fashion as the standard edge_index.
-    """
-
-    def __inc__(self, key: str, value: any, *args, **kwargs) -> any:
-        num_nodes = getattr(self, "x_0").size(0)
-        if "adj" in key:
-            i, j = key[4], key[6]
-            return torch.tensor(
-                [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
-            )
-        elif "inv" in key:
-            return num_nodes
-        else:
-            return super().__inc__(key, value, *args, **kwargs)
-
-    def __cat_dim__(self, key: str, value: any, *args, **kwargs) -> any:
-        if "adj" in key or "inv" in key:
-            return 1
-        else:
-            return 0
 
 
 class CombinatorialComplexData(Data):
@@ -126,6 +103,8 @@ class CombinatorialComplexData(Data):
     pos : torch.FloatTensor
         Positions of rank 0 cells (atoms). Expected to have shape (num_atoms, 3).
     x_i : torch.FloatTensor
+        Features of cells of rank i, where i is a non-negative integer.
+    cell_i : torch.FloatTensor
         Node indices associated with cells of rank i, where i is a non-negative integer.
     adj_i_j : torch.LongTensor
         Adjacency tensors representing the relationships (edges) between cells of rank i and j,
@@ -139,7 +118,8 @@ class CombinatorialComplexData(Data):
 
     attribute_dtype = MappingProxyType(
         {
-            "x_": torch.float64,
+            "x_": torch.float32,
+            "cell_": torch.float64,
             "mem_": torch.bool,
             "adj_": torch.int64,
             "inv_": torch.float64,
@@ -162,19 +142,19 @@ class CombinatorialComplexData(Data):
         -------
         any
             The increment value for the attribute `key`. Returns a tensor for `adj_i_j` attributes,
-            the number of nodes for `inv_i_j` and `x_i` attributes, or calls the superclass's
+            the number of nodes for `inv_i_j` and `cell_i` attributes, or calls the superclass's
             `__inc__` method for other attributes.
         """
-        num_nodes = getattr(self, "x_0").size(0)
+        num_nodes = getattr(self, "cell_0").size(0)
         # The adj_i_j attribute holds cell indices, increment each dim by the number of cells of
         # corresponding rank
         if re.match(r"adj_(\d+_\d+|\d+_\d+_\d+)", key):
             i, j = key.split("_")[1:3]
             return torch.tensor(
-                [[getattr(self, f"x_{i}").size(0)], [getattr(self, f"x_{j}").size(0)]]
+                [[getattr(self, f"cell_{i}").size(0)], [getattr(self, f"cell_{j}").size(0)]]
             )
-        # The inv_i_j and x_i attributes hold node indices, they should be incremented
-        elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"x_\d+", key):
+        # The inv_i_j and cell_i attributes hold node indices, they should be incremented
+        elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"cell_\d+", key):
             return num_nodes
         else:
             return super().__inc__(key, value, *args, **kwargs)
@@ -219,11 +199,10 @@ class CombinatorialComplexData(Data):
 
         Notes
         -----
-        This method currently only supports QM9 with no heterogeneous features and is not safe.
-        It needs the following information to support heterogeneous features and to be safe:
-
-        - For each rank, the number of features per node (to address the case of no rank-2 cells).
-        - Relevant dataset arguments to determine the required keys in `data`.
+        In addition to the attributes listed under CombinatorialComplexData, this method also
+        assumes that the input dictionary contains a dictionary under the key "num_features_dict".
+        This dictionary should hold the number of heterogeneous features for each rank, and aids
+        to initialize tensors with the correct size.
 
         """
 
@@ -235,10 +214,20 @@ class CombinatorialComplexData(Data):
             # cast the x_i
             if "x_" in key:
                 if len(value) == 0:
-                    attr_value = torch.empty((0, 0), dtype=self.attribute_dtype["x_"])
+                    rank = key.split("_")[1]
+                    num_features = data["num_features_dict"][rank]
+                    attr_value = torch.empty((0, num_features), dtype=self.attribute_dtype["x_"])
+                else:
+                    attr_value = torch.tensor(value, dtype=self.attribute_dtype["x_"])
+                setattr(self, key, attr_value)
+
+            # cast the cell_i
+            elif "cell_" in key:
+                if len(value) == 0:
+                    attr_value = torch.empty((0, 0), dtype=self.attribute_dtype["cell_"])
                 else:
                     attr_value = torch.tensor(
-                        pad_lists_to_same_length(value), dtype=self.attribute_dtype["x_"]
+                        pad_lists_to_same_length(value), dtype=self.attribute_dtype["cell_"]
                     )
                 setattr(self, key, attr_value)
 
@@ -275,18 +264,13 @@ class CombinatorialComplexTransform(BaseTransform):
 
     def __init__(
         self,
-        lifters: Union[list[callable], callable],
-        ranker: callable,
+        lifter: Lifter,
         dim: int,
         adjacencies: list[str],
         processed_adjacencies: list[str],
         merge_neighbors: bool,
     ):
-        if isinstance(lifters, list):
-            self.lifters = lifters
-        else:
-            self.lifters = [lifters]
-        self.rank = ranker
+        self.lifter = lifter
         self.dim = dim
         self.adjacencies = adjacencies
         self.processed_adjacencies = processed_adjacencies
@@ -334,24 +318,23 @@ class CombinatorialComplexTransform(BaseTransform):
         -----
         The combinatorial complex dictionary is created by performing the following steps:
 
-        1. Compute the cells of the graph using the `lift` method.
-        2. Compute the ranks for each cell using the `rank` method.
-        3. Create a cell dictionary that maps each rank to a dictionary of cells and their
+        1. Compute the cells of the graph using the lifter.
         memberships.
-        4. Extract the cell indices and memberships from the cell dictionary.
-        5. Create the combinatorial complex using the `create_combinatorial_complex` method.
-        6. Compute the adjacencies and incidences of the combinatorial complex.
-        7. Merge matching adjacencies if the `merge_neighbors` flag is set to True.
-        8. Convert the sparse numpy matrices to dense torch tensors.
-        9. Store the nodes for computing geometric features in the inv_dict.
-        10. Convert the graph and other data to a dictionary format.
-        11. Convert tensors in the dictionary to lists.
+        2. Extract the cell indices and memberships from the cell dictionary.
+        3. Create the combinatorial complex using the `create_combinatorial_complex` method.
+        4. Compute the adjacencies and incidences of the combinatorial complex.
+        5. Merge matching adjacencies if the `merge_neighbors` flag is set to True.
+        6. Convert the sparse numpy matrices to dense torch tensors.
+        7. Store the nodes for computing geometric features in the inv_dict.
+        8. Convert the graph and other data to a dictionary format.
+        9. Convert tensors in the dictionary to lists.
 
         The resulting combinatorial complex dictionary contains the following keys:
         - 'x': features of rank 0 cells (atoms)
         - 'pos': positions of rank 0 cells (atoms)
         - 'y': target values
-        - 'x_i': cell indices for each rank i
+        - 'x_i': feature vectors for each rank i
+        - 'cell_i': cell indices for each rank i
         - 'mem_i': cell memberships for each rank i
         - 'adj_adj_type': adjacency matrices for each adjacency type
         - 'inv_adj_type': nodes used for computing geometric features for each adjacency type
@@ -360,20 +343,13 @@ class CombinatorialComplexTransform(BaseTransform):
         """
 
         # compute cells
-        cells = self.lift(graph)
-
-        # compute ranks for each cell
-        cell_dict = {rank: {} for rank in range(self.dim + 1)}
-        for cell, memberships in cells.items():
-            cell_rank = self.rank(cell, memberships)
-            if cell_rank <= self.dim:
-                cell_dict[cell_rank][cell] = memberships
+        cc_dict = self.lifter.lift(graph)
 
         # compute cell indices and memberships
-        x_dict, mem_dict = extract_cell_and_membership_data(cell_dict)
+        cell_dict, x_dict, mem_dict = extract_cell_and_membership_data(cc_dict)
 
         # create the combinatorial complex
-        cc = create_combinatorial_complex(cell_dict)
+        cc = create_combinatorial_complex(cc_dict)
 
         # compute adjancencies and incidences
         adj_dict = dict()
@@ -409,8 +385,8 @@ class CombinatorialComplexTransform(BaseTransform):
             num_edges = len(neighbors[0])
             for edge_idx in range(num_edges):
                 idx_a, idx_b = neighbors[0][edge_idx], neighbors[1][edge_idx]
-                cell_a = x_dict[i][idx_a]
-                cell_b = x_dict[j][idx_b]
+                cell_a = cell_dict[i][idx_a]
+                cell_b = cell_dict[j][idx_b]
                 shared = [node for node in cell_a if node in cell_b]
                 only_in_a = [node for node in cell_a if node not in shared]
                 only_in_b = [node for node in cell_b if node not in shared]
@@ -418,6 +394,9 @@ class CombinatorialComplexTransform(BaseTransform):
                 inv_dict[adj_type].append(inv_nodes)
 
         cc_dict = graph.to_dict()
+
+        for k, v in cell_dict.items():
+            cc_dict[f"cell_{k}"] = v
 
         for k, v in x_dict.items():
             cc_dict[f"x_{k}"] = v
@@ -431,6 +410,11 @@ class CombinatorialComplexTransform(BaseTransform):
         for k, v in inv_dict.items():
             cc_dict[f"inv_{k}"] = v
 
+        # store the number of features for each rank for tensor reconstruction
+        cc_dict["num_features_dict"] = {}
+        for rank in range(self.dim + 1):
+            cc_dict["num_features_dict"][rank] = self.lifter.num_features_dict[rank]
+
         for att in ["edge_attr", "edge_index"]:
             if att in cc_dict.keys():
                 cc_dict.pop(att)
@@ -440,62 +424,10 @@ class CombinatorialComplexTransform(BaseTransform):
             if torch.is_tensor(v):
                 cc_dict[k] = v.tolist()
 
+        # remove the molecule from the dictionary
+        cc_dict.pop("mol")
+
         return cc_dict
-
-    def lift(self, graph: Data) -> dict[frozenset[int], list[bool]]:
-        """
-        Apply lifters to a data point, process their outputs, and track contributions.
-
-        This method applies each registered lifter to the given graph, processes the output to
-        ensure uniqueness, and tracks which lifters contributed to each resulting cell. A cell is
-        considered contributed by a lifter if it appears in the lifter's processed output.
-
-        Parameters
-        ----------
-        graph : Data
-            The input graph to which the lifters are applied. It should be an instance of a Data
-            class or similar structure containing graph data.
-
-        Returns
-        -------
-        dict[frozenset[int], list[bool]]
-            A dictionary mapping each unique cell (a list of integers representing a cell) to a list
-            of booleans. Each boolean value indicates whether the corresponding lifter (by index)
-            contributed to the creation of that cell. The length of the boolean list for each cell
-            equals the total number of lifters, with True indicating contribution and False
-            indicating no contribution. The keys of the dictionary are ordered according to the
-            sorting order they would have if they were cast to lists and internally sorted.
-
-        Examples
-        --------
-        Assuming `self.lifters` contains two lifters and the graph is such that both lifters
-        contribute to the cell [1, 2], and only the first lifter contributes to the cell [2, 3], the
-        method might return: {
-            [1, 2]: [True, True], [2, 3]: [True, False]
-        }
-
-        Notes
-        -----
-        The keys of the dictionary are reordered according to the sorting order they would have if
-        they were cast to lists and internally sorted. This sorting must happen here as the keys of
-        this dictionary determine the ordering of rows/columns in all of x_dict, mem_dict, adj and
-        inv in get_relevant_dicts(), which is the only caller of this function.
-        """
-        cell_lifter_map = {}
-        for lifter_idx, lifter in enumerate(self.lifters):
-            lifter_output = lifter(graph)
-            for cell in lifter_output:
-                if cell not in cell_lifter_map:
-                    cell_lifter_map[cell] = [False] * len(self.lifters)
-                cell_lifter_map[cell][lifter_idx] = True
-
-        # Reorder the dictionary keys numerically
-        sorted_cells = sorted(sorted(list(cell)) for cell in cell_lifter_map.keys())
-        cell_lifter_map = {
-            frozenset(cell): cell_lifter_map[frozenset(cell)] for cell in sorted_cells
-        }
-
-        return cell_lifter_map
 
 
 def adjacency_matrix(cc: CombinatorialComplex, rank: int, via_rank: int) -> csc_matrix:
@@ -606,17 +538,15 @@ def incidence_matrix(cc, rank, to_rank):
     return matrix
 
 
-def create_combinatorial_complex(
-    cell_dict: dict[int, Iterable[frozenset[int]]]
-) -> CombinatorialComplex:
+def create_combinatorial_complex(cell_dict: dict[int, Iterable[Cell]]) -> CombinatorialComplex:
     """
     Create a combinatorial complex from a dictionary of cells.
 
     Parameters
     ----------
-    cell_dict : dict[int, Iterable[frozenset[int]]]
+    cell_dict : dict[int, Iterable[Cell]]
         A dictionary of cells, where the keys are the ranks of the cells and the values are
-        iterables of cell indices.
+        iterables of tuples of cell indices and corresponding feature vectors.
 
     Returns
     -------
@@ -637,7 +567,7 @@ def create_combinatorial_complex(
     adds higher-order cells, then removes the artificially created 0-rank cells, and finally adds
     the organic 0-rank cells.
 
-    The type of dictionary values is chosen to be Iterable[frozenset[int]] to allow for flexibility.
+    The type of dictionary values is chosen to be Iterable[Cell] to allow for flexibility.
     In particular, this choice permits the dictionary values to be themselves dictionaries, in which
     case only their keys are used to create the complex. This is useful for creating a complex from
     the keys of a dictionary of cells and their lifter contributions, for example.
@@ -646,19 +576,14 @@ def create_combinatorial_complex(
     if not isinstance(cell_dict, dict):
         raise TypeError("Input cell_dict must be a dictionary.")
 
-    for rank, cells in cell_dict.items():
-        if (not isinstance(cells, Iterable)) or any(
-            not isinstance(cell, frozenset) for cell in cells
-        ):
-            raise TypeError(f"Cells of rank {rank} must be Iterable[frozenset[int]].")
-
     # Create an instance of the combinatorial complex
     cc = CombinatorialComplex()
 
     # First add higher-order cells
     for rank, cells in cell_dict.items():
         if rank > 0:
-            cc.add_cells_from(cells, ranks=rank)
+            node_idc = [cell[0] for cell in cells.keys()]
+            cc.add_cells_from(node_idc, ranks=rank)
 
     # Then remove the artificially created 0-rank cells
     zero_rank_cells = [cell for cell in cc.cells if len(cell) == 1]
@@ -666,35 +591,38 @@ def create_combinatorial_complex(
 
     # Finally add the organic 0-rank cells
     if 0 in cell_dict.keys():
-        cc.add_cells_from(cell_dict[0], ranks=0)
+        node_idc = [cell[0] for cell in cell_dict[0].keys()]
+        cc.add_cells_from(node_idc, ranks=0)
 
     return cc
 
 
 def extract_cell_and_membership_data(
-    input_dict: dict[int, dict[frozenset[int], list[bool]]]
+    input_dict: dict[int, dict[Cell, list[bool]]]
 ) -> tuple[dict[int, list[list[int]]], dict[int, list[list[bool]]]]:
     """
     Extract cell and membership data from the input dictionary.
 
     Parameters
     ----------
-    input_dict : dict[int, dict[frozenset[int], list[bool]]]
+    input_dict : dict[int, dict[Cell, list[bool]]]
         The input dictionary containing cell and membership data.
 
     Returns
     -------
-    x_dict : dict[int, list[list[int]]]
+    cell_dict : dict[int, list[list[int]]]
         A dictionary mapping ranks to a list of sorted cells.
+    x_dict : dict[int, list[list[float]]]
+        A dictionary mapping ranks to a list of feature vectors.
     mem_dict : dict[int, list[list[bool]]]
         A dictionary mapping ranks to a list of membership values.
-
     """
-    x_dict, mem_dict = {}, {}
+    cell_dict, x_dict, mem_dict = {}, {}, {}
     for rank, cell_lifter_map in input_dict.items():
-        x_dict[rank] = [sorted(cell) for cell in cell_lifter_map.keys()]
+        cell_dict[rank] = [sorted(cell[0]) for cell in cell_lifter_map.keys()]
+        x_dict[rank] = [cell[1] for cell in cell_lifter_map.keys()]
         mem_dict[rank] = list(cell_lifter_map.values())
-    return x_dict, mem_dict
+    return cell_dict, x_dict, mem_dict
 
 
 def merge_neighbors(adj: dict[str, torch.Tensor]) -> tuple[dict[str, torch.Tensor], list[str]]:
@@ -847,36 +775,3 @@ def sparse_to_dense(sparse_matrix: csc_matrix) -> torch.Tensor:
 
     # Convert the NumPy array to a PyTorch tensor
     return torch.from_numpy(dense_array).type(torch.int64)
-
-
-if __name__ == "__main__":
-    import functools
-    import random
-
-    from torch_geometric.datasets import QM9
-
-    from combinatorial_data.lifts import rips_lift
-
-    data = QM9("../datasets/QM9")
-    dim = 2
-    transform_2 = CombinatorialComplexTransform(
-        functools.partial(rips_lift, dim=dim, dis=2.0), dim=dim
-    )
-    transform_3 = CombinatorialComplexTransform(
-        functools.partial(rips_lift, dim=dim, dis=3.0), dim=dim
-    )
-    transform_4 = CombinatorialComplexTransform(
-        functools.partial(rips_lift, dim=dim, dis=4.0), dim=dim
-    )
-
-    random_graph = random.randint(0, len(data) - 1)
-
-    # transform data[0] to combinatorial complex
-    com_2 = transform_2(data[random_graph])
-    com_3 = transform_3(data[random_graph])
-    com_4 = transform_4(data[random_graph])
-
-    print(f"Original Graph: {data[random_graph]}")
-    print(f"Combinatorial Complex (delta = 2.0): {com_2}")
-    print(f"Combinatorial Complex (delta = 3.0): {com_3}")
-    print(f"Combinatorial Complex (delta = 4.0): {com_4}")

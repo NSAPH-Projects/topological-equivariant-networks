@@ -17,8 +17,9 @@ from combinatorial_data.combinatorial_data_utils import (
     CombinatorialComplexTransform,
     CustomCollater,
 )
-from combinatorial_data.lifts import get_lifters
-from combinatorial_data.ranker import get_ranker
+from combinatorial_data.lifter import Lifter
+from qm9.lifts.registry import lifter_registry
+from qm9.qm9_cc import QM9_CC
 
 
 def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
@@ -89,25 +90,23 @@ def lift_qm9_to_cc(args: Namespace) -> list[dict]:
     the CombinatorialComplexData class. We transform to dictionary format to allow for storage as
     JSON files.
     """
-    qm9 = QM9("./datasets/QM9")
+
     # Create the transform
-    lifters = get_lifters(args)
-    ranker = get_ranker(args.lifters)
     transform = CombinatorialComplexTransform(
-        lifters=lifters,
-        ranker=ranker,
+        lifter=args.lifter,
         dim=args.dim,
         adjacencies=args.adjacencies,
         processed_adjacencies=args.processed_adjacencies,
         merge_neighbors=args.merge_neighbors,
     )
-    qm9_cc = []
-    for graph in tqdm(qm9, desc="Lifting QM9 samples"):
-        qm9_cc.append(transform.graph_to_ccdict(graph))
+    qm9_cc = QM9_CC("./datasets/QM9_CC", pre_transform=transform.graph_to_ccdict)
+    # qm9_cc = []
+    # for graph in tqdm(qm9, desc="Lifting QM9 samples"):
+    #    qm9_cc.append(transform.graph_to_ccdict(graph))
     return qm9_cc
 
 
-def save_lifted_qm9(storage_path: str, samples: list[dict]) -> None:
+def save_lifted_qm9(storage_path: str, lifted_qm9: QM9_CC) -> None:
     """
     Save the lifted QM9 samples to individual JSON files.
 
@@ -123,6 +122,7 @@ def save_lifted_qm9(storage_path: str, samples: list[dict]) -> None:
     None
     """
 
+    samples = lifted_qm9.data_list
     if os.path.exists(storage_path):
         raise FileExistsError(f"Path '{storage_path}' already exists.")
     os.makedirs(storage_path, exist_ok=True)
@@ -136,9 +136,26 @@ def save_lifted_qm9(storage_path: str, samples: list[dict]) -> None:
 
 def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
 
-    # Load the QM9 dataset just to get the number of samples
-    data_root = "./datasets/QM9"
-    num_samples = len(QM9(root=data_root))
+    # Load the QM9 dataset
+
+    # Compute the data path
+    relevant_args = [
+        "lifters",
+        "neighbor_types",
+        "connectivity",
+        "visible_dims",
+        "merge_neighbors",
+        "dim",
+        "dis",
+    ]
+    data_path = "./datasets/QM9_CC_" + generate_dataset_dir_name(args, relevant_args)
+
+    # Check if data path already exists
+    if not os.path.exists(data_path):
+        qm9_cc = lift_qm9_to_cc(args)
+        save_lifted_qm9(data_path, qm9_cc)
+    data_files = sorted(os.listdir(data_path))
+    num_samples = len(data_files)
 
     # Compute split indices
     with open("misc/egnn_splits.pkl", "rb") as f:
@@ -198,33 +215,15 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     index = targets.index(target_map[args.target_name])
 
     # Create DataLoader kwargs
-    follow_batch = [f"x_{i}" for i in range(args.dim + 1)] + ["x"]
+    follow_batch = [f"cell_{i}" for i in range(args.dim + 1)] + ["x"]
     dataloader_kwargs = {
         "batch_size": args.batch_size,
         "num_workers": args.num_workers,
         "shuffle": True,
     }
 
-    # Compute the data path
-    relevant_args = [
-        "lifters",
-        "neighbor_types",
-        "connectivity",
-        "visible_dims",
-        "merge_neighbors",
-        "dim",
-        "dis",
-    ]
-    data_path = "./datasets/QM9_" + generate_dataset_dir_name(args, relevant_args)
-
-    # Check if data path already exists
-    if not os.path.exists(data_path):
-        qm9_cc = lift_qm9_to_cc(args)
-        save_lifted_qm9(data_path, qm9_cc)
-
     # Process data splits
     loaders = {}
-    data_files = sorted(os.listdir(data_path))
     for split in ["train", "valid", "test"]:
 
         # Filter out the relevant data files

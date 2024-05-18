@@ -154,6 +154,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     if not os.path.exists(data_path):
         qm9_cc = lift_qm9_to_cc(args)
         save_lifted_qm9(data_path, qm9_cc)
+        del qm9_cc  # free memory
     data_files = sorted(os.listdir(data_path))
     num_samples = len(data_files)
 

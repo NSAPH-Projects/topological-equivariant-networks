@@ -1,14 +1,24 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
 from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
-from torch_scatter import scatter_add
 
 from models.utils import compute_centroids, compute_invariants_3d
 
+
+def scatter_add(
+    src: Tensor,
+    index: Tensor,
+    dim: int = 0,
+    dim_size: Optional[int] = None,
+):
+    src_shape = list(src.shape)
+    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+    aux = src.new_zeros(src_shape)
+    return aux.index_add(dim, index, src)
 
 class EMPSN(nn.Module):
     """

@@ -626,11 +626,11 @@ def compute_invariants(
             centroid_rec = pos_rec.mean(dim=0)
             centroid_dists[j] = torch.norm(centroid_send - centroid_rec)
             # diameters
-            diameter_send[j] = torch.norm(pos_send[:, None] - pos_send[None], -1).amax()
-            diameter_rec[j] = torch.norm(pos_rec[:, None] - pos_rec[None], -1).amax()
+            diameter_send[j] = torch.norm(pos_send[:, None] - pos_send[None], dim=-1).amax()
+            diameter_rec[j] = torch.norm(pos_rec[:, None] - pos_rec[None], dim=-1).amax()
             # hausdorff
             if haussdorf:
-                distmat_cross = torch.norm(pos_send[:, None] - pos_rec[None], -1)
+                distmat_cross = torch.norm(pos_send[:, None] - pos_rec[None], dim=-1)
                 hausdorff_dists_send[j] = distmat_cross.amin(dim=1).max()
                 hausdorff_dists_rec[j] = distmat_cross.amin(dim=0).max()
 

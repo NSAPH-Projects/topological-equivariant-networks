@@ -130,7 +130,7 @@ if __name__ == "__main__":
     # TODO: this metadata should be stored in the SpatialCC object
     data = next(iter(loader))
     num_features_per_rank = {
-        int(k.split("_")[1]): v.shape[1] for k, v in data.items() if "x_" in k
+        int(k.split("_")[1]): v.shape[1] for k, v in data.items() if k.startswith("x_")
     }
     max_dim = max(num_features_per_rank.keys())
 

@@ -8,7 +8,6 @@ from etnn.combinatorial_complexes import (
     CombinatorialComplexCollater,
 )
 
-
 class SpatialCC(InMemoryDataset):
     def __init__(
         self,
@@ -39,8 +38,8 @@ class SpatialCC(InMemoryDataset):
 
         # Add road, tract indictor in the data
         tract_indicator = pd.read_csv(f"{self.raw_dir}/{self.raw_file_names[1]}")
-        data.road = torch.tensor(tract_indicator.road.values).to(data.pos.device)
-        data.tract = torch.tensor(tract_indicator.tract.values).to(data.pos.device)
+        data.index_1 = torch.tensor(tract_indicator.road.values).to(data.pos.device)
+        data.index_2 = torch.tensor(tract_indicator.tract.values).to(data.pos.device)
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
@@ -53,7 +52,7 @@ class SpatialCC(InMemoryDataset):
 
 def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
     for key, tensor in data.items():
-        if "x_" in key:
+        if key.startswith("x_"):
             # loop per column
             for i in range(tensor.shape[1]):
                 # if dummy variable, skip
@@ -65,11 +64,28 @@ def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
                     ].std()
         if "y" in key:
             data[key] = (tensor - tensor.mean()) / tensor.std()
-        if "pos" in key:
+        if "pos" == key:
             # normalize to 0-1 range per columns
             data[key] = (tensor - tensor.amin(0)) / (tensor.amax(0) - tensor.amin(0))
     return data
 
+def squash_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
+    x_0 = data.x_0
+    for key, tensor in data.items():
+        if key.startswith("x_") and key != "x_0":
+            #extract i from key
+            i = key.split("_")[1]
+            x_0 = torch.cat((x_0, tensor[getattr(data, "index_" + i)]), dim=1)
+            # remove the original tensor
+            delattr(data, key) # inplace
+        elif key.startswith("adj_") and key != "adj_0_0":
+            delattr(data, key)
+        elif key.startswith("cell_") and key != "cell_0":
+            delattr(data, key)
+        elif key.startswith("lengths_") and key != "lengths_0":
+            delattr(data, key)
+    data.x_0 = x_0
+    return data
 
 def create_mask(
     data: CombinatorialComplexData, rate: float = 0.1, seed: int | None = None
@@ -104,7 +120,7 @@ if __name__ == "__main__":
     dataset = SpatialCC(
         root="data",
         transform=create_mask,
-        pre_transform=standardize_cc,
+        pre_transform=squash_cc,
         force_reload=True,
     )
     follow_batch = ["cell_0", "cell_1", "cell_2"]

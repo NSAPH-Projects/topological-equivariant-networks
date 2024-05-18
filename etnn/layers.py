@@ -74,18 +74,20 @@ class ETNNLayer(nn.Module):
             f = 1 + sum([adj_type[2] == str(dim) for adj_type in adjacencies])
             self.factor[str(dim)] = f
             self.update[str(dim)] = etnn_block(
-                f * num_hidden, num_hidden, num_hidden, num_layers
+                f * num_hidden, num_hidden, num_hidden, num_layers, last_act=nn.Identity
             )
         if self.equivariant:
             self.pos_update = nn.Linear(num_hidden, 1)
+            nn.init.trunc_normal_(self.pos_update.weight, std=0.02)
+            nn.init.constant_(self.pos_update.bias, 0)
 
     def get_pos_delta(
         self, pos: Tensor, mes: dict[str, Tensor], adj: dict[str, Tensor]
     ) -> Tensor:
-        sender = adj['0_0'][0]
-        receiver = adj['0_0'][1]
+        sender = adj["0_0"][0]
+        receiver = adj["0_0"][1]
         pos_diff = pos[sender] - pos[receiver]
-        pos_upd = self.pos_update(mes['0_0'][receiver])
+        pos_upd = self.pos_update(mes["0_0"][receiver])
         pos_delta = pos_diff * pos_upd
         # collect the pos_delta for each node: going from [num_edges, num_hidden] to [num_nodes, num_hidden]
         new_pos_delta = scatter_add(pos_delta, sender, dim=0, dim_size=pos.size(0))
@@ -116,7 +118,8 @@ class ETNNLayer(nn.Module):
 
         if self.equivariant:
             pos_delta = self.get_pos_delta(pos, mes, adj)
-            pos = pos + pos_delta
+            C = 0.1
+            pos = pos + C * pos_delta
 
         return x, pos
 
@@ -128,7 +131,7 @@ class ETNNMessagerLayer(nn.Module):
             2 * num_hidden + num_inv, num_hidden, num_hidden, num_layers
         )
         self.edge_inf_mlp = nn.Sequential(nn.Linear(num_hidden, 1), nn.Sigmoid())
-    
+
     def forward(self, x_send: Tensor, x_rec: Tensor, index: Tensor, edge_attr: Tensor):
         index_send = index[0]
         index_rec = index[1]

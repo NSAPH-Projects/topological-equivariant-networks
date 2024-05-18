@@ -516,12 +516,14 @@ compute_invariants_3d.num_features_map = {
 }
 
 
+
+# @torch.jit.script
 def compute_invariants(
     feat_ind: dict[str, list[Tensor]],
     pos: torch.FloatTensor,
     adj: dict[str, torch.LongTensor],
     haussdorf: bool = True,
-    max_haussdorf_points: int = 100,
+    max_cell_size: int = 100,
     # inv_ind: dict[str, torch.FloatTensor] = None,
     # device: torch.device = None,
 ) -> dict[str, Tensor]:
@@ -585,6 +587,67 @@ def compute_invariants(
     mean_cell_positions = {}
     max_pairwise_distances = {}
 
+    dev = pos.device
+    # compute centroids distance
+    for rank_pair, cell_pairs in adj.items():
+        centroid_dists = torch.zeros(cell_pairs.shape[1], device=dev)
+        diameter_send = torch.zeros(cell_pairs.shape[1], device=dev)
+        diameter_rec = torch.zeros(cell_pairs.shape[1], device=dev)
+        hausdorff_dists_send = torch.zeros(cell_pairs.shape[1], device=dev)
+        hausdorff_dists_rec = torch.zeros(cell_pairs.shape[1], device=dev)
+
+        send_rank, rec_rank = rank_pair.split("_")[:2]
+
+        for j in range(cell_pairs.shape[1]):
+            index_send = feat_ind[send_rank][cell_pairs[0, j]]
+            index_rec = feat_ind[rec_rank][cell_pairs[1, j]]
+
+            if len(index_send) == 1 and len(index_rec) == 1:
+                # trivial case, only one point
+                dist = torch.norm(pos[index_send] - pos[index_rec])
+                centroid_dists[j] = dist
+                diameter_send[j] = dist
+                diameter_rec[j] = dist
+                if haussdorf:
+                    hausdorff_dists_send[j] = dist
+                    hausdorff_dists_rec[j] = dist
+                continue
+
+            if len(index_send) > max_cell_size:
+                new_pts_ix = torch.randperm(len(index_send))[:max_cell_size]
+                index_send = index_send[new_pts_ix]
+            if len(index_rec) > max_cell_size:
+                new_pts_ix = torch.randperm(len(index_rec))[:max_cell_size]
+                index_rec = index_rec[new_pts_ix]
+            pos_send = pos[index_send]
+            pos_rec = pos[index_rec]
+            # centroids
+            centroid_send = pos_send.mean(dim=0)
+            centroid_rec = pos_rec.mean(dim=0)
+            centroid_dists[j] = torch.norm(centroid_send - centroid_rec)
+            # diameters
+            diameter_send[j] = torch.norm(pos_send[:, None] - pos_send[None], -1).amax()
+            diameter_rec[j] = torch.norm(pos_rec[:, None] - pos_rec[None], -1).amax()
+            # hausdorff
+            if haussdorf:
+                distmat_cross = torch.norm(pos_send[:, None] - pos_rec[None], -1)
+                hausdorff_dists_send[j] = distmat_cross.amin(dim=1).max()
+                hausdorff_dists_rec[j] = distmat_cross.amin(dim=0).max()
+
+        f = torch.stack(
+            [
+                centroid_dists,
+                diameter_send,
+                diameter_rec,
+                hausdorff_dists_send,
+                hausdorff_dists_rec,
+            ],
+            dim=1,
+        )
+        new_features[rank_pair] = f
+
+    return new_features
+
     for rank_pair, cell_pairs in adj.items():
 
         # Compute mean cell positions memoized
@@ -628,44 +691,43 @@ def compute_invariants(
         max_dim_receiver = max(len(x) for x in feat_ind[rec_rank])
 
         if haussdorf:
-            with torch.no_grad():
-                # easy case/graph
-                if max_dim_sender == 1 and max_dim_receiver == 1:
-                    feats_sender = torch.cat(
-                        [feat_ind[send_rank][c] for c in cell_pairs[0]]
+            # easy case/graph
+            if max_dim_sender == 1 and max_dim_receiver == 1:
+                feats_sender = torch.cat(
+                    [feat_ind[send_rank][c] for c in cell_pairs[0]]
+                )
+                feats_receiver = torch.cat(
+                    [feat_ind[rec_rank][c] for c in cell_pairs[1]]
+                )
+                pos_sender = pos[feats_sender]
+                pos_receiver = pos[feats_receiver]
+                # cells have equal size, just get the positions and compute the distance
+                # hausdorff is the trivially equal to the distance
+                dists = torch.norm(pos_sender - pos_receiver, dim=1)
+                hausdorff_dists_sender = dists
+                hausdorff_dists_receiver = dists
+            # general case
+            else:
+                hausdorff_dists_sender = torch.zeros_like(centroid_dists)
+                hausdorff_dists_receiver = torch.zeros_like(centroid_dists)
+                for j in range(cell_pairs.shape[1]):
+                    index_left = feat_ind[send_rank][cell_pairs[0, j]]
+                    index_right = feat_ind[rec_rank][cell_pairs[1, j]]
+                    #
+                    if len(index_left) > max_cell_size:
+                        new_pts_ix = torch.randperm(len(index_left))[:max_cell_size]
+                        index_left = index_left[new_pts_ix]
+                    if len(index_right) > max_cell_size:
+                        new_pts_ix = torch.randperm(len(index_right))[:max_cell_size]
+                        index_right = index_right[new_pts_ix]
+                    #
+                    pos_sender = pos[index_left]
+                    pos_receiver = pos[index_right]
+                    distmat_cross = torch.norm(
+                        pos_sender[:, None] - pos_receiver, dim=2
                     )
-                    feats_receiver = torch.cat(
-                        [feat_ind[rec_rank][c] for c in cell_pairs[1]]
-                    )
-                    pos_sender = pos[feats_sender]
-                    pos_receiver = pos[feats_receiver]
-                    # cells have equal size, just get the positions and compute the distance
-                    # hausdorff is the trivially equal to the distance
-                    dists = torch.norm(pos_sender - pos_receiver, dim=1)
-                    hausdorff_dists_sender = dists
-                    hausdorff_dists_receiver = dists
-                # general case
-                else:
-                    hausdorff_dists_sender = torch.zeros_like(centroid_dists)
-                    hausdorff_dists_receiver = torch.zeros_like(centroid_dists)
-                    for j in range(cell_pairs.shape[1]):
-                        index_left = feat_ind[send_rank][cell_pairs[0, j]]
-                        index_right = feat_ind[rec_rank][cell_pairs[1, j]]
-                        #
-                        if len(index_left) > max_haussdorf_points:
-                            new_pts_ix = torch.randperm(len(index_left))[:max_haussdorf_points]
-                            index_left = index_left[new_pts_ix]
-                        if len(index_right) > max_haussdorf_points:
-                            new_pts_ix = torch.randperm(len(index_right))[:max_haussdorf_points]
-                            index_right = index_right[new_pts_ix]
-                        #
-                        pos_sender = pos[index_left]
-                        pos_receiver = pos[index_right]
-                        distmat_cross = torch.norm(
-                            pos_sender[:, None] - pos_receiver, dim=2
-                        )
-                        hausdorff_dists_sender[j] = distmat_cross.min(dim=1)[0].max()
-                        hausdorff_dists_receiver[j] = distmat_cross.min(dim=0)[0].max()
+                    hausdorff_dists_sender[j] = distmat_cross.min(dim=1)[0].max()
+                    hausdorff_dists_receiver[j] = distmat_cross.min(dim=0)[0].max()
 
             # Combine all features
             new_features[rank_pair] = torch.stack(

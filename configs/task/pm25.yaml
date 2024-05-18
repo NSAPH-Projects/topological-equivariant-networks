@@ -1,7 +1,7 @@
 #@package _global_
 
 model:
-  # task defaults, can be overwritten by baseline
+  # defaults, other params changed by baseline/ config files
   _target_: etnn.models.ETNN
   num_out: 1
   adjacencies: ["0_0", "0_1", "1_1", "1_2", "2_2"]
@@ -32,28 +32,20 @@ dataset:
     seed: ${seed}   
     _partial_: true
 
-# logger:
-#   - _target_: lightning.pytorch.loggers.WandbLogger
-#     log_model: all
-#     entity: ten-harvard
-#     project: spatial-cc
+training:
+  # defaults, other params cchanged by training/ config files
+  clip: 1.0
+
 wandb:
   entity: ten-harvard
   project: spatial-cc
-
-# trainer:
-#   _target_: lightning.pytorch.Trainer
-#   max_epochs: 100
-#   accelerator: auto
-#   gradient_clip_val: 10
-#   callbacks:
-#     - _target_: lightning.pytorch.callbacks.LearningRateMonitor
-#       logging_interval: epoch
-#   num_sanity_val_steps: 0
-
-trainer:
-  max_epochs: 100
-  clip: 1.0
+  config:
+    baseline: ${hydra:runtime.choices.baseline}
+    seed: ${seed}
+    lr: ${optimizer.lr}
+    max_epochs: ${training.max_epochs}
+    loss_fn: ${hydra:runtime.choices.loss_fn}
+    clip: ${training.clip}
 
 optimizer:
   _target_: torch.optim.Adam
@@ -63,6 +55,6 @@ optimizer:
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.OneCycleLR
   max_lr: 0.001
-  final_div_factor: 1e2
-  epochs: ${trainer.max_epochs}
+  final_div_factor: 1e3
+  epochs: ${training.max_epochs}
   steps_per_epoch: 1

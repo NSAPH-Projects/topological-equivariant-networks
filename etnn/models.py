@@ -1,15 +1,12 @@
-import numpy as np
 import torch
 import torch.nn as nn
 from torch import Tensor
 from torch_geometric.data import Data
 
-# from torch_geometric.nn import global_add_pool
-
-# from torch_scatter import scatter_add
 
 from etnn.layers import ETNNLayer, etnn_block
-from etnn.utils import compute_invariants, compute_invariants2, fast_agg_indices
+from etnn.invariants import compute_invariants
+# from etnn.utils import compute_invariants
 
 
 class ETNN(nn.Module):
@@ -25,17 +22,13 @@ class ETNN(nn.Module):
         num_layers: int,
         adjacencies: list[str],
         depth_etnn_layers = 1,
-        compute_invariants: callable = compute_invariants,
         equivariant: bool = False,
         num_readout_layers: int = 2,
-        jit: bool = False,
         haussdorf: bool = True,
     ) -> None:
         super().__init__()
-        # self.num_inv_fts_map = self.compute_invariants.num_features_map
         self.adjacencies = adjacencies
         self.equivariant = equivariant
-        self.compute_invariants = compute_invariants
         self.haussdorf = haussdorf
         self.num_invariants = 5 if haussdorf else 3
         self.visible_dims = list(num_features_per_rank.keys())
@@ -61,9 +54,6 @@ class ETNN(nn.Module):
                 for _ in range(num_layers)
             ]
         )
-        if jit:  # doesn't help much in mac os at least, only like 1% speedup
-            self.layers = torch.jit.script(self.layers)
-            compute_invariants = torch.jit.script(compute_invariants)
 
         self.readout = nn.ModuleDict()
         for dim in self.visible_dims:
@@ -101,34 +91,15 @@ class ETNN(nn.Module):
         x = {str(i): getattr(graph, f"x_{i}") for i in self.visible_dims}
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
 
-        # pre-compute fast agg indices
-        # agg_indices = {}
-        # for key, edges in adj.items():
-        #     cell_send, cell_rec = edges[0], edges[1]
-        #     r1, r2 = key.split("_")[:2]
-        #     list_left = [cell_ind[r1][c].cpu().numpy().tolist() for c in cell_send]
-        #     list_right = [cell_ind[r2][c].cpu().numpy().tolist() for c in cell_rec]
-        #     atoms_left = np.concatenate(list_left)
-        #     atoms_right = np.concatenate(list_right)
-        #     lengths_left = np.array([len(c) for c in list_left])
-        #     lengths_right = np.array([len(c) for c in list_right])
-        #     indices = fast_agg_indices(
-        #         atoms_left, lengths_left, atoms_right, lengths_right
-        #     )
-        #     agg_indices[key] = [
-        #         torch.from_numpy(u).to(graph.pos.device) for u in indices
-        #     ]
-
         # message passing
         pos = graph.pos
-        inv = self.compute_invariants(cell_ind, pos, adj, self.haussdorf)
-
-        for layer in self.layers:
+        inv = compute_invariants(cell_ind, pos, adj, self.haussdorf, max_cell_size=100)
+        for _, layer in enumerate(self.layers):
             if not self.equivariant:
                 x, _ = layer(x, adj, pos, inv)
             else:
                 x, pos = layer(x, adj, pos, inv)
-                inv = self.compute_invariants(cell_ind, pos, adj, self.haussdorf)
+                inv = compute_invariants(cell_ind, pos, adj, self.haussdorf, max_cell_size=100)
 
         # read out
         out = {dim: self.readout[dim](feature) for dim, feature in x.items()}
@@ -171,7 +142,6 @@ if __name__ == "__main__":
         num_readout_layers=1,
         adjacencies=["0_0", "0_1", "1_1", "1_2", "2_2"],
         equivariant=True,
-        jit=False,
     )
 
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)

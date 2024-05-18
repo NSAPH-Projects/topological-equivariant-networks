@@ -24,7 +24,7 @@ def main(cfg: DictConfig):
     wandb.init(
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
-        config=OmegaConf.resolve(cfg),
+        config=OmegaConf.resolve(cfg.wandb.config),
         id=cfg.baseline_name
     )
 
@@ -50,7 +50,7 @@ def main(cfg: DictConfig):
     model.train()
 
     # get training params from config
-    pbar = trange(cfg.trainer.max_epochs, desc="", leave=True)
+    pbar = trange(cfg.training.max_epochs, desc="", leave=True)
     for epoch in pbar:
         epoch_metrics = defaultdict(list)
         for batch in loader:
@@ -63,8 +63,8 @@ def main(cfg: DictConfig):
             train_loss = (loss_terms * mask).sum() / mask.sum()
             eval_loss = (loss_terms * (1 - mask)).sum() / (1 - mask).sum()
             train_loss.backward()
-            if cfg.trainer.clip is not None:
-                torch.nn.utils.clip_grad_value_(model.parameters(), cfg.trainer.clip)
+            if cfg.training.clip is not None:
+                torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
             opt.step()
             # end training step
 

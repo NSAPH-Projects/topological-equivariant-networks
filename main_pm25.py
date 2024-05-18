@@ -25,7 +25,7 @@ def main(cfg: DictConfig):
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
         config=OmegaConf.resolve(cfg.wandb.config),
-        id=cfg.baseline_name
+        id=cfg.baseline_name + "-" + wandb.util.generate_id(),
     )
 
     # load data

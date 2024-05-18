@@ -35,7 +35,7 @@ def main(cfg: DictConfig):
 
     # determine number of features per rank
     D = next(iter(loader))
-    num_feats = {k.split("_")[1]: v.shape[1] for k, v in D.items() if "x_" in k}
+    num_feats = {k.split("_")[1]: v.shape[1] for k, v in D.items() if k.startswith("x_")}
 
     # instantiate model, optimizer, scheduler
     model: nn.Module = instantiate(cfg.model, num_features_per_rank=num_feats)

@@ -76,6 +76,14 @@ class ETNN(nn.Module):
                 last_act=nn.Identity,
             )
 
+        # initialize all layers
+        for layer in self.layers:
+            for m in layer.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.trunc_normal_(m.weight, std=0.2)
+                    if m.bias is not None:
+                        nn.init.constant_(m.bias, 0)
+
     def forward(self, graph: Data) -> Tensor:
         # nest cell indices from cat format
         cell_ind = {}
@@ -93,7 +101,7 @@ class ETNN(nn.Module):
         x = {str(i): getattr(graph, f"x_{i}") for i in self.visible_dims}
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
 
-        # # pre-compute fast agg indices
+        # pre-compute fast agg indices
         # agg_indices = {}
         # for key, edges in adj.items():
         #     cell_send, cell_rec = edges[0], edges[1]
@@ -114,7 +122,6 @@ class ETNN(nn.Module):
         # message passing
         pos = graph.pos
         inv = self.compute_invariants(cell_ind, pos, adj, self.haussdorf)
-        # inv = compute_invariants2(cell_ind, pos, adj, agg_indices)
 
         for layer in self.layers:
             if not self.equivariant:
@@ -122,7 +129,6 @@ class ETNN(nn.Module):
             else:
                 x, pos = layer(x, adj, pos, inv)
                 inv = self.compute_invariants(cell_ind, pos, adj, self.haussdorf)
-                # inv = compute_invariants2(cell_ind, pos, adj, agg_indices)
 
         # read out
         out = {dim: self.readout[dim](feature) for dim, feature in x.items()}

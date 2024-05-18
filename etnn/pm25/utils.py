@@ -115,12 +115,13 @@ def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
     from etnn.combinatorial_complexes import CombinatorialComplexCollater
+    from torch_geometric.transforms import Compose
 
     # quick test
     dataset = SpatialCC(
         root="data",
         transform=create_mask,
-        pre_transform=squash_cc,
+        pre_transform=Compose([standardize_cc, squash_cc]),
         force_reload=True,
     )
     follow_batch = ["cell_0", "cell_1", "cell_2"]

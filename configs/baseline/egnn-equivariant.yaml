@@ -1,4 +1,4 @@
 #@package _global_
 model:
+  equivariant: true
   haussdorf: false
-  num_invariants: 3

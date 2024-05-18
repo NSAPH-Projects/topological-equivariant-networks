@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -98,7 +98,7 @@ class ETNNLayer(nn.Module):
         x: dict[str, Tensor],
         adj: dict[str, Tensor],
         pos: Tensor,
-        inv: dict[str, Tensor],
+        inv: dict[str, Optional[Tensor]],
     ) -> tuple[dict[str, Tensor], Tensor]:
         # pass the different messages of all adjacency types
         mes = {}
@@ -132,11 +132,15 @@ class ETNNMessagerLayer(nn.Module):
         )
         self.edge_inf_mlp = nn.Sequential(nn.Linear(num_hidden, 1), nn.Sigmoid())
 
-    def forward(self, x_send: Tensor, x_rec: Tensor, index: Tensor, edge_attr: Tensor):
+    def forward(
+        self, x_send: Tensor, x_rec: Tensor, index: Tensor, edge_attr: Optional[Tensor]
+    ):
         index_send = index[0]
         index_rec = index[1]
         sim_send, sim_rec = x_send[index_send], x_rec[index_rec]
-        state = torch.cat((sim_send, sim_rec, edge_attr), dim=1)
+        state = torch.cat((sim_send, sim_rec), dim=1)
+        if edge_attr is not None:
+            state = torch.cat((state, edge_attr), dim=1)
 
         messages = self.message_mlp(state)
         edge_weights = self.edge_inf_mlp(messages)

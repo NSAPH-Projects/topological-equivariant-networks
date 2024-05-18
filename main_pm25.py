@@ -36,9 +36,12 @@ def main(cfg: DictConfig):
     # determine number of features per rank
     D = next(iter(loader))
     num_feats = {k.split("_")[1]: v.shape[1] for k, v in D.items() if k.startswith("x_")}
+    adjacencies = [k[4:] for k in D.keys() if k.startswith("adj_")]
 
     # instantiate model, optimizer, scheduler
-    model: nn.Module = instantiate(cfg.model, num_features_per_rank=num_feats)
+    model: nn.Module = instantiate(
+        cfg.model, num_features_per_rank=num_feats, adjacencies=adjacencies
+    )
     opt: Optimizer = instantiate(cfg.optimizer, model.parameters())
     sched: LRScheduler = instantiate(cfg.lr_scheduler, opt)
     loss_fn: callable = instantiate(cfg.loss_fn, reduction="none")

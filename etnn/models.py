@@ -25,12 +25,14 @@ class ETNN(nn.Module):
         equivariant: bool = False,
         num_readout_layers: int = 2,
         haussdorf: bool = True,
+        invariants: bool = True,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
         self.equivariant = equivariant
         self.haussdorf = haussdorf
-        self.num_invariants = 5 if haussdorf else 3
+        self.invariants = invariants
+        self.num_invariants = (5 if haussdorf else 3) * invariants
         self.visible_dims = list(num_features_per_rank.keys())
         self.num_inv_fts_map = {k: self.num_invariants for k in adjacencies}
         self.max_dim = max(self.visible_dims)
@@ -93,7 +95,11 @@ class ETNN(nn.Module):
 
         # message passing
         pos = graph.pos
-        inv = compute_invariants(cell_ind, pos, adj, self.haussdorf, max_cell_size=100)
+        if self.invariants:
+            inv = compute_invariants(cell_ind, pos, adj, self.haussdorf, max_cell_size=100)
+        else:
+            inv = {adj_type: None for adj_type in self.adjacencies}
+
         for _, layer in enumerate(self.layers):
             if not self.equivariant:
                 x, _ = layer(x, adj, pos, inv)

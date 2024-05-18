@@ -1,6 +1,7 @@
 defaults:
   - _self_
   - task: pm25
+  - dataset: pm25-cc
   - loss_fn: huber
   - training: fast
   - baseline: invariant

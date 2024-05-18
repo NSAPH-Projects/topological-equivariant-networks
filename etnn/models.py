@@ -5,8 +5,8 @@ from torch_geometric.data import Data
 
 
 from etnn.layers import ETNNLayer, etnn_block
-from etnn.invariants import compute_invariants
-# from etnn.utils import compute_invariants
+# from etnn.invariants import compute_invariants
+from etnn.utils import compute_invariants
 
 
 class ETNN(nn.Module):

@@ -62,7 +62,7 @@ def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
                     tensor[:, i] = (tensor[:, i] - tensor[:, i].mean()) / tensor[
                         :, i
                     ].std()
-        if "y" in key:
+        if key.startswith("y"):
             data[key] = (tensor - tensor.mean()) / tensor.std()
         if "pos" == key:
             # normalize to 0-1 range per columns

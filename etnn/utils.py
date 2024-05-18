@@ -517,7 +517,7 @@ compute_invariants_3d.num_features_map = {
 
 
 
-# @torch.jit.script
+@torch.jit.script
 def compute_invariants(
     feat_ind: dict[str, list[Tensor]],
     pos: torch.FloatTensor,

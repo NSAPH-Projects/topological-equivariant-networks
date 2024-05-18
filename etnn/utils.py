@@ -606,8 +606,8 @@ def compute_invariants(
                 # trivial case, only one point
                 dist = torch.norm(pos[index_send] - pos[index_rec])
                 centroid_dists[j] = dist
-                diameter_send[j] = dist
-                diameter_rec[j] = dist
+                diameter_send[j] = torch.tensor(0.0, device=dev)
+                diameter_rec[j] = torch.tensor(0.0, device=dev)
                 if haussdorf:
                     hausdorff_dists_send[j] = dist
                     hausdorff_dists_rec[j] = dist

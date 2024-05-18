@@ -11,13 +11,23 @@ def _invariants_kernel(
     haussdorf: bool = True,
     max_cell_size: Optional[int] = None,
 ) -> Tensor:
-    m = len(cells_send)
     out_dim = 5 if haussdorf else 3
     device = pos.device
-    out = torch.zeros(m, out_dim, device=device)
+    out = torch.zeros(len(cells_send), out_dim, device=device)
 
     # loop over all cells
     for i, (cell_send, cell_rec) in enumerate(zip(cells_send, cells_rec)):
+        # trivial case, only one point
+        if len(cell_send) == 1 and len(cell_rec) == 1:
+            dist = torch.norm(pos[cell_send[0]] - pos[cell_send[0]])
+            out[i, 0] = dist
+            out[i, 1] = torch.tensor(0.0, device=device)
+            out[i, 2] = torch.tensor(0.0, device=device)
+            if haussdorf:
+                out[i, 3] = torch.tensor(0.0, device=device)
+                out[i, 4] = torch.tensor(0.0, device=device)
+            continue
+
         # subsmple cell sizes if needed
         if max_cell_size is not None and len(cell_send) > max_cell_size:
             subsample = torch.randperm(len(cell_send))[:max_cell_size].to(device)
@@ -31,14 +41,12 @@ def _invariants_kernel(
         pos_rec = pos[cell_rec]
 
         # compute centroid distance
-        centroid_send = pos_send.mean(dim=0)
-        centroid_rec = pos_rec.mean(dim=0)
-        centroid_dist = torch.dist(centroid_send, centroid_rec)
+        centroid_dist = torch.norm(pos_send.mean(0) - pos_rec.mean(0))
         out[i, 0] = centroid_dist
 
         # compute diameters (max distance per cell)
-        send_dist = torch.norm(pos_send[:, None] - pos_send[None, :], dim=-1)
-        rec_dist = torch.norm(pos_rec[:, None] - pos_rec[None, :], dim=-1)
+        send_dist = torch.norm(pos_send[:, None] - pos_send[None], dim=-1)
+        rec_dist = torch.norm(pos_rec[:, None] - pos_rec[None], dim=-1)
         send_diameter = send_dist.max()
         rec_diameter = rec_dist.max()
         out[i, 1] = send_diameter
@@ -46,9 +54,7 @@ def _invariants_kernel(
 
         # haussdorff distance
         if haussdorf:
-            cross_dist = torch.norm(
-                pos_send[:, None] - pos_rec[None, :], dim=-1
-            )
+            cross_dist = torch.norm(pos_send[:, None] - pos_rec[None], dim=-1)
             send_hausdorff = cross_dist.amin(dim=0).max()
             rec_hausdorff = cross_dist.amin(dim=1).max()
             out[i, 3] = send_hausdorff

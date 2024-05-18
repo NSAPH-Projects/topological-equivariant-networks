@@ -1,5 +1,5 @@
 import os
-import numba
+# import numba
 import random
 from argparse import Namespace
 from typing import Optional, Tuple
@@ -41,93 +41,93 @@ def scatter_max(
     return aux.index_reduce(dim, index, src, reduce="amax", include_self=False)
 
 
-@numba.jit(nopython=True)
-def fast_agg_indices(
-    atoms_left: np.ndarray,
-    lengths_left: np.ndarray,
-    atoms_right: np.ndarray,
-    lengths_right: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    # inputs must be equal size
-    splits_left = np.split(atoms_left, np.cumsum(lengths_left)[:-1])
-    splits_right = np.split(atoms_right, np.cumsum(lengths_right)[:-1])
+# @numba.jit(nopython=True)
+# def fast_agg_indices(
+#     atoms_left: np.ndarray,
+#     lengths_left: np.ndarray,
+#     atoms_right: np.ndarray,
+#     lengths_right: np.ndarray,
+# ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+#     # inputs must be equal size
+#     splits_left = np.split(atoms_left, np.cumsum(lengths_left)[:-1])
+#     splits_right = np.split(atoms_right, np.cumsum(lengths_right)[:-1])
 
-    # must return a tuple of 6 arrays
-    n = len(lengths_left)  # must be the same as len(splits_right)
-    m = sum(lengths_left * lengths_right)
-    content_left = np.empty(m, dtype=np.int64)
-    content_right = np.empty(m, dtype=np.int64)
-    index_left = np.empty(m, dtype=np.int64)
-    index_right = np.empty(m, dtype=np.int64)
+#     # must return a tuple of 6 arrays
+#     n = len(lengths_left)  # must be the same as len(splits_right)
+#     m = sum(lengths_left * lengths_right)
+#     content_left = np.empty(m, dtype=np.int64)
+#     content_right = np.empty(m, dtype=np.int64)
+#     index_left = np.empty(m, dtype=np.int64)
+#     index_right = np.empty(m, dtype=np.int64)
 
-    offset_index_left = 0
-    offset_index_right = 0
-    step = 0
-    for i in range(n):
-        n_left = len(splits_left[i])
-        n_right = len(splits_right[i])
-        for j, sj in enumerate(splits_left[i]):
-            for k, sk in enumerate(splits_right[i]):
-                ind = step + j * n_right + k
-                content_left[ind] = sj
-                content_right[ind] = sk
-                index_left[ind] = offset_index_left + j
-                index_right[ind] = offset_index_right + k
-        step += n_left * n_right
-        offset_index_left += n_left
-        offset_index_right += n_right
+#     offset_index_left = 0
+#     offset_index_right = 0
+#     step = 0
+#     for i in range(n):
+#         n_left = len(splits_left[i])
+#         n_right = len(splits_right[i])
+#         for j, sj in enumerate(splits_left[i]):
+#             for k, sk in enumerate(splits_right[i]):
+#                 ind = step + j * n_right + k
+#                 content_left[ind] = sj
+#                 content_right[ind] = sk
+#                 index_left[ind] = offset_index_left + j
+#                 index_right[ind] = offset_index_right + k
+#         step += n_left * n_right
+#         offset_index_left += n_left
+#         offset_index_right += n_right
 
-    step = 0
-    subindex_left = np.empty(sum(lengths_left), dtype=np.int64)
-    for j, sj in enumerate(splits_left):
-        subindex_left[step : step + len(sj)] = j
-        step += len(sj)
+#     step = 0
+#     subindex_left = np.empty(sum(lengths_left), dtype=np.int64)
+#     for j, sj in enumerate(splits_left):
+#         subindex_left[step : step + len(sj)] = j
+#         step += len(sj)
 
-    step = 0
-    subindex_right = np.empty(sum(lengths_right), dtype=np.int64)
-    for j, sj in enumerate(splits_right):
-        subindex_right[step : step + len(sj)] = j
-        step += len(sj)
+#     step = 0
+#     subindex_right = np.empty(sum(lengths_right), dtype=np.int64)
+#     for j, sj in enumerate(splits_right):
+#         subindex_right[step : step + len(sj)] = j
+#         step += len(sj)
 
-    return (
-        content_left,
-        content_right,
-        index_left,
-        index_right,
-        subindex_left,
-        subindex_right,
-    )
+#     return (
+#         content_left,
+#         content_right,
+#         index_left,
+#         index_right,
+#         subindex_left,
+#         subindex_right,
+#     )
 
 
-def haussdorff(
-    list_left: np.ndarray,
-    list_right: np.ndarray,
-    pos: torch.FloatTensor | np.ndarray,
-) -> tuple[torch.FloatTensor | np.ndarray, torch.FloatTensor | np.ndarray]:
-    atoms_left = np.concatenate(list_left)
-    atoms_right = np.concatenate(list_right)
-    lengths_left = np.array([len(x) for x in list_left])
-    length_right = np.array([len(x) for x in list_right])
+# def haussdorff(
+#     list_left: np.ndarray,
+#     list_right: np.ndarray,
+#     pos: torch.FloatTensor | np.ndarray,
+# ) -> tuple[torch.FloatTensor | np.ndarray, torch.FloatTensor | np.ndarray]:
+#     atoms_left = np.concatenate(list_left)
+#     atoms_right = np.concatenate(list_right)
+#     lengths_left = np.array([len(x) for x in list_left])
+#     length_right = np.array([len(x) for x in list_right])
 
-    cl, cr, il, ir, sl, sr = fast_agg_indices(
-        atoms_left, lengths_left, atoms_right, length_right
-    )
+#     cl, cr, il, ir, sl, sr = fast_agg_indices(
+#         atoms_left, lengths_left, atoms_right, length_right
+#     )
 
-    # cast to longtensors
-    cl, cr, il, ir, sl, sr = [
-        torch.LongTensor(x).to(pos.device) for x in (cl, cr, il, ir, sl, sr)
-    ]
+#     # cast to longtensors
+#     cl, cr, il, ir, sl, sr = [
+#         torch.LongTensor(x).to(pos.device) for x in (cl, cr, il, ir, sl, sr)
+#     ]
 
-    # # compute haussford by two aggregations
-    pos_left = pos[cl]
-    pos_right = pos[cr]
-    dists = torch.norm(pos_left - pos_right, dim=1)
-    hausdorff_left = scatter_min(dists, il)
-    hausdorff_left = scatter_max(hausdorff_left, sl)
-    hausdorff_right = scatter_min(dists, ir)
-    hausdorff_right = scatter_max(hausdorff_right, sr)
+#     # # compute haussford by two aggregations
+#     pos_left = pos[cl]
+#     pos_right = pos[cr]
+#     dists = torch.norm(pos_left - pos_right, dim=1)
+#     hausdorff_left = scatter_min(dists, il)
+#     hausdorff_left = scatter_max(hausdorff_left, sl)
+#     hausdorff_right = scatter_min(dists, ir)
+#     hausdorff_right = scatter_max(hausdorff_right, sr)
 
-    return hausdorff_left, hausdorff_right
+#     return hausdorff_left, hausdorff_right
 
 
 def get_adjacency_types(
@@ -1013,30 +1013,30 @@ def compute_centroids(
     return centroids
 
 
-if __name__ == "__main__":
-    import timeit
+# if __name__ == "__main__":
+#     import timeit
 
-    list1 = [[0, 1], [2, 3, 4]]
-    list2 = [[2, 3, 4], [5]]
-    lengths_left = np.array([len(x) for x in list1])
-    lengths_right = np.array([len(x) for x in list2])
-    indices_left = np.concatenate(list1)
-    atoms_right = np.concatenate(list2)
+#     list1 = [[0, 1], [2, 3, 4]]
+#     list2 = [[2, 3, 4], [5]]
+#     lengths_left = np.array([len(x) for x in list1])
+#     lengths_right = np.array([len(x) for x in list2])
+#     indices_left = np.concatenate(list1)
+#     atoms_right = np.concatenate(list2)
 
-    # first run
-    fast_agg_indices(indices_left, lengths_left, atoms_right, lengths_right)
+#     # first run
+#     fast_agg_indices(indices_left, lengths_left, atoms_right, lengths_right)
 
-    # second run
-    res = timeit.timeit(
-        lambda: fast_agg_indices(
-            indices_left, lengths_left, atoms_right, lengths_right
-        ),
-        number=100,
-    )
-    print(res)
+#     # second run
+#     res = timeit.timeit(
+#         lambda: fast_agg_indices(
+#             indices_left, lengths_left, atoms_right, lengths_right
+#         ),
+#         number=100,
+#     )
+#     print(res)
 
-    # now test hausdorff, transform to torch
-    pos = torch.rand(6, 2)
-    with torch.no_grad():
-        hl, hr = haussdorff(list1, list2, pos)
-    print(hl, hr)
+#     # now test hausdorff, transform to torch
+#     pos = torch.rand(6, 2)
+#     with torch.no_grad():
+#         hl, hr = haussdorff(list1, list2, pos)
+#     print(hl, hr)

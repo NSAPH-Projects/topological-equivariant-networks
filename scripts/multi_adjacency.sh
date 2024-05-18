@@ -17,5 +17,4 @@ python src/main_qm9.py --lifters "atom:0" "functional_group:1" "supercell:2" \
                        --num_layers 7 \
                        --num_hidden 128 \
                        --model_name "ten" \
-                       --compile \
                        --splits "egnn" \

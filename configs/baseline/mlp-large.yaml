@@ -4,5 +4,6 @@ defaults:
 
 model:
   num_layers: 0
-  num_readout_layers: 0
+  num_readout_layers: 5
+  num_hidden: 128
   invariants: false

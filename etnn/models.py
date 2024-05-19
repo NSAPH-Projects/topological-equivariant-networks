@@ -86,9 +86,11 @@ class ETNN(nn.Module):
         self.max_dim = max(self.visible_dims)
 
         self.feature_embedding = nn.ModuleDict()
+        out_dim = num_hidden if num_readout_layers > 0 else num_out
+        out_act = nn.Identity if num_readout_layers > 0 else nn.Sigmoid
         for dim in self.visible_dims:
             self.feature_embedding[str(dim)] = nn.Sequential(
-                nn.Linear(num_features_per_rank[dim], num_hidden), nn.SiLU()
+                nn.Linear(num_features_per_rank[dim], out_dim), out_act()
             )
 
         self.layers = nn.ModuleList(
@@ -106,6 +108,7 @@ class ETNN(nn.Module):
         )
 
         self.readout = nn.ModuleDict()
+        self.num_readout_layers = num_readout_layers
         for dim in self.visible_dims:
             self.readout[str(dim)] = etnn_block(
                 num_hidden,
@@ -170,10 +173,11 @@ class ETNN(nn.Module):
                     cell_ind_inv, pos, adj, agg_indices, self.hausdorff
                 )
 
-        # read out
-        out = {dim: self.readout[dim](feature) for dim, feature in x.items()}
+        # readout
+        if self.num_readout_layers > 0:
+            x = {dim: self.readout[dim](feature) for dim, feature in x.items()}
 
-        return out
+        return x
 
     def __str__(self):
         return f"ETNN ({self.type})"

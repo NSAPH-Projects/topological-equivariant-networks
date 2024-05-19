@@ -825,12 +825,13 @@ def compute_invariants2(
         centroids[rank] = scatter_mean(pos[ids], index, dim=0, dim_size=len(cells))
 
         # compute diameters (max pairwise distance)
-        agg = agg_indices[rank]
-        pos_send = pos[agg.ids_send]
-        pos_recv = pos[agg.ids_recv]
-        dist = torch.norm(pos_send - pos_recv, dim=-1)
-        index = torch.tensor(agg.cell).to(dev)
-        diameters[rank] = scatter_max(dist, index, dim=0, dim_size=len(cells))
+        with torch.no_grad():
+            agg = agg_indices[rank]
+            pos_send = pos[agg.ids_send]
+            pos_recv = pos[agg.ids_recv]
+            dist = torch.norm(pos_send - pos_recv, dim=-1)
+            index = torch.tensor(agg.cell).to(dev)
+            diameters[rank] = scatter_max(dist, index, dim=0, dim_size=len(cells))
 
     # compute distances
     for rank_pair, cell_pairs in adj.items():
@@ -853,23 +854,24 @@ def compute_invariants2(
 
         # # hausdorff
         if hausdorff:
-            # gather indices for positions
-            agg = agg_indices[rank_pair]
-            pos_send = pos[agg.ids_send]
-            pos_recv = pos[agg.ids_recv]
-            dists = torch.norm(pos_send - pos_recv, dim=1)
+            with torch.no_grad():
+                # gather indices for positions
+                agg = agg_indices[rank_pair]
+                pos_send = pos[agg.ids_send]
+                pos_recv = pos[agg.ids_recv]
+                dists = torch.norm(pos_send - pos_recv, dim=1)
 
-            # move agg indices to device for scatter operations
-            minix_send = torch.tensor(agg.minindex_send).to(dev)
-            minix_recv = torch.tensor(agg.minindex_recv).to(dev)
-            maxix_send = torch.tensor(agg.maxindex_send).to(dev)
-            maxix_recv = torch.tensor(agg.maxindex_recv).to(dev)
+                # move agg indices to device for scatter operations
+                minix_send = torch.tensor(agg.minindex_send).to(dev)
+                minix_recv = torch.tensor(agg.minindex_recv).to(dev)
+                maxix_send = torch.tensor(agg.maxindex_send).to(dev)
+                maxix_recv = torch.tensor(agg.maxindex_recv).to(dev)
 
-            # compute hausdorff distances with scatter operations
-            hausdorff_send = scatter_max(scatter_min(dists, minix_send), maxix_send)
-            hausdorff_recv = scatter_max(scatter_min(dists, minix_recv), maxix_recv)
+                # compute hausdorff distances with scatter operations
+                hausdorff_send = scatter_max(scatter_min(dists, minix_send), maxix_send)
+                hausdorff_recv = scatter_max(scatter_min(dists, minix_recv), maxix_recv)
 
-            inv_list[rank_pair].extend([hausdorff_send, hausdorff_recv])
+                inv_list[rank_pair].extend([hausdorff_send, hausdorff_recv])
 
     out: dict[str, Tensor] = {k: torch.stack(v, dim=1) for k, v in inv_list.items()}
 

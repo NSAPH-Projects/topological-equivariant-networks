@@ -69,6 +69,12 @@ def standardize_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
             data[key] = (tensor - tensor.amin(0)) / (tensor.amax(0) - tensor.amin(0))
     return data
 
+
+def add_pos_to_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
+    data.x_0 = torch.cat([data.x_0, data.pos], dim=1)
+    return data
+
+
 def squash_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
     x_0 = data.x_0
     for key, tensor in data.items():

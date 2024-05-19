@@ -55,13 +55,14 @@ def main(cfg: DictConfig):
     loader: DataLoader = instantiate(cfg.loader, dataset, collate_fn=collate_fn)
 
     # determine number of features per rank
-    batch = next(iter(loader))
+    batch = next(iter(loader))   # get the first element to compute number of features
+                                 # to create the model
     num_feats = {
         k.split("_")[1]: v.shape[1] for k, v in batch.items() if k.startswith("x_")
     }
     adjacencies = [k[4:] for k in batch.keys() if k.startswith("adj_")]
 
-    # instantiate model, optimizer, scheduler
+    # instantiate model, optimizer, learning rate scheduler, loss fn
     model: nn.Module = instantiate(
         cfg.model, num_features_per_rank=num_feats, adjacencies=adjacencies
     )
@@ -83,7 +84,7 @@ def main(cfg: DictConfig):
     else:
         start_epoch, run_id = 0, None
 
-    # == init wandb ==
+    # == init wandb logger ==
     if run_id is None:
         run_id = "_".join([cfg.baseline_name, str(cfg.seed), wandb.util.generate_id()])
         if cfg.ckpt_prefix is not None:
@@ -92,10 +93,8 @@ def main(cfg: DictConfig):
     else:
         resume = True
 
-    # create wandb config
+    # create wandb config and add number of parameters
     wandb_config = OmegaConf.to_container(cfg, resolve=True)
-
-    # add number of parameters to config
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     wandb_config["num_params"] = num_params
 
@@ -121,17 +120,17 @@ def main(cfg: DictConfig):
             # == training step ==
             opt.zero_grad()
             outputs = model(batch)
-            mask = getattr(batch, f"mask")
+            mask = batch.mask  # 1-0 mask of nodes used for training
             loss_terms = loss_fn(outputs["0"].squeeze(-1), batch.y.squeeze(-1))
             train_loss = (loss_terms * mask).sum() / mask.sum()
             eval_loss = (loss_terms * (1 - mask)).sum() / (1 - mask).sum()
-            train_loss.backward()
+            train_loss.backward()  # backpropagate
             if cfg.training.clip is not None:
                 torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
             opt.step()
 
             if dev == "cuda":
-                # not really helping
+                # not really helping, but this should free up unused GPU memory
                 torch.cuda.empty_cache()
 
             # == end training step ==
@@ -140,7 +139,7 @@ def main(cfg: DictConfig):
             epoch_metrics["eval_loss"].append(eval_loss.item())
             epoch_metrics["lr"].append(opt.param_groups[0]["lr"])
 
-        # update schedule
+        # update lr scheduler
         sched.step()
 
         # save checkpoint
@@ -151,7 +150,7 @@ def main(cfg: DictConfig):
         pbar.set_description(msg)
         pbar.refresh()
 
-        # log metrics
+        # log metrics to wandb and to a file
         mean_metrics = {k: np.mean(v) for k, v in epoch_metrics.items()}
         wandb.log(mean_metrics, step=epoch)
 

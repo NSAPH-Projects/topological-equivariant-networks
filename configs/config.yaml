@@ -12,7 +12,7 @@ baseline_name: ${hydra:runtime.choices.baseline}
 ckpt_prefix: null
 
 model:
-  # defaults, other params changed by the runtime choices
+  # defaults, other params changed by the runtime choices such as baseline, etc
   _target_: etnn.models.ETNN
 
 loader:

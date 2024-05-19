@@ -25,12 +25,14 @@ def etnn_block(
         layers.append(nn.BatchNorm1d(dim_in))
     if last_act is None:
         last_act = act
+    dim_prev = dim_in
     for i in range(num_layers):
         dim_next = dim_out if i == num_layers - 1 else dim_hidden
         act_next = act if i != num_layers - 1 else last_act
-        layers.extend([nn.Linear(dim_in, dim_next), act_next()])
+        layers.extend([nn.Linear(dim_prev, dim_next), act_next()])
         if batchnorm and batchnorm_always and i != num_layers - 1:
             layers.append(nn.BatchNorm1d(dim_next))
+        dim_prev = dim_next
     return nn.Sequential(*layers)
 
 

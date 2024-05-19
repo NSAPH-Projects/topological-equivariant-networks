@@ -47,7 +47,7 @@ def main(cfg: DictConfig):
     set_seed(cfg.seed)
 
     # get device
-    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
 
     # == instantiate dataset, loader, model, optimizer, scheduler ==
     dataset: Dataset = instantiate(cfg.dataset)
@@ -56,7 +56,6 @@ def main(cfg: DictConfig):
 
     # determine number of features per rank
     batch = next(iter(loader))
-    batch = batch.to(dev)
     num_feats = {
         k.split("_")[1]: v.shape[1] for k, v in batch.items() if k.startswith("x_")
     }
@@ -84,7 +83,7 @@ def main(cfg: DictConfig):
     else:
         start_epoch, run_id = 0, None
 
-    # == init wandb == 
+    # == init wandb ==
     if run_id is None:
         run_id = cfg.baseline_name + "-" + wandb.util.generate_id()
         if cfg.ckpt_prefix is not None:

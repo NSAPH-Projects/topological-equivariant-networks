@@ -1,5 +1,0 @@
-#@package _global_
-model:
-  equivariant: true
-  num_hidden: 64
-  num_layers: 7

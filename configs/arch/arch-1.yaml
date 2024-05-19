@@ -1,0 +1,13 @@
+model:
+  _target_: etnn.models.ETNN
+  num_out: 1
+  num_hidden: 64
+  num_layers: 4
+  num_readout_layers: 3
+  depth_etnn_layers: 2
+
+optimizer:
+  weight_decay: 1e-4
+
+lr_scheduler:
+  final_div_factor: 1

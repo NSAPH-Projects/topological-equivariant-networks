@@ -1,6 +1,6 @@
 import os
 
-# import numba
+import numba
 import random
 from argparse import Namespace
 from typing import Dict, Optional, Tuple
@@ -24,80 +24,89 @@ def scatter_add(
     return aux.index_add(dim, index, src)
 
 
-# def scatter_min(
-#     src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
-# ):
-#     src_shape = list(src.shape)
-#     src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
-#     aux = src.new_zeros(src_shape)
-#     return aux.index_reduce(dim, index, src, reduce="amin", include_self=False)
+def scatter_min(
+    src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
+):
+    src_shape = list(src.shape)
+    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+    aux = src.new_zeros(src_shape)
+    return aux.index_reduce(dim, index, src, reduce="amin", include_self=False)
 
 
-# def scatter_max(
-#     src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
-# ):
-#     src_shape = list(src.shape)
-#     src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
-#     aux = src.new_zeros(src_shape)
-#     return aux.index_reduce(dim, index, src, reduce="amax", include_self=False)
+def scatter_max(
+    src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
+):
+    src_shape = list(src.shape)
+    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+    aux = src.new_zeros(src_shape)
+    return aux.index_reduce(dim, index, src, reduce="amax", include_self=False)
 
 
-# @numba.jit(nopython=True)
-# def fast_agg_indices(
-#     atoms_left: np.ndarray,
-#     lengths_left: np.ndarray,
-#     atoms_right: np.ndarray,
-#     lengths_right: np.ndarray,
-# ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-#     # inputs must be equal size
-#     splits_left = np.split(atoms_left, np.cumsum(lengths_left)[:-1])
-#     splits_right = np.split(atoms_right, np.cumsum(lengths_right)[:-1])
+def scatter_mean(
+    src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
+):
+    src_shape = list(src.shape)
+    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+    aux = src.new_zeros(src_shape)
+    return aux.index_reduce(dim, index, src, reduce="amax", include_self=False)
 
-#     # must return a tuple of 6 arrays
-#     n = len(lengths_left)  # must be the same as len(splits_right)
-#     m = sum(lengths_left * lengths_right)
-#     content_left = np.empty(m, dtype=np.int64)
-#     content_right = np.empty(m, dtype=np.int64)
-#     index_left = np.empty(m, dtype=np.int64)
-#     index_right = np.empty(m, dtype=np.int64)
 
-#     offset_index_left = 0
-#     offset_index_right = 0
-#     step = 0
-#     for i in range(n):
-#         n_left = len(splits_left[i])
-#         n_right = len(splits_right[i])
-#         for j, sj in enumerate(splits_left[i]):
-#             for k, sk in enumerate(splits_right[i]):
-#                 ind = step + j * n_right + k
-#                 content_left[ind] = sj
-#                 content_right[ind] = sk
-#                 index_left[ind] = offset_index_left + j
-#                 index_right[ind] = offset_index_right + k
-#         step += n_left * n_right
-#         offset_index_left += n_left
-#         offset_index_right += n_right
+@numba.jit(nopython=True)
+def invariant_computation_indices(
+    atoms_left: np.ndarray,
+    lengths_left: np.ndarray,
+    atoms_right: np.ndarray,
+    lengths_right: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    # inputs must be equal size
+    splits_left = np.split(atoms_left, np.cumsum(lengths_left)[:-1])
+    splits_right = np.split(atoms_right, np.cumsum(lengths_right)[:-1])
 
-#     step = 0
-#     subindex_left = np.empty(sum(lengths_left), dtype=np.int64)
-#     for j, sj in enumerate(splits_left):
-#         subindex_left[step : step + len(sj)] = j
-#         step += len(sj)
+    # must return a tuple of 6 arrays
+    n = len(lengths_left)  # must be the same as len(splits_right)
+    m = sum(lengths_left * lengths_right)
+    content_left = np.empty(m, dtype=np.int64)
+    content_right = np.empty(m, dtype=np.int64)
+    index_left = np.empty(m, dtype=np.int64)
+    index_right = np.empty(m, dtype=np.int64)
 
-#     step = 0
-#     subindex_right = np.empty(sum(lengths_right), dtype=np.int64)
-#     for j, sj in enumerate(splits_right):
-#         subindex_right[step : step + len(sj)] = j
-#         step += len(sj)
+    offset_index_left = 0
+    offset_index_right = 0
+    step = 0
+    for i in range(n):
+        n_left = len(splits_left[i])
+        n_right = len(splits_right[i])
+        for j, sj in enumerate(splits_left[i]):
+            for k, sk in enumerate(splits_right[i]):
+                ind = step + j * n_right + k
+                content_left[ind] = sj
+                content_right[ind] = sk
+                index_left[ind] = offset_index_left + j
+                index_right[ind] = offset_index_right + k
+        step += n_left * n_right
+        offset_index_left += n_left
+        offset_index_right += n_right
 
-#     return (
-#         content_left,
-#         content_right,
-#         index_left,
-#         index_right,
-#         subindex_left,
-#         subindex_right,
-#     )
+    step = 0
+    subindex_left = np.empty(sum(lengths_left), dtype=np.int64)
+    for j, sj in enumerate(splits_left):
+        subindex_left[step : step + len(sj)] = j
+        step += len(sj)
+
+    step = 0
+    subindex_right = np.empty(sum(lengths_right), dtype=np.int64)
+    for j, sj in enumerate(splits_right):
+        subindex_right[step : step + len(sj)] = j
+        step += len(sj)
+
+    return (
+        content_left,
+        content_right,
+        index_left,
+        index_right,
+        subindex_left,
+        subindex_right,
+    )
 
 
 # def haussdorff(
@@ -753,12 +762,14 @@ def compute_invariants(
 
 # compute_invariants.num_features_map = defaultdict(lambda: 5)
 
-
+# @torch.jit.script
 def compute_invariants2(
     feat_ind: dict[str, torch.LongTensor],
     pos: torch.FloatTensor,
     adj: dict[str, torch.LongTensor],
-    agg_indices: dict[str, tuple[np.ndarray, ...]],
+    agg_indices_send: dict[str, tuple[list[int], list[int], list[int], list[int], list[int], list[int]]],
+    agg_indices_rec: dict[str, tuple[list[int], list[int], list[int], list[int], list[int], list[int]]],
+    agg_indices_cross: dict[str, tuple[list[int], list[int], list[int], list[int], list[int], list[int]]],
 ) -> dict[str, torch.FloatTensor]:
     new_features = {}
     mean_cell_positions = {}
@@ -766,31 +777,9 @@ def compute_invariants2(
 
     for rank_pair, cell_pairs in adj.items():
 
-        # Compute mean cell positions memoized
-        send_rank, rec_rank = rank_pair.split("_")[:2]
+        # centroid dist
 
-        for rank in [send_rank, rec_rank]:
-            max_dim = max([len(x) for x in feat_ind[rank]])
-            if max_dim == 1:
-                if rank not in mean_cell_positions:
-                    feats = torch.cat(feat_ind[rank])
-                    mean_cell_positions[rank] = pos[feats]
-                if rank not in max_pairwise_distances:
-                    max_pairwise_distances[rank] = torch.zeros(
-                        len(feat_ind[rank]), device=pos.device
-                    )
-            else:
-                if rank not in mean_cell_positions:
-                    mean_cell_positions[rank] = torch.stack(
-                        [pos[f].mean(dim=0) for f in feat_ind[rank]]
-                    )
-                if rank not in max_pairwise_distances:
-                    max_pairwise_distances[rank] = torch.stack(
-                        [
-                            torch.norm(pos[f][:, None] - pos[f], dim=2).max()
-                            for f in feat_ind[rank]
-                        ]
-                    )
+        # 
 
         # Compute mean distances
         indexed_sender_centroids = mean_cell_positions[send_rank][cell_pairs[0]]

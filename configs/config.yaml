@@ -1,11 +1,49 @@
 defaults:
   - _self_
-  - task: pm25
-  - loss_fn: huber
   - training: fast
   - baseline: invariant
+  - dataset: pm25-cc
+  - arch: arch-0
+  - loss_fn: huber
 
 seed: 42
 force_restart: false
 baseline_name: ${hydra:runtime.choices.baseline}
 ckpt_prefix: null
+
+loader:
+  _target_: torch.utils.data.DataLoader 
+  num_workers: 0
+  batch_size: 1
+  persistent_workers: false
+  pin_memory: true
+
+collate_fn:
+  _target_: etnn.combinatorial_complexes.CombinatorialComplexCollater
+
+training:
+  # defaults, other params cchanged by training/ config files
+  clip: 10.0
+
+wandb:
+  entity: ten-harvard
+  project: spatial-cc
+  config:
+    baseline: ${hydra:runtime.choices.baseline}
+    seed: ${seed}
+    lr: ${optimizer.lr}
+    max_epochs: ${training.max_epochs}
+    loss_fn: ${hydra:runtime.choices.loss_fn}
+    clip: ${training.clip}
+
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 0.0003
+  weight_decay: 1e-6
+
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.OneCycleLR
+  max_lr: 0.001
+  final_div_factor: 10
+  epochs: ${training.max_epochs}
+  steps_per_epoch: 1

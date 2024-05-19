@@ -1,4 +1,3 @@
-import itertools
 import json
 import re
 from collections.abc import Iterable
@@ -236,19 +235,13 @@ class CombinatorialComplexData(Data):
                 else:
                     # attr_value = nt.nested_tensor(value, dtype=cls.attr_dtype["cell_"])
                     # attr_value = nt.to_padded_tensor(attr_value, padding=torch.nan)
-                    # mapping[key] = torch.cat(
-                    #     [torch.tensor(v, dtype=cls.attr_dtype["cell_"]) for v in value],
-                    #     dim=0,
-                    # )
-                    mapping[key] = list(itertools.chain(*value))
-                    #  torch.cat(
-                    #     [torch.tensor(v, dtype=cls.attr_dtype["cell_"]) for v in value],
-                    #     dim=0,
-                    # )
-                    mapping[key.replace("cell_", "lengths_")] = [len(c) for c in value]
-                    # = torch.tensor(
-                    #     [len(c) for c in value], dtype=torch.long
-                    # )
+                    mapping[key] = torch.cat(
+                        [torch.tensor(v, dtype=cls.attr_dtype["cell_"]) for v in value],
+                        dim=0,
+                    )
+                    mapping[key.replace("cell_", "lengths_")] = torch.tensor(
+                        [len(c) for c in value], dtype=torch.long
+                    )
 
             # cast the mem_i
             elif "mem_" in key:

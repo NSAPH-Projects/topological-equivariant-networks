@@ -3,7 +3,7 @@ import os
 # import numba
 import random
 from argparse import Namespace
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -519,69 +519,69 @@ compute_invariants_3d.num_features_map = {
 
 @torch.jit.script
 def compute_invariants(
-    feat_ind: dict[str, list[Tensor]],
-    pos: torch.FloatTensor,
-    adj: dict[str, torch.LongTensor],
+    feat_ind: dict[str, list[list[int]]],
+    pos: Tensor,
+    adj: dict[str, Tensor],
     haussdorf: bool = True,
     max_cell_size: int = 100,
     # inv_ind: dict[str, torch.FloatTensor] = None,
     # device: torch.device = None,
 ) -> dict[str, Tensor]:
     """
-    Compute geometric invariants between pairs of cells specified in `adj`.
+        Compute geometric invariants between pairs of cells specified in `adj`.
 
     This function calculates the following geometric features:
 
-    Distance between centroids
-        Euclidean distance between the centroids of cell pairs. The centroids are computed only once
-        per rank and memoized to improve efficiency. The distances serve as geometric invariants
-        that characterize the spatial relationships between cells of different ranks.
+        Distance between centroids
+            Euclidean distance between the centroids of cell pairs. The centroids are computed only once
+            per rank and memoized to improve efficiency. The distances serve as geometric invariants
+            that characterize the spatial relationships between cells of different ranks.
 
-    Maximum pairwise distance within-cell
-        For both the sender and receiver cell, the pairwise distances between their nodes are
-        computed and the maximum distance is stored. This feature is meant to very loosely
-        approximate the size of each cell.
+        Maximum pairwise distance within-cell
+            For both the sender and receiver cell, the pairwise distances between their nodes are
+            computed and the maximum distance is stored. This feature is meant to very loosely
+            approximate the size of each cell.
 
-    Two Hausdorff distances
-        We compute two Hausdorff distances, one from the sender's point of view and one from the
-        receiver's. The Hausdorff distance between two sets of points is typically defined as
+        Two Hausdorff distances
+            We compute two Hausdorff distances, one from the sender's point of view and one from the
+            receiver's. The Hausdorff distance between two sets of points is typically defined as
 
-            H(A, B) = max{sup_{a in A} inf_{b in B} d(a, b), sup_{b in B} inf_{a in A} d(b, a)}
+                H(A, B) = max{sup_{a in A} inf_{b in B} d(a, b), sup_{b in B} inf_{a in A} d(b, a)}
 
-        where A and B are two sets of points, d(a, b) is the Euclidean distance between points a and
-        b, sup denotes the supremum (least upper bound) of a set, and inf denotes the infimum
-        (greatest lower bound) of a set. Instead of taking the maximum, we instead return both of
-        the terms. This choice allows us to implicitly encode the subset relationship into these
-        features: the first Hausdorff distance is 0 iff A is a subset of B and the second Hausdorff
-        distance is 0 iff B is a subset of A.
+            where A and B are two sets of points, d(a, b) is the Euclidean distance between points a and
+            b, sup denotes the supremum (least upper bound) of a set, and inf denotes the infimum
+            (greatest lower bound) of a set. Instead of taking the maximum, we instead return both of
+            the terms. This choice allows us to implicitly encode the subset relationship into these
+            features: the first Hausdorff distance is 0 iff A is a subset of B and the second Hausdorff
+            distance is 0 iff B is a subset of A.
 
 
-    Parameters
-    ----------
-    feat_ind : dict
-        A dictionary mapping cell ranks to tensors of shape (num_cells, max_cardinality) containing
-        indices of nodes for each cell. It is used to identify the cells for which centroids should
-        be computed.
-    pos : torch.FloatTensor
-        A 2D tensor of shape (num_nodes, num_dimensions) containing the positions of each node.
-    adj : dict
-        A dictionary where each key is a string in the format 'sender_rank_receiver_rank' indicating
-        the ranks of cell pairs, and each value is a tensor of shape (2, num_cell_pairs) containing
-        indices for sender and receiver cells.
+        Parameters
+        ----------
+        feat_ind : dict
+            A dictionary mapping cell ranks to tensors of shape (num_cells, max_cardinality) containing
+            indices of nodes for each cell. It is used to identify the cells for which centroids should
+            be computed.
+        pos : torch.FloatTensor
+            A 2D tensor of shape (num_nodes, num_dimensions) containing the positions of each node.
+        adj : dict
+            A dictionary where each key is a string in the format 'sender_rank_receiver_rank' indicating
+            the ranks of cell pairs, and each value is a tensor of shape (2, num_cell_pairs) containing
+            indices for sender and receiver cells.
 
-    Returns
-    -------
-    dict
-        A dictionary where each key corresponds to a key in `adj` and each value is a 2D tensor
-        holding the computed geometric features for each cell pair.
+        Returns
+        -------
+        dict
+            A dictionary where each key corresponds to a key in `adj` and each value is a 2D tensor
+            holding the computed geometric features for each cell pair.
 
-    Notes
-    -----
-    The `inv_ind` and `device` parameters are included for compatibility with a previous function
-    interface and might be used in future versions of this function as it evolves. The computation
-    of cell centroids is memoized based on cell rank to avoid redundant calculations, enhancing
-    performance especially for large datasets with many cells. The current implementation focuses on
-    Euclidean distances but may be extended to include other types of geometric invariants.
+        Notes
+        -----
+        The `inv_ind` and `device` parameters are included for compatibility with a previous function
+        interface and might be used in future versions of this function as it evolves. The computation
+        of cell centroids is memoized based on cell rank to avoid redundant calculations, enhancing
+        performance especially for large datasets with many cells. The current implementation focuses on
+        Euclidean distances but may be extended to include other types of geometric invariants.
     """
     new_features = {}
     mean_cell_positions = {}
@@ -612,11 +612,12 @@ def compute_invariants(
                 continue
 
             if len(index_send) > max_cell_size:
-                new_pts_ix = torch.randperm(len(index_send))[:max_cell_size]
-                index_send = index_send[new_pts_ix]
+                pts_ix: Tensor = torch.randperm(len(index_send))[:max_cell_size]
+                index_send = [index_send[i] for i in pts_ix]
             if len(index_rec) > max_cell_size:
-                new_pts_ix = torch.randperm(len(index_rec))[:max_cell_size]
-                index_rec = index_rec[new_pts_ix]
+                pts_ix: Tensor = torch.randperm(len(index_rec))[:max_cell_size]
+                index_rec = [index_rec[i] for i in pts_ix]
+
             pos_send = pos[index_send]
             pos_rec = pos[index_rec]
             # centroids

@@ -110,7 +110,8 @@ def main(cfg: DictConfig):
         epoch_metrics = defaultdict(list)
         # for batch in loader:
         # batch = batch.to(dev)
-        # training step, use mask for eval
+
+        # == training step ==
         opt.zero_grad()
         outputs = model(batch)
         mask = getattr(batch, f"mask")
@@ -121,9 +122,12 @@ def main(cfg: DictConfig):
         if cfg.training.clip is not None:
             torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
         opt.step()
+
         if dev.type == "cuda":
+            # not really helping
             torch.cuda.empty_cache()
-        # end training step
+       
+        # == end training step ==
 
         epoch_metrics["train_loss"].append(train_loss.item())
         epoch_metrics["eval_loss"].append(eval_loss.item())
@@ -145,7 +149,7 @@ def main(cfg: DictConfig):
         wandb.log(mean_metrics, step=epoch)
        
         logline = json.dumps({"epoch": epoch, **mean_metrics})
-        with open(f"checkpoints/{cfg.baseline_name}_{cfg.seed}.json", "a") as f:
+        with open(f"checkpoints/{cfg.baseline_name}_{cfg.seed}.jsonl", "a") as f:
             f.write(logline + "\n")
 
 

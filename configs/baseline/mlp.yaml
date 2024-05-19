@@ -1,4 +1,5 @@
 #@package _global_
 model:
   num_layers: 0
+  num_readout_layers: 5
   invariants: false

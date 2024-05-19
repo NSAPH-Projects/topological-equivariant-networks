@@ -1,4 +1,5 @@
 import os
+
 # import numba
 import random
 from argparse import Namespace
@@ -23,22 +24,22 @@ def scatter_add(
     return aux.index_add(dim, index, src)
 
 
-def scatter_min(
-    src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
-):
-    src_shape = list(src.shape)
-    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
-    aux = src.new_zeros(src_shape)
-    return aux.index_reduce(dim, index, src, reduce="amin", include_self=False)
+# def scatter_min(
+#     src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
+# ):
+#     src_shape = list(src.shape)
+#     src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+#     aux = src.new_zeros(src_shape)
+#     return aux.index_reduce(dim, index, src, reduce="amin", include_self=False)
 
 
-def scatter_max(
-    src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
-):
-    src_shape = list(src.shape)
-    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
-    aux = src.new_zeros(src_shape)
-    return aux.index_reduce(dim, index, src, reduce="amax", include_self=False)
+# def scatter_max(
+#     src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
+# ):
+#     src_shape = list(src.shape)
+#     src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+#     aux = src.new_zeros(src_shape)
+#     return aux.index_reduce(dim, index, src, reduce="amax", include_self=False)
 
 
 # @numba.jit(nopython=True)
@@ -516,7 +517,6 @@ compute_invariants_3d.num_features_map = {
 }
 
 
-
 @torch.jit.script
 def compute_invariants(
     feat_ind: dict[str, list[Tensor]],
@@ -626,8 +626,12 @@ def compute_invariants(
             centroid_rec = pos_rec.mean(dim=0)
             centroid_dists[j] = torch.norm(centroid_send - centroid_rec)
             # diameters
-            diameter_send[j] = torch.norm(pos_send[:, None] - pos_send[None], dim=-1).amax()
-            diameter_rec[j] = torch.norm(pos_rec[:, None] - pos_rec[None], dim=-1).amax()
+            diameter_send[j] = torch.norm(
+                pos_send[:, None] - pos_send[None], dim=-1
+            ).amax()
+            diameter_rec[j] = torch.norm(
+                pos_rec[:, None] - pos_rec[None], dim=-1
+            ).amax()
             # hausdorff
             if haussdorf:
                 distmat_cross = torch.norm(pos_send[:, None] - pos_rec[None], dim=-1)
@@ -635,15 +639,14 @@ def compute_invariants(
                 hausdorff_dists_rec[j] = distmat_cross.amin(dim=0).max()
 
         f = torch.stack(
-            [
-                centroid_dists,
-                diameter_send,
-                diameter_rec,
-                hausdorff_dists_send,
-                hausdorff_dists_rec,
-            ],
+            [centroid_dists, diameter_send, diameter_rec],
             dim=1,
         )
+        if haussdorf:
+            f = torch.cat(
+                [f, hausdorff_dists_send[:, None], hausdorff_dists_rec[:, None]],
+                dim=1,
+            )
         new_features[rank_pair] = f
 
     return new_features

@@ -7,6 +7,8 @@ dataset:
     _target_: etnn.pm25.utils.standardize_cc
     _partial_: true
   transform:
-    _target_: etnn.pm25.utils.create_mask
-    seed: ${seed}   
-    _partial_: true
+    _target_: torch_geometric.transforms.compose.Compose
+    _args_:
+      - - _target_: etnn.pm25.utils.create_mask
+          _partial_: true
+          seed: ${seed}

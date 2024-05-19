@@ -1,7 +1,6 @@
 import hydra
 import numpy as np
 import wandb
-import lightning.pytorch as pl
 import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
@@ -14,17 +13,19 @@ from torch.utils.data import DataLoader, Dataset
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
+from etnn.utils import set_seed
+
 
 @hydra.main(config_path="configs", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     # seed everything
-    pl.seed_everything(cfg.seed)
+    set_seed(cfg.seed)
 
     # init wandb
     wandb.init(
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
-        config=OmegaConf.resolve(cfg.wandb.config),
+        config=OmegaConf.to_container(cfg, resolve=True),
         id=cfg.baseline_name + "-" + wandb.util.generate_id(),
     )
 

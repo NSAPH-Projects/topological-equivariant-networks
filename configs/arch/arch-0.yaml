@@ -1,6 +1,5 @@
+#@package _global_
 model:
-  # defaults, other params changed by baseline/ config files
-  _target_: etnn.models.ETNN
   num_out: 1
   num_hidden: 32
   num_layers: 4

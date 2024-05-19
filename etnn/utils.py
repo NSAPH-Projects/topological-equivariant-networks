@@ -1,9 +1,12 @@
+from collections import namedtuple
+import functools
+import itertools
 import os
 
 import numba
 import random
 from argparse import Namespace
-from typing import Dict, Optional, Tuple
+from typing import Dict, NamedTuple, Optional, Tuple
 
 import numpy as np
 import torch
@@ -24,8 +27,23 @@ def scatter_add(
     return aux.index_add(dim, index, src)
 
 
+def scatter_mean(
+    src: Tensor,
+    index: Tensor,
+    dim: int = 0,
+    dim_size: Optional[int] = None,
+):
+    src_shape = list(src.shape)
+    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+    aux = src.new_zeros(src_shape)
+    return aux.index_reduce(dim, index, src, reduce="mean", include_self=False)
+
+
 def scatter_min(
-    src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
+    src: Tensor,
+    index: Tensor,
+    dim: int = 0,
+    dim_size: Optional[int] = None,
 ):
     src_shape = list(src.shape)
     src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
@@ -34,7 +52,10 @@ def scatter_min(
 
 
 def scatter_max(
-    src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
+    src: Tensor,
+    index: Tensor,
+    dim: int = 0,
+    dim_size: Optional[int] = None,
 ):
     src_shape = list(src.shape)
     src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
@@ -42,85 +63,94 @@ def scatter_max(
     return aux.index_reduce(dim, index, src, reduce="amax", include_self=False)
 
 
-def scatter_mean(
-    src: Tensor, index: Tensor, dim: int = 0, dim_size: Optional[int] = None
-):
-    src_shape = list(src.shape)
-    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
-    aux = src.new_zeros(src_shape)
-    return aux.index_reduce(dim, index, src, reduce="amax", include_self=False)
+# scatter_max = functools.partial(scatter_reduce, reduce="amax")
+# scatter_min = functools.partial(scatter_reduce, reduce="amin")
+# scatter_mean = functools.partial(scatter_reduce, reduce="mean")
+
+
+class AggIndices(NamedTuple):
+    ids_send: list[int]
+    ids_recv: list[int]
+    minindex_send: list[int]
+    minindex_recv: list[int]
+    maxindex_send: list[int]
+    maxindex_recv: list[int]
+    cell: list[int]
 
 
 @numba.jit(nopython=True)
-def invariant_computation_indices(
-    atoms_left: np.ndarray,
-    lengths_left: np.ndarray,
-    atoms_right: np.ndarray,
-    lengths_right: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def fast_agg_indices(
+    atoms_send: np.ndarray,
+    sizes_send: np.ndarray,
+    atoms_recv: np.ndarray,
+    sizes_recv: np.ndarray,
+) -> AggIndices:
     # inputs must be equal size
-    splits_left = np.split(atoms_left, np.cumsum(lengths_left)[:-1])
-    splits_right = np.split(atoms_right, np.cumsum(lengths_right)[:-1])
+    splits_send = np.split(atoms_send, np.cumsum(sizes_send)[:-1])
+    splits_recv = np.split(atoms_recv, np.cumsum(sizes_recv)[:-1])
 
     # must return a tuple of 6 arrays
-    n = len(lengths_left)  # must be the same as len(splits_right)
-    m = sum(lengths_left * lengths_right)
-    content_left = np.empty(m, dtype=np.int64)
-    content_right = np.empty(m, dtype=np.int64)
-    index_left = np.empty(m, dtype=np.int64)
-    index_right = np.empty(m, dtype=np.int64)
+    n = len(sizes_send)  # must be the same as len(splits_recv)
+    m = sum(sizes_send * sizes_recv)
+    ids_send = np.empty(m, dtype=np.int64)
+    ids_recv = np.empty(m, dtype=np.int64)
+    minindex_send = np.empty(m, dtype=np.int64)
+    minindex_recv = np.empty(m, dtype=np.int64)
+    cell = np.empty(m, dtype=np.int64)
 
-    offset_index_left = 0
-    offset_index_right = 0
+    offset_index_send = 0
+    offset_index_recv = 0
     step = 0
     for i in range(n):
-        n_left = len(splits_left[i])
-        n_right = len(splits_right[i])
-        for j, sj in enumerate(splits_left[i]):
-            for k, sk in enumerate(splits_right[i]):
-                ind = step + j * n_right + k
-                content_left[ind] = sj
-                content_right[ind] = sk
-                index_left[ind] = offset_index_left + j
-                index_right[ind] = offset_index_right + k
-        step += n_left * n_right
-        offset_index_left += n_left
-        offset_index_right += n_right
+        n_send = len(splits_send[i])
+        n_recv = len(splits_recv[i])
+        for j, sj in enumerate(splits_send[i]):
+            for k, sk in enumerate(splits_recv[i]):
+                ind = step + j * n_recv + k
+                ids_send[ind] = sj
+                ids_recv[ind] = sk
+                minindex_send[ind] = offset_index_send + j
+                minindex_recv[ind] = offset_index_recv + k
+                cell[ind] = i
+        step += n_send * n_recv
+        offset_index_send += n_send
+        offset_index_recv += n_recv
 
     step = 0
-    subindex_left = np.empty(sum(lengths_left), dtype=np.int64)
-    for j, sj in enumerate(splits_left):
-        subindex_left[step : step + len(sj)] = j
+    maxindex_send = np.empty(sum(sizes_send), dtype=np.int64)
+    for j, sj in enumerate(splits_send):
+        maxindex_send[step : step + len(sj)] = j
         step += len(sj)
 
     step = 0
-    subindex_right = np.empty(sum(lengths_right), dtype=np.int64)
-    for j, sj in enumerate(splits_right):
-        subindex_right[step : step + len(sj)] = j
+    maxindex_recv = np.empty(sum(sizes_recv), dtype=np.int64)
+    for j, sj in enumerate(splits_recv):
+        maxindex_recv[step : step + len(sj)] = j
         step += len(sj)
 
-    return (
-        content_left,
-        content_right,
-        index_left,
-        index_right,
-        subindex_left,
-        subindex_right,
+    return AggIndices(
+        list(ids_send),
+        list(ids_recv),
+        list(minindex_send),
+        list(minindex_recv),
+        list(maxindex_send),
+        list(maxindex_recv),
+        list(cell),
     )
 
 
-# def haussdorff(
-#     list_left: np.ndarray,
-#     list_right: np.ndarray,
+# def hausdorff(
+#     list_send: np.ndarray,
+#     list_recv: np.ndarray,
 #     pos: torch.FloatTensor | np.ndarray,
 # ) -> tuple[torch.FloatTensor | np.ndarray, torch.FloatTensor | np.ndarray]:
-#     atoms_left = np.concatenate(list_left)
-#     atoms_right = np.concatenate(list_right)
-#     lengths_left = np.array([len(x) for x in list_left])
-#     length_right = np.array([len(x) for x in list_right])
+#     atoms_send = np.concatenate(list_send)
+#     atoms_recv = np.concatenate(list_recv)
+#     lengths_send = np.array([len(x) for x in list_send])
+#     length_recv = np.array([len(x) for x in list_recv])
 
 #     cl, cr, il, ir, sl, sr = fast_agg_indices(
-#         atoms_left, lengths_left, atoms_right, length_right
+#         atoms_send, lengths_send, atoms_recv, length_recv
 #     )
 
 #     # cast to longtensors
@@ -129,15 +159,15 @@ def invariant_computation_indices(
 #     ]
 
 #     # # compute haussford by two aggregations
-#     pos_left = pos[cl]
-#     pos_right = pos[cr]
-#     dists = torch.norm(pos_left - pos_right, dim=1)
-#     hausdorff_left = scatter_min(dists, il)
-#     hausdorff_left = scatter_max(hausdorff_left, sl)
-#     hausdorff_right = scatter_min(dists, ir)
-#     hausdorff_right = scatter_max(hausdorff_right, sr)
+#     pos_send = pos[cl]
+#     pos_recv = pos[cr]
+#     dists = torch.norm(pos_send - pos_recv, dim=1)
+#     hausdorff_send = scatter_min(dists, il)
+#     hausdorff_send = scatter_max(hausdorff_send, sl)
+#     hausdorff_recv = scatter_min(dists, ir)
+#     hausdorff_recv = scatter_max(hausdorff_recv, sr)
 
-#     return hausdorff_left, hausdorff_right
+#     return hausdorff_send, hausdorff_recv
 
 
 def get_adjacency_types(
@@ -531,7 +561,7 @@ def compute_invariants(
     feat_ind: dict[str, list[list[int]]],
     pos: Tensor,
     adj: dict[str, Tensor],
-    haussdorf: bool = True,
+    hausdorff: bool = True,
     max_cell_size: int = 100,
     # inv_ind: dict[str, torch.FloatTensor] = None,
     # device: torch.device = None,
@@ -615,7 +645,7 @@ def compute_invariants(
                 # trivial case, only one point
                 dist = torch.norm(pos[index_send] - pos[index_rec])
                 centroid_dists[j] = dist
-                if haussdorf:
+                if hausdorff:
                     hausdorff_dists_send[j] = dist
                     hausdorff_dists_rec[j] = dist
                 continue
@@ -630,9 +660,9 @@ def compute_invariants(
             pos_send = pos[index_send]
             pos_rec = pos[index_rec]
             # centroids
-            centroid_send = pos_send.mean(dim=0)
+            centroids_send = pos_send.mean(dim=0)
             centroid_rec = pos_rec.mean(dim=0)
-            centroid_dists[j] = torch.norm(centroid_send - centroid_rec)
+            centroid_dists[j] = torch.norm(centroids_send - centroid_rec)
             # diameters
             diameter_send[j] = torch.norm(
                 pos_send[:, None] - pos_send[None], dim=-1
@@ -641,7 +671,7 @@ def compute_invariants(
                 pos_rec[:, None] - pos_rec[None], dim=-1
             ).amax()
             # hausdorff
-            if haussdorf:
+            if hausdorff:
                 distmat_cross = torch.norm(pos_send[:, None] - pos_rec[None], dim=-1)
                 hausdorff_dists_send[j] = distmat_cross.amin(dim=1).max()
                 hausdorff_dists_rec[j] = distmat_cross.amin(dim=0).max()
@@ -650,7 +680,7 @@ def compute_invariants(
             [centroid_dists, diameter_send, diameter_rec],
             dim=1,
         )
-        if haussdorf:
+        if hausdorff:
             f = torch.cat(
                 [f, hausdorff_dists_send[:, None], hausdorff_dists_rec[:, None]],
                 dim=1,
@@ -701,7 +731,7 @@ def compute_invariants(
         max_dim_sender = max(len(x) for x in feat_ind[send_rank])
         max_dim_receiver = max(len(x) for x in feat_ind[rec_rank])
 
-        if haussdorf:
+        if hausdorff:
             # easy case/graph
             if max_dim_sender == 1 and max_dim_receiver == 1:
                 feats_sender = torch.cat(
@@ -722,18 +752,18 @@ def compute_invariants(
                 hausdorff_dists_sender = torch.zeros_like(centroid_dists)
                 hausdorff_dists_receiver = torch.zeros_like(centroid_dists)
                 for j in range(cell_pairs.shape[1]):
-                    index_left = feat_ind[send_rank][cell_pairs[0, j]]
-                    index_right = feat_ind[rec_rank][cell_pairs[1, j]]
+                    index_send = feat_ind[send_rank][cell_pairs[0, j]]
+                    index_recv = feat_ind[rec_rank][cell_pairs[1, j]]
                     #
-                    if len(index_left) > max_cell_size:
-                        new_pts_ix = torch.randperm(len(index_left))[:max_cell_size]
-                        index_left = index_left[new_pts_ix]
-                    if len(index_right) > max_cell_size:
-                        new_pts_ix = torch.randperm(len(index_right))[:max_cell_size]
-                        index_right = index_right[new_pts_ix]
+                    if len(index_send) > max_cell_size:
+                        new_pts_ix = torch.randperm(len(index_send))[:max_cell_size]
+                        index_send = index_send[new_pts_ix]
+                    if len(index_recv) > max_cell_size:
+                        new_pts_ix = torch.randperm(len(index_recv))[:max_cell_size]
+                        index_recv = index_recv[new_pts_ix]
                     #
-                    pos_sender = pos[index_left]
-                    pos_receiver = pos[index_right]
+                    pos_sender = pos[index_send]
+                    pos_receiver = pos[index_recv]
                     distmat_cross = torch.norm(
                         pos_sender[:, None] - pos_receiver, dim=2
                     )
@@ -762,69 +792,139 @@ def compute_invariants(
 
 # compute_invariants.num_features_map = defaultdict(lambda: 5)
 
-# @torch.jit.script
+
+@torch.jit.script
 def compute_invariants2(
-    feat_ind: dict[str, torch.LongTensor],
+    cell_ind: dict[str, list[list[int]]],
     pos: torch.FloatTensor,
     adj: dict[str, torch.LongTensor],
-    agg_indices_send: dict[str, tuple[list[int], list[int], list[int], list[int], list[int], list[int]]],
-    agg_indices_rec: dict[str, tuple[list[int], list[int], list[int], list[int], list[int], list[int]]],
-    agg_indices_cross: dict[str, tuple[list[int], list[int], list[int], list[int], list[int], list[int]]],
-) -> dict[str, torch.FloatTensor]:
-    new_features = {}
-    mean_cell_positions = {}
-    max_pairwise_distances = {}
+    agg_indices: dict[str, AggIndices],
+    hausdorff: bool = True,
+) -> dict[str, Tensor]:
+    # device
+    dev = pos.device
 
+    # placeholder
+    inv_list: dict[str, list[Tensor]] = {}
+
+    # compute centroids and diameters
+    centroids: dict[str, Tensor] = {}
+    diameters: dict[str, Tensor] = {}
+    for rank, cells in cell_ind.items():
+        # compute centroids
+        ids: list[int] = []
+        for c in cells:
+            ids.extend(c)
+
+        sizes: list[int] = []
+        index: list[int] = []
+        for i, c in enumerate(cells):
+            sizes.append(len(c))
+            index.extend([i] * len(c))
+        index = torch.tensor(index).to(dev)
+        centroids[rank] = scatter_mean(pos[ids], index, dim=0, dim_size=len(cells))
+
+        # compute diameters (max pairwise distance)
+        agg = agg_indices[rank]
+        pos_send = pos[agg.ids_send]
+        pos_recv = pos[agg.ids_recv]
+        dist = torch.norm(pos_send - pos_recv, dim=-1)
+        index = torch.tensor(agg.cell).to(dev)
+        diameters[rank] = scatter_max(dist, index, dim=0, dim_size=len(cells))
+
+    # compute distances
     for rank_pair, cell_pairs in adj.items():
+        send_rank, recv_rank = rank_pair.split("_")
 
         # centroid dist
+        centroids_send: Tensor = centroids[send_rank][cell_pairs[0]]
+        centroids_recv: Tensor = centroids[recv_rank][cell_pairs[1]]
+        centroids_dist: Tensor = torch.norm(centroids_send - centroids_recv, dim=1)
 
-        # 
+        # diameter
+        diameter_send: Tensor = diameters[send_rank][cell_pairs[0]]
+        diameter_recv: Tensor = diameters[recv_rank][cell_pairs[1]]
 
-        # Compute mean distances
-        indexed_sender_centroids = mean_cell_positions[send_rank][cell_pairs[0]]
-        indexed_receiver_centroids = mean_cell_positions[rec_rank][cell_pairs[1]]
-        differences = indexed_sender_centroids - indexed_receiver_centroids
-        centroid_dists = torch.sqrt((differences**2).sum(dim=1))
+        inv_list[rank_pair] = [
+            centroids_dist,
+            diameter_send,
+            diameter_recv,
+        ]
 
-        # Compute diameter
-        max_dist_sender = max_pairwise_distances[send_rank][cell_pairs[0]]
-        max_dist_receiver = max_pairwise_distances[rec_rank][cell_pairs[1]]
+        # # hausdorff
+        if hausdorff:
+            # gather indices for positions
+            agg = agg_indices[rank_pair]
+            pos_send = pos[agg.ids_send]
+            pos_recv = pos[agg.ids_recv]
+            dists = torch.norm(pos_send - pos_recv, dim=1)
 
-        # # Compute haussdorf distances
-        max_dim_sender = max(len(x) for x in feat_ind[send_rank])
-        max_dim_receiver = max(len(x) for x in feat_ind[rec_rank])
+            # move agg indices to device for scatter operations
+            minix_send = torch.tensor(agg.minindex_send).to(dev)
+            minix_recv = torch.tensor(agg.minindex_recv).to(dev)
+            maxix_send = torch.tensor(agg.maxindex_send).to(dev)
+            maxix_recv = torch.tensor(agg.maxindex_recv).to(dev)
 
-        # this part is a bit tedious since we want to solve independently the easy cases
-        # for better performance
+            # compute hausdorff distances with scatter operations
+            hausdorff_send = scatter_max(scatter_min(dists, minix_send), maxix_send)
+            hausdorff_recv = scatter_max(scatter_min(dists, minix_recv), maxix_recv)
 
-        if max_dim_sender == 1 and max_dim_receiver == 1:
-            feats_sender = torch.cat([feat_ind[send_rank][c] for c in cell_pairs[0]])
-            feats_receiver = torch.cat([feat_ind[rec_rank][c] for c in cell_pairs[1]])
-            pos_sender = pos[feats_sender]
-            pos_receiver = pos[feats_receiver]
-            dists = torch.norm(pos_sender - pos_receiver, dim=1)
-            hausdorff_dists_sender = dists
-            hausdorff_dists_receiver = dists
-        else:
-            cl, cr, il, ir, sl, sr = agg_indices[rank_pair]
-            pos_sender = pos[cl]
-            pos_receiver = pos[cr]
-            dists = torch.norm(pos_sender - pos_receiver, dim=1)
-            hausdorff_dists_sender = scatter_max(scatter_min(dists, il), sl)
-            hausdorff_dists_receiver = scatter_max(scatter_min(dists, ir), sr)
+            inv_list[rank_pair].extend([hausdorff_send, hausdorff_recv])
 
-        # Combine all features
-        new_features[rank_pair] = torch.stack(
-            [
-                centroid_dists,
-                max_dist_sender,
-                max_dist_receiver,
-                hausdorff_dists_sender,
-                hausdorff_dists_receiver,
-            ],
-            dim=1,
-        )
+    out: dict[str, Tensor] = {k: torch.stack(v, dim=1) for k, v in inv_list.items()}
+
+    return out
+
+    # for rank_pair, cell_pairs in adj.items():
+
+    #     # centroid dist
+
+    #     #
+
+    #     # Compute mean distances
+    #     indexed_sender_centroids = mean_cell_positions[send_rank][cell_pairs[0]]
+    #     indexed_receiver_centroids = mean_cell_positions[rec_rank][cell_pairs[1]]
+    #     differences = indexed_sender_centroids - indexed_receiver_centroids
+    #     centroid_dists = torch.sqrt((differences**2).sum(dim=1))
+
+    #     # Compute diameter
+    #     max_dist_sender = max_pairwise_distances[send_rank][cell_pairs[0]]
+    #     max_dist_receiver = max_pairwise_distances[rec_rank][cell_pairs[1]]
+
+    #     # # Compute haussdorf distances
+    #     max_dim_sender = max(len(x) for x in feat_ind[send_rank])
+    #     max_dim_receiver = max(len(x) for x in feat_ind[rec_rank])
+
+    #     # this part is a bit tedious since we want to solve independently the easy cases
+    #     # for better performance
+
+    #     if max_dim_sender == 1 and max_dim_receiver == 1:
+    #         feats_sender = torch.cat([feat_ind[send_rank][c] for c in cell_pairs[0]])
+    #         feats_receiver = torch.cat([feat_ind[rec_rank][c] for c in cell_pairs[1]])
+    #         pos_sender = pos[feats_sender]
+    #         pos_receiver = pos[feats_receiver]
+    #         dists = torch.norm(pos_sender - pos_receiver, dim=1)
+    #         hausdorff_dists_sender = dists
+    #         hausdorff_dists_receiver = dists
+    #     else:
+    #         cl, cr, il, ir, sl, sr = agg_indices[rank_pair]
+    #         pos_sender = pos[cl]
+    #         pos_receiver = pos[cr]
+    #         dists = torch.norm(pos_sender - pos_receiver, dim=1)
+    #         hausdorff_dists_sender = scatter_max(scatter_min(dists, il), sl)
+    #         hausdorff_dists_receiver = scatter_max(scatter_min(dists, ir), sr)
+
+    # # Combine all features
+    # new_features[rank_pair] = torch.stack(
+    #     [
+    #         centroid_dists,
+    #         max_dist_sender,
+    #         max_dist_receiver,
+    #         hausdorff_dists_sender,
+    #         hausdorff_dists_receiver,
+    #     ],
+    #     dim=1,
+    # )
 
     return new_features
 
@@ -1009,18 +1109,18 @@ def compute_centroids(
 
 #     list1 = [[0, 1], [2, 3, 4]]
 #     list2 = [[2, 3, 4], [5]]
-#     lengths_left = np.array([len(x) for x in list1])
-#     lengths_right = np.array([len(x) for x in list2])
-#     indices_left = np.concatenate(list1)
-#     atoms_right = np.concatenate(list2)
+#     lengths_send = np.array([len(x) for x in list1])
+#     lengths_recv = np.array([len(x) for x in list2])
+#     indices_send = np.concatenate(list1)
+#     atoms_recv = np.concatenate(list2)
 
 #     # first run
-#     fast_agg_indices(indices_left, lengths_left, atoms_right, lengths_right)
+#     fast_agg_indices(indices_send, lengths_send, atoms_recv, lengths_recv)
 
 #     # second run
 #     res = timeit.timeit(
 #         lambda: fast_agg_indices(
-#             indices_left, lengths_left, atoms_right, lengths_right
+#             indices_send, lengths_send, atoms_recv, lengths_recv
 #         ),
 #         number=100,
 #     )
@@ -1029,5 +1129,5 @@ def compute_centroids(
 #     # now test hausdorff, transform to torch
 #     pos = torch.rand(6, 2)
 #     with torch.no_grad():
-#         hl, hr = haussdorff(list1, list2, pos)
+#         hl, hr = hausdorff(list1, list2, pos)
 #     print(hl, hr)

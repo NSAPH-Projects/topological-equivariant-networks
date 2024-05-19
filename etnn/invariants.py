@@ -8,7 +8,7 @@ def _invariants_kernel(
     cells_send: list[Tensor],
     cells_rec: list[Tensor],
     pos: Tensor,
-    haussdorf: bool = True,
+    hausdorff: bool = True,
     max_cell_size: Optional[int] = None,
 ) -> Tensor:
     out_dim = 5 if haussdorf else 3
@@ -23,7 +23,7 @@ def _invariants_kernel(
             out[i, 0] = dist
             out[i, 1] = torch.tensor(0.0, device=device)
             out[i, 2] = torch.tensor(0.0, device=device)
-            if haussdorf:
+            if hausdorff:
                 out[i, 3] = torch.tensor(0.0, device=device)
                 out[i, 4] = torch.tensor(0.0, device=device)
             continue
@@ -52,8 +52,8 @@ def _invariants_kernel(
         out[i, 1] = send_diameter
         out[i, 2] = rec_diameter
 
-        # haussdorff distance
-        if haussdorf:
+        # hausdorff distance
+        if hausdorff:
             cross_dist = torch.norm(pos_send[:, None] - pos_rec[None], dim=-1)
             send_hausdorff = cross_dist.amin(dim=0).max()
             rec_hausdorff = cross_dist.amin(dim=1).max()
@@ -67,7 +67,7 @@ def compute_invariants(
     cell_ind: dict[str, list[Tensor]],
     pos: Tensor,
     adj: dict[str, Tensor],
-    haussdorf: bool = True,
+    hausdorff: bool = True,
     max_cell_size: Optional[int] = None,
 ) -> dict[str, Tensor]:
     # compute invariants for all adjacency types
@@ -78,7 +78,7 @@ def compute_invariants(
         cell_send = [cell_ind[send_rank][c] for c in cell_pairs[0]]
         cell_rec = [cell_ind[rec_rank][c] for c in cell_pairs[1]]
         invariants[rank_pair] = _invariants_kernel(
-            cell_send, cell_rec, pos, haussdorf, max_cell_size
+            cell_send, cell_rec, pos, hausdorff, max_cell_size
         )
 
     return invariants

@@ -1,12 +1,60 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from torch import Tensor
 from torch_geometric.data import Data
-
+from copy import deepcopy
 
 from etnn.layers import ETNNLayer, etnn_block
+
 # from etnn.invariants import compute_invariants
-from etnn.utils import compute_invariants, compute_invariants2
+from etnn.utils import (
+    compute_invariants,
+    compute_invariants2,
+    fast_agg_indices,
+)
+
+
+def prepare_agg_indices(cell_ind, adj, max_cell_size=100):
+    agg_indices = {}
+
+    # first take sub sample of the cells if larger than max size
+    cell_ind = deepcopy(cell_ind)
+    for rank, cells in cell_ind.items():
+        for j, c in enumerate(cells):
+            if len(c) > max_cell_size:
+                subsample = np.random.choice(c, max_cell_size, replace=False)
+                cell_ind[rank][j] = subsample.tolist()
+
+        # create agg indices for rank
+        # transform on the format of atoms/sizes needed by the helper functin
+        atoms = np.concatenate(cells)
+        sizes = np.array([len(c) for c in cells])
+        indices = fast_agg_indices(atoms, sizes, atoms, sizes)
+        agg_indices[rank] = indices
+        # [x.tolist() for x in indices]
+
+    # for each aggregation indices for edges
+    for adj_type, edges in adj.items():
+        # get the indices of the cells
+        send_rank, recv_rank = adj_type.split("_")[:2]
+
+        # get the cells of sender and receiver
+        cells_send = [cell_ind[send_rank][i] for i in edges[0]]
+        cells_recv = [cell_ind[recv_rank][i] for i in edges[1]]
+
+        # transform on the format of atoms/sizes needed by the helper functin
+        atoms_send = np.concatenate(cells_send)
+        sizes_send = np.array([len(c) for c in cells_send])
+        atoms_recv = np.concatenate(cells_recv)
+        sizes_recv = np.array([len(c) for c in cells_recv])
+
+        # get the indices of the cells
+        indices = fast_agg_indices(atoms_send, sizes_send, atoms_recv, sizes_recv)
+        agg_indices[adj_type] = indices
+        # [x.tolist() for x in indices]
+
+    return cell_ind, agg_indices
 
 
 class ETNN(nn.Module):
@@ -21,18 +69,18 @@ class ETNN(nn.Module):
         num_out: int,
         num_layers: int,
         adjacencies: list[str],
-        depth_etnn_layers = 1,
+        depth_etnn_layers=1,
         equivariant: bool = False,
         num_readout_layers: int = 2,
-        haussdorf: bool = True,
+        hausdorff: bool = True,
         invariants: bool = True,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
         self.equivariant = equivariant
-        self.haussdorf = haussdorf
+        self.hausdorff = hausdorff
         self.invariants = invariants
-        self.num_invariants = (5 if haussdorf else 3) * invariants
+        self.num_invariants = (5 if hausdorff else 3) * invariants
         self.visible_dims = list(num_features_per_rank.keys())
         self.num_inv_fts_map = {k: self.num_invariants for k in adjacencies}
         self.max_dim = max(self.visible_dims)
@@ -86,18 +134,27 @@ class ETNN(nn.Module):
             cell_ind[str(r)] = [c.cpu().numpy().tolist() for c in ind]
 
         adj = {
-            adj_type: getattr(graph, f"adj_{adj_type}")
-            for adj_type in self.adjacencies
+            adj_type: getattr(graph, f"adj_{adj_type}") for adj_type in self.adjacencies
         }
 
         # embed features and E(n) invariant information
         x = {str(i): getattr(graph, f"x_{i}") for i in self.visible_dims}
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
 
+        # get aggregation indices
+        cell_ind_inv, agg_indices = prepare_agg_indices(
+            cell_ind, adj, max_cell_size=100
+        )
+
         # message passing
         pos = graph.pos
         if self.invariants:
-            inv = compute_invariants(cell_ind, pos, adj, self.haussdorf, max_cell_size=100)
+            # inv = compute_invariants2(
+            #     cell_ind, pos, adj, self.hausdorff, max_cell_size=100
+            # )
+            inv = compute_invariants2(
+                cell_ind_inv, pos, adj, agg_indices, self.hausdorff
+            )
         else:
             inv = {adj_type: None for adj_type in self.adjacencies}
 
@@ -106,7 +163,12 @@ class ETNN(nn.Module):
                 x, _ = layer(x, adj, pos, inv)
             else:
                 x, pos = layer(x, adj, pos, inv)
-                inv = compute_invariants(cell_ind, pos, adj, self.haussdorf, max_cell_size=100)
+                # inv = compute_invariants(
+                #     cell_ind, pos, adj, self.hausdorff, max_cell_size=100
+                # )
+                inv = compute_invariants2(
+                    cell_ind_inv, pos, adj, agg_indices, self.hausdorff
+                )
 
         # read out
         out = {dim: self.readout[dim](feature) for dim, feature in x.items()}

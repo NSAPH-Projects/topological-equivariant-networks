@@ -1,15 +1,19 @@
 defaults:
   - _self_
   - training: fast
-  - baseline: invariant
   - dataset: pm25-cc
   - arch: arch-0
   - loss_fn: huber
+  - baseline: invariant
 
 seed: 42
 force_restart: false
 baseline_name: ${hydra:runtime.choices.baseline}
 ckpt_prefix: null
+
+model:
+  # defaults, other params changed by the runtime choices
+  _target_: etnn.models.ETNN
 
 loader:
   _target_: torch.utils.data.DataLoader 

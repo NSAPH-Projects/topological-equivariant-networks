@@ -1,5 +1,5 @@
+#@package _global_
 model:
-  _target_: etnn.models.ETNN
   num_out: 1
   num_hidden: 64
   num_layers: 4

@@ -87,6 +87,8 @@ def main(cfg: DictConfig):
     # init wandb
     if run_id is None:
         run_id = cfg.baseline_name + "-" + wandb.util.generate_id()
+        if cfg.ckpt_prefix is not None:
+            run_id = cfg.ckpt_prefix + "-" + run_id
         resume = False
     else:
         resume = True

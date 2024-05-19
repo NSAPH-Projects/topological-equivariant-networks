@@ -93,13 +93,18 @@ def main(cfg: DictConfig):
     else:
         resume = True
 
-    wandb.init(
+    run = wandb.init(
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
         config=OmegaConf.to_container(cfg, resolve=True),
         id=run_id,
         resume=resume,
     )
+
+    if not resume:
+        # compute number of trainable parmeters in model and log
+        num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        run.summary["num_params"] = num_params
 
     model = model.to(dev)
     model.train()
@@ -126,7 +131,7 @@ def main(cfg: DictConfig):
         if dev.type == "cuda":
             # not really helping
             torch.cuda.empty_cache()
-       
+
         # == end training step ==
 
         epoch_metrics["train_loss"].append(train_loss.item())
@@ -147,7 +152,7 @@ def main(cfg: DictConfig):
         # log metrics
         mean_metrics = {k: np.mean(v) for k, v in epoch_metrics.items()}
         wandb.log(mean_metrics, step=epoch)
-       
+
         logline = json.dumps({"epoch": epoch, **mean_metrics})
         with open(f"checkpoints/{cfg.baseline_name}_{cfg.seed}.jsonl", "a") as f:
             f.write(logline + "\n")

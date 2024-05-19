@@ -49,7 +49,7 @@ def main(cfg: DictConfig):
     # get device
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # load data
+    # == instantiate dataset, loader, model, optimizer, scheduler ==
     dataset: Dataset = instantiate(cfg.dataset)
     collate_fn: callable = instantiate(cfg.collate_fn, dataset)
     loader: DataLoader = instantiate(cfg.loader, dataset, collate_fn=collate_fn)
@@ -70,7 +70,7 @@ def main(cfg: DictConfig):
     sched: LRScheduler = instantiate(cfg.lr_scheduler, opt)
     loss_fn: callable = instantiate(cfg.loss_fn, reduction="none")
 
-    # Define checkpoint path
+    # == checkpointing ==
     checkpoint_dir = "checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
     checkpoint_filename = f"{cfg.baseline_name}_{cfg.seed}.pth"
@@ -84,7 +84,7 @@ def main(cfg: DictConfig):
     else:
         start_epoch, run_id = 0, None
 
-    # init wandb
+    # == init wandb == 
     if run_id is None:
         run_id = cfg.baseline_name + "-" + wandb.util.generate_id()
         if cfg.ckpt_prefix is not None:
@@ -93,19 +93,22 @@ def main(cfg: DictConfig):
     else:
         resume = True
 
+    # create wandb config
+    wandb_config = OmegaConf.to_container(cfg, resolve=True)
+
+    # add number of parameters to config
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    wandb_config["num_params"] = num_params
+
     run = wandb.init(
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
-        config=OmegaConf.to_container(cfg, resolve=True),
+        config=wandb_config,
         id=run_id,
         resume=resume,
     )
 
-    if not resume:
-        # compute number of trainable parmeters in model and log
-        num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        run.summary["num_params"] = num_params
-
+    # == training loop ==
     model = model.to(dev)
     model.train()
 

@@ -143,7 +143,7 @@ def main(cfg: DictConfig):
         wandb.log(mean_metrics, step=epoch)
        
         logline = json.dumps({"epoch": epoch, **mean_metrics})
-        with open(f"checkpoints/{run_id}.jsonl", "a") as f:
+        with open(f"checkpoints/{cfg.baseline_name}_{cfg.seed}.json", "a") as f:
             f.write(logline + "\n")
 
 

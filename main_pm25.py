@@ -116,30 +116,30 @@ def main(cfg: DictConfig):
     pbar = trange(start_epoch, cfg.training.max_epochs, desc="", leave=True)
     for epoch in pbar:
         epoch_metrics = defaultdict(list)
-        # for batch in loader:
-        # batch = batch.to(dev)
+        for batch in loader:
+            batch = batch.to(dev)
 
-        # == training step ==
-        opt.zero_grad()
-        outputs = model(batch)
-        mask = getattr(batch, f"mask")
-        loss_terms = loss_fn(outputs["0"].squeeze(-1), batch.y.squeeze(-1))
-        train_loss = (loss_terms * mask).sum() / mask.sum()
-        eval_loss = (loss_terms * (1 - mask)).sum() / (1 - mask).sum()
-        train_loss.backward()
-        if cfg.training.clip is not None:
-            torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
-        opt.step()
+            # == training step ==
+            opt.zero_grad()
+            outputs = model(batch)
+            mask = getattr(batch, f"mask")
+            loss_terms = loss_fn(outputs["0"].squeeze(-1), batch.y.squeeze(-1))
+            train_loss = (loss_terms * mask).sum() / mask.sum()
+            eval_loss = (loss_terms * (1 - mask)).sum() / (1 - mask).sum()
+            train_loss.backward()
+            if cfg.training.clip is not None:
+                torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
+            opt.step()
 
-        if dev.type == "cuda":
-            # not really helping
-            torch.cuda.empty_cache()
+            if dev.type == "cuda":
+                # not really helping
+                torch.cuda.empty_cache()
 
-        # == end training step ==
+            # == end training step ==
 
-        epoch_metrics["train_loss"].append(train_loss.item())
-        epoch_metrics["eval_loss"].append(eval_loss.item())
-        epoch_metrics["lr"].append(opt.param_groups[0]["lr"])
+            epoch_metrics["train_loss"].append(train_loss.item())
+            epoch_metrics["eval_loss"].append(eval_loss.item())
+            epoch_metrics["lr"].append(opt.param_groups[0]["lr"])
 
         # update schedule
         sched.step()

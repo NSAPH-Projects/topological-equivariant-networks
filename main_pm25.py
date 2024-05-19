@@ -85,9 +85,9 @@ def main(cfg: DictConfig):
 
     # == init wandb ==
     if run_id is None:
-        run_id = cfg.baseline_name + "-" + wandb.util.generate_id()
+        run_id = "_".join([cfg.baseline_name, str(cfg.seed), wandb.util.generate_id()])
         if cfg.ckpt_prefix is not None:
-            run_id = cfg.ckpt_prefix + "-" + run_id
+            run_id = "_".join([cfg.ckpt_prefix, run_id])
         resume = False
     else:
         resume = True
@@ -99,7 +99,7 @@ def main(cfg: DictConfig):
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     wandb_config["num_params"] = num_params
 
-    run = wandb.init(
+    wandb.init(
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
         config=wandb_config,
@@ -130,7 +130,7 @@ def main(cfg: DictConfig):
                 torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
             opt.step()
 
-            if dev.type == "cuda":
+            if dev == "cuda":
                 # not really helping
                 torch.cuda.empty_cache()
 

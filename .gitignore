@@ -166,6 +166,7 @@ job_outputs/
 wandb/
 outputs/
 checkpoints/
+multirun
 
 # Mac
 **/.DS_Store

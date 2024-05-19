@@ -165,6 +165,7 @@ datasets/
 job_outputs/
 wandb/
 outputs/
+checkpoints/
 
 # Mac
 **/.DS_Store

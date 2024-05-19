@@ -6,4 +6,6 @@ defaults:
   - baseline: invariant
 
 seed: 42
+force_restart: false
 baseline_name: ${hydra:runtime.choices.baseline}
+ckpt_prefix: null

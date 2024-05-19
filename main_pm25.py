@@ -1,3 +1,5 @@
+import os
+import json
 import hydra
 import numpy as np
 import wandb
@@ -5,7 +7,6 @@ import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from collections import defaultdict
-
 
 from torch import nn
 from tqdm.auto import tqdm, trange
@@ -16,18 +17,37 @@ from torch.optim.lr_scheduler import LRScheduler
 from etnn.utils import set_seed
 
 
+def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "run_id": run_id,
+        },
+        filepath,
+    )
+
+
+def load_checkpoint(filepath, model, optimizer, scheduler):
+    if os.path.isfile(filepath):
+        checkpoint = torch.load(filepath)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        return checkpoint["epoch"] + 1, checkpoint["run_id"]
+    else:
+        return 0, None
+
+
 @hydra.main(config_path="configs", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     # seed everything
     set_seed(cfg.seed)
 
-    # init wandb
-    wandb.init(
-        project=cfg.wandb.project,
-        entity=cfg.wandb.entity,
-        config=OmegaConf.to_container(cfg, resolve=True),
-        id=cfg.baseline_name + "-" + wandb.util.generate_id(),
-    )
+    # get device
+    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # load data
     dataset: Dataset = instantiate(cfg.dataset)
@@ -35,9 +55,12 @@ def main(cfg: DictConfig):
     loader: DataLoader = instantiate(cfg.loader, dataset, collate_fn=collate_fn)
 
     # determine number of features per rank
-    D = next(iter(loader))
-    num_feats = {k.split("_")[1]: v.shape[1] for k, v in D.items() if k.startswith("x_")}
-    adjacencies = [k[4:] for k in D.keys() if k.startswith("adj_")]
+    batch = next(iter(loader))
+    batch = batch.to(dev)
+    num_feats = {
+        k.split("_")[1]: v.shape[1] for k, v in batch.items() if k.startswith("x_")
+    }
+    adjacencies = [k[4:] for k in batch.keys() if k.startswith("adj_")]
 
     # instantiate model, optimizer, scheduler
     model: nn.Module = instantiate(
@@ -47,39 +70,70 @@ def main(cfg: DictConfig):
     sched: LRScheduler = instantiate(cfg.lr_scheduler, opt)
     loss_fn: callable = instantiate(cfg.loss_fn, reduction="none")
 
-    # get device
-    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Define checkpoint path
+    checkpoint_dir = "checkpoints"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    checkpoint_filename = f"{cfg.baseline_name}_{cfg.seed}.pth"
+    if cfg.ckpt_prefix is not None:
+        checkpoint_filename = f"{cfg.ckpt_prefix}_{checkpoint_filename}"
+    checkpoint_path = os.path.join(checkpoint_dir, checkpoint_filename)
+
+    # Check for force restart flag
+    if not cfg.force_restart:
+        start_epoch, run_id = load_checkpoint(checkpoint_path, model, opt, sched)
+    else:
+        start_epoch, run_id = 0, None
+
+    # init wandb
+    if run_id is None:
+        run_id = cfg.baseline_name + "-" + wandb.util.generate_id()
+        resume = False
+    else:
+        resume = True
+
+    wandb.init(
+        project=cfg.wandb.project,
+        entity=cfg.wandb.entity,
+        config=OmegaConf.to_container(cfg, resolve=True),
+        id=run_id,
+        resume=resume,
+    )
 
     model = model.to(dev)
     model.train()
 
     # get training params from config
-    pbar = trange(cfg.training.max_epochs, desc="", leave=True)
+    pbar = trange(start_epoch, cfg.training.max_epochs, desc="", leave=True)
     for epoch in pbar:
         epoch_metrics = defaultdict(list)
-        for batch in loader:
-            # training step, use mask for eval
-            opt.zero_grad()
-            batch = batch.to(dev)
-            outputs = model(batch)
-            mask = getattr(batch, f"mask")
-            loss_terms = loss_fn(outputs["0"].squeeze(-1), batch.y.squeeze(-1))
-            train_loss = (loss_terms * mask).sum() / mask.sum()
-            eval_loss = (loss_terms * (1 - mask)).sum() / (1 - mask).sum()
-            train_loss.backward()
-            if cfg.training.clip is not None:
-                torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
-            opt.step()
-            # end training step
+        # for batch in loader:
+        # batch = batch.to(dev)
+        # training step, use mask for eval
+        opt.zero_grad()
+        outputs = model(batch)
+        mask = getattr(batch, f"mask")
+        loss_terms = loss_fn(outputs["0"].squeeze(-1), batch.y.squeeze(-1))
+        train_loss = (loss_terms * mask).sum() / mask.sum()
+        eval_loss = (loss_terms * (1 - mask)).sum() / (1 - mask).sum()
+        train_loss.backward()
+        if cfg.training.clip is not None:
+            torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
+        opt.step()
+        if dev.type == "cuda":
+            torch.cuda.empty_cache()
+        # end training step
 
-            epoch_metrics["train_loss"].append(train_loss.item())
-            epoch_metrics["eval_loss"].append(eval_loss.item())
-            epoch_metrics["lr"].append(opt.param_groups[0]["lr"])
+        epoch_metrics["train_loss"].append(train_loss.item())
+        epoch_metrics["eval_loss"].append(eval_loss.item())
+        epoch_metrics["lr"].append(opt.param_groups[0]["lr"])
 
         # update schedule
         sched.step()
 
-        # update progress bax
+        # save checkpoint
+        save_checkpoint(epoch, model, opt, sched, run_id, checkpoint_path)
+
+        # update progress bar
         msg = f"Train loss: {train_loss.item():.4f}, Eval loss: {eval_loss.item():.4f}"
         pbar.set_description(msg)
         pbar.refresh()
@@ -87,6 +141,10 @@ def main(cfg: DictConfig):
         # log metrics
         mean_metrics = {k: np.mean(v) for k, v in epoch_metrics.items()}
         wandb.log(mean_metrics, step=epoch)
+       
+        logline = json.dumps({"epoch": epoch, **mean_metrics})
+        with open(f"checkpoints/{run_id}.jsonl", "a") as f:
+            f.write(logline + "\n")
 
 
 if __name__ == "__main__":

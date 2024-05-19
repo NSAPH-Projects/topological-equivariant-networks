@@ -90,16 +90,14 @@ def squash_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
 def create_mask(
     data: CombinatorialComplexData, rate: float = 0.1, seed: int | None = None
 ) -> CombinatorialComplexData:
-    cell_2 = data.cell_2
-    lengths_2 = data.lengths_2
-    cell_ind_2 = torch.split(cell_2, lengths_2.tolist())
-    n = len(lengths_2)
+    cell_ind_2 = np.split(data.cell_2, np.cumsum(data.lengths_2)[:-1])
+    n = len(cell_ind_2)
     m = int(rate * n)
     rng = np.random.default_rng(seed)
     mask_vals = rng.choice(range(n), m, replace=False)
     to_mask = []
     for i in mask_vals:
-        to_mask.extend(cell_ind_2[i].tolist())
+        to_mask.extend(cell_ind_2[i])
     to_mask = np.array(to_mask)
     masked = np.ones(len(data.lengths_0))
     masked[np.array(list(to_mask))] = 0

@@ -8,7 +8,7 @@ model:
   num_out: 1
   num_hidden: 32
   num_layers: 4
-  num_readout_layers: 1
+  num_readout_layers: 3
 
 loader:
   _target_: torch.utils.data.DataLoader 
@@ -22,7 +22,7 @@ collate_fn:
 
 training:
   # defaults, other params cchanged by training/ config files
-  clip: 1.0
+  clip: 10.0
 
 wandb:
   entity: ten-harvard
@@ -43,6 +43,6 @@ optimizer:
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.OneCycleLR
   max_lr: 0.001
-  final_div_factor: 1
+  final_div_factor: 10
   epochs: ${training.max_epochs}
   steps_per_epoch: 1

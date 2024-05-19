@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -5,6 +6,7 @@ from torch_geometric.data import Data
 
 
 from etnn.layers import ETNNLayer, etnn_block
+
 # from etnn.invariants import compute_invariants
 from etnn.utils import compute_invariants
 
@@ -21,7 +23,7 @@ class ETNN(nn.Module):
         num_out: int,
         num_layers: int,
         adjacencies: list[str],
-        depth_etnn_layers = 1,
+        depth_etnn_layers=1,
         equivariant: bool = False,
         num_readout_layers: int = 2,
         haussdorf: bool = True,
@@ -80,13 +82,13 @@ class ETNN(nn.Module):
         # nest cell indices from cat format
         cell_ind = {}
         for r in self.visible_dims:
-            lengths = getattr(graph, f"lengths_{r}")
-            cat_cells = getattr(graph, f"cell_{r}")
-            cell_ind[str(r)] = torch.split(cat_cells, lengths.tolist())
+            cell_ind[str(r)] = np.split(
+                getattr(graph, f"cell_{r}"),
+                np.cumsum(getattr(graph, f"lengths_{r}"))[:-1],
+            )
 
         adj = {
-            adj_type: getattr(graph, f"adj_{adj_type}")
-            for adj_type in self.adjacencies
+            adj_type: getattr(graph, f"adj_{adj_type}") for adj_type in self.adjacencies
         }
 
         # embed features and E(n) invariant information
@@ -96,7 +98,9 @@ class ETNN(nn.Module):
         # message passing
         pos = graph.pos
         if self.invariants:
-            inv = compute_invariants(cell_ind, pos, adj, self.haussdorf, max_cell_size=100)
+            inv = compute_invariants(
+                cell_ind, pos, adj, self.haussdorf, max_cell_size=100
+            )
         else:
             inv = {adj_type: None for adj_type in self.adjacencies}
 
@@ -105,7 +109,9 @@ class ETNN(nn.Module):
                 x, _ = layer(x, adj, pos, inv)
             else:
                 x, pos = layer(x, adj, pos, inv)
-                inv = compute_invariants(cell_ind, pos, adj, self.haussdorf, max_cell_size=100)
+                inv = compute_invariants(
+                    cell_ind, pos, adj, self.haussdorf, max_cell_size=100
+                )
 
         # read out
         out = {dim: self.readout[dim](feature) for dim, feature in x.items()}

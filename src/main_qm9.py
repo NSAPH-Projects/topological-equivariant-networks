@@ -15,6 +15,7 @@ from qm9.utils import calc_mean_mad
 from utils import get_adjacency_types, get_loaders, get_model, merge_adjacencies, set_seed
 
 torch.set_float32_matmul_precision("high")
+os.environ["WANDB__SERVICE_WAIT"] = "600"
 
 
 def save_checkpoint(state, checkpoint_path):
@@ -25,21 +26,22 @@ def save_checkpoint(state, checkpoint_path):
     torch.save(state, checkpoint_path)
 
 
-def load_checkpoint(checkpoint_path, model, optimizer, scheduler):
+def load_checkpoint(checkpoint_path, model, best_model, optimizer, scheduler):
     if os.path.isfile(checkpoint_path):
         print(f"=> loading checkpoint '{checkpoint_path}'")
         checkpoint = torch.load(checkpoint_path)
         start_epoch = checkpoint["epoch"]
         best_val_mae = checkpoint["best_val_mae"]
         model.load_state_dict(checkpoint["state_dict"])
+        best_model.load_state_dict(checkpoint["best_model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer"])
         scheduler.load_state_dict(checkpoint["scheduler"])
         run_id = checkpoint["run_id"]
         run_name = checkpoint["run_name"]
-        return start_epoch, best_val_mae, model, optimizer, scheduler, run_id, run_name
+        return start_epoch, best_val_mae, model, best_model, optimizer, scheduler, run_id, run_name
     else:
         print(f"=> no checkpoint found at '{checkpoint_path}'")
-    return 0, float("inf"), model, optimizer, scheduler, None, None
+    return 0, float("inf"), model, best_model, optimizer, scheduler, None, None
 
 
 def args_to_hash(args):
@@ -81,6 +83,7 @@ def main(args):
     model = get_model(args).to(args.device)
     if args.compile:
         model = torch.compile(model)
+    best_model = copy.deepcopy(model)
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Number of parameters: {num_params}")
     print(model)
@@ -95,7 +98,7 @@ def main(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     T_max = args.epochs // args.num_lr_cycles
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max, eta_min=args.min_lr)
-    best_val_mae, best_model = float("inf"), None
+    best_val_mae = float("inf")
 
     # Create checkpoint filename based on args hash
     args_hash = args_to_hash(args)
@@ -103,8 +106,8 @@ def main(args):
     checkpoint_path = os.path.join(args.checkpoint_dir, checkpoint_filename)
 
     # Load checkpoint if exists
-    start_epoch, best_val_mae, model, optimizer, scheduler, run_id, run_name = load_checkpoint(
-        checkpoint_path, model, optimizer, scheduler
+    start_epoch, best_val_mae, model, best_model, optimizer, scheduler, run_id, run_name = (
+        load_checkpoint(checkpoint_path, model, best_model, optimizer, scheduler)
     )
 
     # Setup wandb
@@ -161,6 +164,7 @@ def main(args):
             {
                 "epoch": epoch + 1,
                 "state_dict": model.state_dict(),
+                "best_model_state_dict": best_model.state_dict(),
                 "best_val_mae": best_val_mae,
                 "optimizer": optimizer.state_dict(),
                 "scheduler": scheduler.state_dict(),
@@ -181,6 +185,26 @@ def main(args):
                 "Learning Rate": scheduler.get_last_lr()[0],
             }
         )
+
+        # Compute and log test error every test_interval epochs
+        if (epoch + 1) % args.test_interval == 0:
+            test_mae = 0
+            best_model.eval()
+            for _, batch in enumerate(test_loader):
+                batch = batch.to(args.device)
+                pred = best_model(batch)
+                mae = criterion(pred * mad + mean, batch.y)
+                test_mae += mae.item()
+
+            test_mae /= len(test_loader)
+            print(f"Epoch {epoch + 1} Test MAE: {test_mae}")
+
+            wandb.log(
+                {
+                    "Interval Test MAE": test_mae,
+                    "Epoch": epoch + 1,
+                }
+            )
 
     test_mae = 0
     best_model.eval()
@@ -298,6 +322,9 @@ if __name__ == "__main__":
     parser.add_argument("--clip_amount", type=float, default=1.0, help="gradient clipping amount")
     parser.add_argument(
         "--num_lr_cycles", type=int, default=3, help="number of learning rate cycles"
+    )
+    parser.add_argument(
+        "--test_interval", type=int, default=10, help="interval to test the model during training"
     )
 
     # Dataset arguments

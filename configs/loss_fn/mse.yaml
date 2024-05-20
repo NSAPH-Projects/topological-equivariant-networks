@@ -1,1 +1,1 @@
-_target_: torch.nn.MAELoss
+_target_: torch.nn.MSELoss

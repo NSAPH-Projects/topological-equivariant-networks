@@ -1,9 +1,9 @@
 defaults:
   - _self_
+  - loss_fn: huber
   - training: fast
   - dataset: pm25-cc
   - arch: arch-0
-  - loss_fn: huber
   - baseline: invariant
 
 seed: 42

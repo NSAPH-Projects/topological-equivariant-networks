@@ -21,7 +21,7 @@ def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
     current_device = next(model.parameters()).device
     torch.save(
         {
-            "epoch": epoch,
+            "epoch": epoch + 1,
             "model_state_dict": model.to("cpu").state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "scheduler_state_dict": scheduler.state_dict(),
@@ -39,7 +39,7 @@ def load_checkpoint(filepath, model, optimizer, scheduler):
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-        return checkpoint["epoch"] + 1, checkpoint["run_id"]
+        return checkpoint["epoch"], checkpoint["run_id"]
     else:
         return 0, None
 
@@ -86,6 +86,10 @@ def main(cfg: DictConfig):
         start_epoch, run_id = load_checkpoint(checkpoint_path, model, opt, sched)
     else:
         start_epoch, run_id = 0, None
+    
+    if start_epoch >= cfg.training.max_epochs - 1:
+        print("Training already completed. Exiting.")
+        return
 
     # == init wandb logger ==
     if run_id is None:

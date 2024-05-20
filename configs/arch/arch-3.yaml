@@ -1,0 +1,19 @@
+#@package _global_
+defaults:
+  - override loss_fn: mse
+
+model:
+  num_out: 1
+  num_hidden: 8
+  num_layers: 4
+  num_readout_layers: 1
+  depth_etnn_layers: 1
+
+optimizer:
+  weight_decay: 1e-10
+
+training:
+  clip: null
+
+lr_scheduler:
+  final_div_factor: 1

@@ -800,6 +800,7 @@ def compute_invariants2(
     adj: dict[str, torch.LongTensor],
     agg_indices: dict[str, AggIndices],
     hausdorff: bool = True,
+    diff_high_order: bool = False,
 ) -> dict[str, Tensor]:
     # device
     dev = pos.device
@@ -825,13 +826,16 @@ def compute_invariants2(
         centroids[rank] = scatter_mean(pos[ids], index, dim=0, dim_size=len(cells))
 
         # compute diameters (max pairwise distance)
-        with torch.no_grad():
-            agg = agg_indices[rank]
+        agg = agg_indices[rank]
+        if diff_high_order:
             pos_send = pos[agg.ids_send]
             pos_recv = pos[agg.ids_recv]
-            dist = torch.norm(pos_send - pos_recv, dim=-1)
-            index = torch.tensor(agg.cell).to(dev)
-            diameters[rank] = scatter_max(dist, index, dim=0, dim_size=len(cells))
+        else:
+            pos_send = pos.detach()[agg.ids_send]
+            pos_recv = pos.detach()[agg.ids_recv]
+        dist = torch.norm(pos_send - pos_recv, dim=-1)
+        index = torch.tensor(agg.cell).to(dev)
+        diameters[rank] = scatter_max(dist, index, dim=0, dim_size=len(cells))
 
     # compute distances
     for rank_pair, cell_pairs in adj.items():
@@ -852,83 +856,33 @@ def compute_invariants2(
             diameter_recv,
         ]
 
-        # # hausdorff
+        # hausdorff
         if hausdorff:
-            with torch.no_grad():
-                # gather indices for positions
-                agg = agg_indices[rank_pair]
+            # gather indices for positions
+            agg = agg_indices[rank_pair]
+            if diff_high_order:
                 pos_send = pos[agg.ids_send]
                 pos_recv = pos[agg.ids_recv]
-                dists = torch.norm(pos_send - pos_recv, dim=1)
+            else:
+                pos_send = pos.detach()[agg.ids_send]
+                pos_recv = pos.detach()[agg.ids_recv]
+            dists = torch.norm(pos_send - pos_recv, dim=1)
 
-                # move agg indices to device for scatter operations
-                minix_send = torch.tensor(agg.minindex_send).to(dev)
-                minix_recv = torch.tensor(agg.minindex_recv).to(dev)
-                maxix_send = torch.tensor(agg.maxindex_send).to(dev)
-                maxix_recv = torch.tensor(agg.maxindex_recv).to(dev)
+            # move agg indices to device for scatter operations
+            minix_send = torch.tensor(agg.minindex_send).to(dev)
+            minix_recv = torch.tensor(agg.minindex_recv).to(dev)
+            maxix_send = torch.tensor(agg.maxindex_send).to(dev)
+            maxix_recv = torch.tensor(agg.maxindex_recv).to(dev)
 
-                # compute hausdorff distances with scatter operations
-                hausdorff_send = scatter_max(scatter_min(dists, minix_send), maxix_send)
-                hausdorff_recv = scatter_max(scatter_min(dists, minix_recv), maxix_recv)
+            # compute hausdorff distances with scatter operations
+            hausdorff_send = scatter_max(scatter_min(dists, minix_send), maxix_send)
+            hausdorff_recv = scatter_max(scatter_min(dists, minix_recv), maxix_recv)
 
-                inv_list[rank_pair].extend([hausdorff_send, hausdorff_recv])
+            inv_list[rank_pair].extend([hausdorff_send, hausdorff_recv])
 
     out: dict[str, Tensor] = {k: torch.stack(v, dim=1) for k, v in inv_list.items()}
 
     return out
-
-    # for rank_pair, cell_pairs in adj.items():
-
-    #     # centroid dist
-
-    #     #
-
-    #     # Compute mean distances
-    #     indexed_sender_centroids = mean_cell_positions[send_rank][cell_pairs[0]]
-    #     indexed_receiver_centroids = mean_cell_positions[rec_rank][cell_pairs[1]]
-    #     differences = indexed_sender_centroids - indexed_receiver_centroids
-    #     centroid_dists = torch.sqrt((differences**2).sum(dim=1))
-
-    #     # Compute diameter
-    #     max_dist_sender = max_pairwise_distances[send_rank][cell_pairs[0]]
-    #     max_dist_receiver = max_pairwise_distances[rec_rank][cell_pairs[1]]
-
-    #     # # Compute haussdorf distances
-    #     max_dim_sender = max(len(x) for x in feat_ind[send_rank])
-    #     max_dim_receiver = max(len(x) for x in feat_ind[rec_rank])
-
-    #     # this part is a bit tedious since we want to solve independently the easy cases
-    #     # for better performance
-
-    #     if max_dim_sender == 1 and max_dim_receiver == 1:
-    #         feats_sender = torch.cat([feat_ind[send_rank][c] for c in cell_pairs[0]])
-    #         feats_receiver = torch.cat([feat_ind[rec_rank][c] for c in cell_pairs[1]])
-    #         pos_sender = pos[feats_sender]
-    #         pos_receiver = pos[feats_receiver]
-    #         dists = torch.norm(pos_sender - pos_receiver, dim=1)
-    #         hausdorff_dists_sender = dists
-    #         hausdorff_dists_receiver = dists
-    #     else:
-    #         cl, cr, il, ir, sl, sr = agg_indices[rank_pair]
-    #         pos_sender = pos[cl]
-    #         pos_receiver = pos[cr]
-    #         dists = torch.norm(pos_sender - pos_receiver, dim=1)
-    #         hausdorff_dists_sender = scatter_max(scatter_min(dists, il), sl)
-    #         hausdorff_dists_receiver = scatter_max(scatter_min(dists, ir), sr)
-
-    # # Combine all features
-    # new_features[rank_pair] = torch.stack(
-    #     [
-    #         centroid_dists,
-    #         max_dist_sender,
-    #         max_dist_receiver,
-    #         hausdorff_dists_sender,
-    #         hausdorff_dists_receiver,
-    #     ],
-    #     dim=1,
-    # )
-
-    return new_features
 
 
 def compute_max_pairwise_distances(

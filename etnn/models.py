@@ -1,3 +1,4 @@
+from functools import partial
 import numpy as np
 import torch
 import torch.nn as nn
@@ -74,16 +75,20 @@ class ETNN(nn.Module):
         num_readout_layers: int = 2,
         hausdorff: bool = True,
         invariants: bool = True,
+        diff_high_order: bool = False,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
         self.equivariant = equivariant
-        self.hausdorff = hausdorff
+        # self.hausdorff = hausdorff
         self.invariants = invariants
         self.num_invariants = (5 if hausdorff else 3) * invariants
         self.visible_dims = list(num_features_per_rank.keys())
         self.num_inv_fts_map = {k: self.num_invariants for k in adjacencies}
         self.max_dim = max(self.visible_dims)
+        self.finv = partial(
+            compute_invariants2, hausdorff=hausdorff, diff_high_order=diff_high_order
+        )
 
         self.feature_embedding = nn.ModuleDict()
         out_dim = num_hidden if num_readout_layers > 0 else num_out
@@ -154,9 +159,7 @@ class ETNN(nn.Module):
             cell_ind_inv, agg_indices = prepare_agg_indices(
                 cell_ind, adj, max_cell_size=100
             )
-            inv = compute_invariants2(
-                cell_ind_inv, pos, adj, agg_indices, self.hausdorff
-            )
+            inv = self.finv(cell_ind_inv, pos, adj, agg_indices)
         else:
             inv = {adj_type: None for adj_type in self.adjacencies}
 
@@ -169,9 +172,7 @@ class ETNN(nn.Module):
                 #     cell_ind, pos, adj, self.hausdorff, max_cell_size=100
                 # )
                 if self.invariants:
-                    inv = compute_invariants2(
-                        cell_ind_inv, pos, adj, agg_indices, self.hausdorff
-                    )
+                    inv = self.finv(cell_ind_inv, pos, adj, agg_indices)
 
         # readout
         if self.num_readout_layers > 0:

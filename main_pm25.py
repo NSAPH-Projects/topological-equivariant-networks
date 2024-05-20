@@ -87,7 +87,7 @@ def main(cfg: DictConfig):
     else:
         start_epoch, run_id = 0, None
     
-    if start_epoch >= cfg.training.max_epochs - 1:
+    if start_epoch >= cfg.training.max_epochs:
         print("Training already completed. Exiting.")
         return
 

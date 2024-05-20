@@ -36,7 +36,11 @@ def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
 def load_checkpoint(filepath, model, optimizer, scheduler):
     if os.path.isfile(filepath):
         checkpoint = torch.load(filepath)
-        model.load_state_dict(checkpoint["model_state_dict"])
+        # try loading in cpu and if fails, load in the same device as the model
+        try:
+            model.load_state_dict(checkpoint["model_state_dict"])
+        except RuntimeError:
+            model.load_state_dict(checkpoint["model_state_dict"], map_location=next(model.parameters()).device)
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         return checkpoint["epoch"], checkpoint["run_id"]

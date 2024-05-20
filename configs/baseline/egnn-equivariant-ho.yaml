@@ -1,8 +1,0 @@
-#@package _global_
-defaults:
-  - override /dataset: pm25-graph
-
-model:
-  equivariant: true
-  hausdorff: true
-  diff_high_order: true

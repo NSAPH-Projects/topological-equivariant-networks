@@ -76,11 +76,14 @@ class ETNN(nn.Module):
         hausdorff: bool = True,
         invariants: bool = True,
         diff_high_order: bool = False,
+        pos_in_readout: bool = False,
+        pos_dim: int = 2,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
         self.equivariant = equivariant
         # self.hausdorff = hausdorff
+        self.pos_in_readout = pos_in_readout
         self.invariants = invariants
         self.num_invariants = (5 if hausdorff else 3) * invariants
         self.visible_dims = list(num_features_per_rank.keys())
@@ -112,11 +115,16 @@ class ETNN(nn.Module):
             ]
         )
 
+        # readout layers
         self.readout = nn.ModuleDict()
         self.num_readout_layers = num_readout_layers
+
         for dim in self.visible_dims:
+            dim_in = num_hidden
+            if dim == '0' and pos_in_readout:
+                dim_in += pos_dim
             self.readout[str(dim)] = etnn_block(
-                num_hidden,
+                dim_in,
                 num_hidden,
                 num_out,
                 num_readout_layers,
@@ -175,6 +183,9 @@ class ETNN(nn.Module):
                     inv = self.finv(cell_ind_inv, pos, adj, agg_indices)
 
         # readout
+        if self.pos_in_readout:
+            x['0'] = torch.cat([x['0'], pos], dim=1)
+
         if self.num_readout_layers > 0:
             x = {dim: self.readout[dim](feature) for dim, feature in x.items()}
 

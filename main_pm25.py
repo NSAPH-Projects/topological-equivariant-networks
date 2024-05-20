@@ -18,16 +18,18 @@ from etnn.utils import set_seed
 
 
 def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
+    current_device = next(model.parameters()).device
     torch.save(
         {
             "epoch": epoch,
-            "model_state_dict": model.cpu().state_dict(),
+            "model_state_dict": model.to("cpu").state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "scheduler_state_dict": scheduler.state_dict(),
             "run_id": run_id,
         },
         filepath,
     )
+    model.to(current_device)
     
 
 
@@ -48,7 +50,7 @@ def main(cfg: DictConfig):
     set_seed(cfg.seed)
 
     # get device
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    dev = "cuda" if torch.cuda.is_available() else "mps"
 
     # == instantiate dataset, loader, model, optimizer, scheduler ==
     dataset: Dataset = instantiate(cfg.dataset)

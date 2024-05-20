@@ -1,6 +1,6 @@
 #@package _global_
 defaults:
-  - override loss_fn: mse
+  - override /loss_fn: mse
 
 model:
   num_out: 1

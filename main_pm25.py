@@ -36,11 +36,14 @@ def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
 def load_checkpoint(filepath, model, optimizer, scheduler):
     if os.path.isfile(filepath):
         checkpoint = torch.load(filepath)
-        # try loading in cpu and if fails, load in the same device as the model
+        curr_dev = next(model.parameters()).device
+        model = model.to("cpu")
+        # try loading in cpu and if it fails try cuda
         try:
             model.load_state_dict(checkpoint["model_state_dict"])
         except RuntimeError:
-            model.load_state_dict(checkpoint["model_state_dict"], map_location=next(model.parameters()).device)
+            model.load_state_dict(checkpoint["model_state_dict"], map_location="cuda")
+        model = model.to(curr_dev)
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         return checkpoint["epoch"], checkpoint["run_id"]
@@ -87,7 +90,7 @@ def main(cfg: DictConfig):
 
     # Check for force restart flag
     if not cfg.force_restart:
-        start_epoch, run_id = load_checkpoint(checkpoint_path, model, opt, sched)
+        start_epoch, run_id, = load_checkpoint(checkpoint_path, model, opt, sched)
     else:
         start_epoch, run_id = 0, None
     

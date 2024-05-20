@@ -56,7 +56,7 @@ def main(cfg: DictConfig):
 
     # determine number of features per rank
     batch = next(iter(loader))   # get the first element to compute number of features
-                                 # to create the model
+    # to create the model
     num_feats = {
         k.split("_")[1]: v.shape[1] for k, v in batch.items() if k.startswith("x_")
     }
@@ -110,34 +110,37 @@ def main(cfg: DictConfig):
     model = model.to(dev)
     model.train()
 
+    # since only one batch is used, move it to the device
+    batch = batch.to(dev)
+
     # get training params from config
     pbar = trange(start_epoch, cfg.training.max_epochs, desc="", leave=True)
     for epoch in pbar:
         epoch_metrics = defaultdict(list)
-        for batch in loader:
-            batch = batch.to(dev)
+        # for batch in loader:
+        # batch = batch.to(dev)
 
-            # == training step ==
-            opt.zero_grad()
-            outputs = model(batch)
-            mask = batch.mask  # 1-0 mask of nodes used for training
-            loss_terms = loss_fn(outputs["0"].squeeze(-1), batch.y.squeeze(-1))
-            train_loss = (loss_terms * mask).sum() / mask.sum()
-            eval_loss = (loss_terms * (1 - mask)).sum() / (1 - mask).sum()
-            train_loss.backward()  # backpropagate
-            if cfg.training.clip is not None:
-                torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
-            opt.step()
+        # == training step ==
+        opt.zero_grad()
+        outputs = model(batch)
+        mask = batch.mask  # 1-0 mask of nodes used for training
+        loss_terms = loss_fn(outputs["0"].squeeze(-1), batch.y.squeeze(-1))
+        train_loss = (loss_terms * mask).sum() / mask.sum()
+        eval_loss = (loss_terms * (1 - mask)).sum() / (1 - mask).sum()
+        train_loss.backward()  # backpropagate
+        if cfg.training.clip is not None:
+            torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
+        opt.step()
 
-            if dev == "cuda":
-                # not really helping, but this should free up unused GPU memory
-                torch.cuda.empty_cache()
+        if dev == "cuda":
+            # not really helping, but this should free up unused GPU memory
+            torch.cuda.empty_cache()
 
-            # == end training step ==
+        # == end training step ==
 
-            epoch_metrics["train_loss"].append(train_loss.item())
-            epoch_metrics["eval_loss"].append(eval_loss.item())
-            epoch_metrics["lr"].append(opt.param_groups[0]["lr"])
+        epoch_metrics["train_loss"].append(train_loss.item())
+        epoch_metrics["eval_loss"].append(eval_loss.item())
+        epoch_metrics["lr"].append(opt.param_groups[0]["lr"])
 
         # update lr scheduler
         sched.step()

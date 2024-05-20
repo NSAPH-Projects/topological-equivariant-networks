@@ -169,9 +169,10 @@ class ETNN(nn.Module):
                 # inv = compute_invariants(
                 #     cell_ind, pos, adj, self.hausdorff, max_cell_size=100
                 # )
-                inv = compute_invariants2(
-                    cell_ind_inv, pos, adj, agg_indices, self.hausdorff
-                )
+                if self.invariants:
+                    inv = compute_invariants2(
+                        cell_ind_inv, pos, adj, agg_indices, self.hausdorff
+                    )
 
         # readout
         if self.num_readout_layers > 0:

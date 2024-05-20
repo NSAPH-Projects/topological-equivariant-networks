@@ -70,6 +70,8 @@ do
                            --num_hidden "$NUM_HIDDEN" \
                            --model_name "$MODEL_NAME" \
                            --splits "$SPLITS" \
+                           --normalize_invariants \
+                           --clip_gradient \
                            --checkpoint_dir "$CHECKPOINT_DIR" &
 done
 

@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # DEFINE EXP ARGUMENTS
-LIFTERS=("atom:0" "bond:1" "ring:2" "functional_group:2" "supercell:3")
-DIM=3
-VISIBLE_DIMS=(0 1 2)
+LIFTERS=("atom:0" "bond:1" "supercell:2")
+DIM=2
+VISIBLE_DIMS=(0 1)
 INITIAL_FEATURES="hetero"
 NEIGHBOR_TYPES="max"
-CONNECTIVITY="all_to_all"
+CONNECTIVITY="self"
 EPOCHS=500
-NUM_HIDDEN=70
+NUM_HIDDEN=
 
 # Constants
 BATCH_SIZE=96

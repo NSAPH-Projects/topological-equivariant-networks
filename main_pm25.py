@@ -21,13 +21,14 @@ def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
     torch.save(
         {
             "epoch": epoch,
-            "model_state_dict": model.state_dict(),
+            "model_state_dict": model.cpu().state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "scheduler_state_dict": scheduler.state_dict(),
             "run_id": run_id,
         },
         filepath,
     )
+    
 
 
 def load_checkpoint(filepath, model, optimizer, scheduler):

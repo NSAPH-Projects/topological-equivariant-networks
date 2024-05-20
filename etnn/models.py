@@ -144,17 +144,16 @@ class ETNN(nn.Module):
         x = {str(i): getattr(graph, f"x_{i}") for i in self.visible_dims}
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
 
-        # get aggregation indices
-        cell_ind_inv, agg_indices = prepare_agg_indices(
-            cell_ind, adj, max_cell_size=100
-        )
-
         # message passing
         pos = graph.pos
         if self.invariants:
-            # inv = compute_invariants2(
+            # inv = compute_invariants(
             #     cell_ind, pos, adj, self.hausdorff, max_cell_size=100
             # )
+            # get aggregation indices
+            cell_ind_inv, agg_indices = prepare_agg_indices(
+                cell_ind, adj, max_cell_size=100
+            )
             inv = compute_invariants2(
                 cell_ind_inv, pos, adj, agg_indices, self.hausdorff
             )

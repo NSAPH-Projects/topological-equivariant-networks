@@ -50,7 +50,7 @@ def main(cfg: DictConfig):
     set_seed(cfg.seed)
 
     # get device
-    dev = "cuda" if torch.cuda.is_available() else "mps"
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
 
     # == instantiate dataset, loader, model, optimizer, scheduler ==
     dataset: Dataset = instantiate(cfg.dataset)

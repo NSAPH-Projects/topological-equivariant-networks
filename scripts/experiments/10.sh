@@ -76,6 +76,9 @@ do
                            --normalize_invariants \
                            --clip_gradient \
                            --checkpoint_dir "$CHECKPOINT_DIR" &
+
+    # Wait for 30 minutes before moving to the next iteration
+    sleep 1800
 done
 
 # Wait for all background jobs to finish

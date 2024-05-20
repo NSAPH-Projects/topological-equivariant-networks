@@ -7,7 +7,7 @@ VISIBLE_DIMS=(0 1)
 INITIAL_FEATURES="hetero"
 NEIGHBOR_TYPES="max"
 CONNECTIVITY="self"
-EPOCHS=100
+EPOCHS=350
 BATCH_SIZE=96
 WEIGHT_DECAY=1e-16
 MIN_LR=0
@@ -73,6 +73,9 @@ do
                            --normalize_invariants \
                            --clip_gradient \
                            --checkpoint_dir "$CHECKPOINT_DIR" &
+
+    # Wait for 30 minutes before moving to the next iteration
+    sleep 1800
 done
 
 # Wait for all background jobs to finish

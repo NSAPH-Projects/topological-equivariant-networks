@@ -121,7 +121,14 @@ def main(cfg: DictConfig):
     )
 
     # == training loop ==
+
+    # move params to device
     model = model.to(dev)
+    for state in opt.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(dev)
+
     model.train()
 
     # since only one batch is used, move it to the device

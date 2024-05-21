@@ -18,6 +18,7 @@ training:
 lr_scheduler:
   final_div_factor: 1
 
+# this one will fail with graphs
 dataset:
   transform:
     _target_: torch_geometric.transforms.compose.Compose

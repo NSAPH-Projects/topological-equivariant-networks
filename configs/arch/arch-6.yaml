@@ -34,3 +34,15 @@ dataset:
         # - _target_: etnn.pm25.utils.squash_cc
         #   _partial_: true
         #   soft: true
+
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 0.003
+  weight_decay: 1e-6
+
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.OneCycleLR
+  max_lr: 0.01
+  final_div_factor: 10
+  epochs: ${training.max_epochs}
+  steps_per_epoch: 1

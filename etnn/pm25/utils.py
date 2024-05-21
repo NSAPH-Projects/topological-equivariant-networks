@@ -129,6 +129,12 @@ def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData
 
     return data
 
+def randomize_x0(data: CombinatorialComplexData) -> CombinatorialComplexData:
+    # permute the x_0
+    perm = torch.randperm(data.x_0.shape[0]).to(data.x_0.device)
+    data.x_0 = data.x_0[perm]
+    return data
+
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader

@@ -164,7 +164,7 @@ def main(cfg: DictConfig):
             torch.cuda.empty_cache()
 
         # == end training step ==
-        err2 = (outputs["0"].squeeze(-1) - batch.y.squeeze(-1)).pow(2)
+        err2 = (outputs["0"] - batch.y).pow(2)
         eval_loss = (err2 * (1 - mask)).sum() / (1 - mask).sum()
 
         epoch_metrics["train_loss"].append(train_loss.item())

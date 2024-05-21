@@ -75,7 +75,10 @@ def add_pos_to_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
     data.x_0 = torch.cat([data.x_0, data.pos], dim=1)
     return data
 
-def squash_cc(data: CombinatorialComplexData, soft: bool = False) -> CombinatorialComplexData:
+
+def squash_cc(
+    data: CombinatorialComplexData, soft: bool = False
+) -> CombinatorialComplexData:
     x_0 = data.x_0
     for key, tensor in data.items():
         if key.startswith("x_") and key != "x_0":
@@ -150,11 +153,15 @@ def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData
 
     return data
 
-def randomize_x0(data: CombinatorialComplexData) -> CombinatorialComplexData:
+
+def randomize(data: CombinatorialComplexData, keys=["x_0"]) -> CombinatorialComplexData:
     # permute the x_0
-    perm = torch.randperm(data.x_0.shape[0]).to(data.x_0.device)
-    data.x_0 = data.x_0[perm]
+    for key, val in data.items():
+        if key in keys:
+            perm = torch.randperm(val.shape[0]).to(val.device)
+            setattr(data, key, val[perm])
     return data
+
 
 def x1_labels(data: CombinatorialComplexData) -> CombinatorialComplexData:
     # add a label to x_1

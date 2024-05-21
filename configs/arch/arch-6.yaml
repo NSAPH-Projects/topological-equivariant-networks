@@ -32,8 +32,9 @@ dataset:
           _partial_: true
           seed: ${seed}
           rate: 0.25
-        - _target_: etnn.pm25.utils.randomize_x0
+        - _target_: etnn.pm25.utils.randomize
           _partial_: true
+          keys: ['x_0', 'x_1', 'x_2']
         # - _target_: etnn.pm25.utils.x1_labels
         #   _partial_: true
         # - _target_: etnn.pm25.utils.squash_cc

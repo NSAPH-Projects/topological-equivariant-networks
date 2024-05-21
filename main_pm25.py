@@ -203,10 +203,8 @@ def main(cfg: DictConfig):
         wandb.log(mean_metrics, step=epoch)
 
         if epoch % (cfg.training.max_epochs // 10) == 0:
-            pred_train = pred.detach().cpu().numpy()
-            target_train = target.cpu().numpy()
             fig, ax = plt.subplots(1, 2, figsize=(8, 4))
-            ax[0].scatter(real_train, pred_train, alpha=0.05)
+            ax[0].scatter(target_train, pred_train, alpha=0.05)
             ax[0].set_title("Train")
             ax[0].set_ylabel("Predicted")
             ax[0].set_xlabel("Real")

@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
+from etnn.models import ETNN
 from etnn.utils import set_seed
 
 
@@ -30,7 +31,6 @@ def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
         filepath,
     )
     model.to(current_device)
-    
 
 
 def load_checkpoint(filepath, model, optimizer, scheduler):
@@ -70,11 +70,18 @@ def main(cfg: DictConfig):
     num_feats = {
         k.split("_")[1]: v.shape[1] for k, v in batch.items() if k.startswith("x_")
     }
+
+    # get adjacencies orther then in reverse order
     adjacencies = [k[4:] for k in batch.keys() if k.startswith("adj_")]
+    adjacencies = list(sorted(adjacencies, reverse=True))
 
     # instantiate model, optimizer, learning rate scheduler, loss fn
-    model: nn.Module = instantiate(
-        cfg.model, num_features_per_rank=num_feats, adjacencies=adjacencies
+    has_virtual_node = ("virtual" in cfg.dataset_name)
+    model: ETNN = instantiate(
+        cfg.model,
+        num_features_per_rank=num_feats,
+        adjacencies=adjacencies,
+        has_virtual_node=has_virtual_node,
     )
     opt: Optimizer = instantiate(cfg.optimizer, model.parameters())
     sched: LRScheduler = instantiate(cfg.lr_scheduler, opt)
@@ -93,7 +100,7 @@ def main(cfg: DictConfig):
         start_epoch, run_id, = load_checkpoint(checkpoint_path, model, opt, sched)
     else:
         start_epoch, run_id = 0, None
-    
+
     if start_epoch >= cfg.training.max_epochs:
         print("Training already completed. Exiting.")
         return

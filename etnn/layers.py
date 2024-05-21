@@ -54,6 +54,7 @@ class ETNNLayer(nn.Module):
         num_features_map: dict[str, int],
         num_layers: int = 1,
         equivariant: bool = True,
+        has_virtual_node: bool = False,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
@@ -62,21 +63,30 @@ class ETNNLayer(nn.Module):
         self.equivariant = equivariant
 
         # messages
-        self.message_passing = nn.ModuleDict(
-            {
-                adj: ETNNMessagerLayer(num_hidden, self.num_features_map[adj])
-                for adj in adjacencies
-            }
-        )
+        self.message_passing = nn.ModuleDict()
+        for adj in adjacencies:
+            use_batchnorm = not has_virtual_node or adj[0] != max(visible_dims)
+            self.message_passing[adj] = ETNNMessagerLayer(
+                num_hidden,
+                self.num_features_map[adj],
+                num_layers,
+                batchnorm=use_batchnorm,
+            )
 
         # updates
         self.update = nn.ModuleDict()
         self.factor = {}
         for dim in self.visible_dims:
+            use_batchnorm = not has_virtual_node or dim != max(self.visible_dims)
             f = 1 + sum([adj_type[2] == str(dim) for adj_type in adjacencies])
             self.factor[str(dim)] = f
             self.update[str(dim)] = etnn_block(
-                f * num_hidden, num_hidden, num_hidden, num_layers, last_act=nn.Identity
+                f * num_hidden,
+                num_hidden,
+                num_hidden,
+                num_layers,
+                last_act=nn.Identity,
+                batchnorm=use_batchnorm,
             )
         if self.equivariant:
             self.pos_update = nn.Linear(num_hidden, 1)
@@ -127,10 +137,10 @@ class ETNNLayer(nn.Module):
 
 
 class ETNNMessagerLayer(nn.Module):
-    def __init__(self, num_hidden: int, num_inv: int, num_layers=1):
+    def __init__(self, num_hidden: int, num_inv: int, num_layers=1, **kwargs):
         super().__init__()
         self.message_mlp = etnn_block(
-            2 * num_hidden + num_inv, num_hidden, num_hidden, num_layers
+            2 * num_hidden + num_inv, num_hidden, num_hidden, num_layers, **kwargs
         )
         self.edge_inf_mlp = nn.Sequential(nn.Linear(num_hidden, 1), nn.Sigmoid())
 

@@ -78,6 +78,7 @@ class ETNN(nn.Module):
         diff_high_order: bool = False,
         pos_in_readout: bool = False,
         pos_dim: int = 2,
+        has_virtual_node: bool = False  # if so, removes Batch norm from top rank
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
@@ -110,6 +111,7 @@ class ETNN(nn.Module):
                     self.num_inv_fts_map,
                     equivariant=self.equivariant,
                     num_layers=depth_etnn_layers,
+                    has_virtual_node=has_virtual_node
                 )
                 for _ in range(num_layers)
             ]
@@ -133,12 +135,17 @@ class ETNN(nn.Module):
             )
 
         # initialize all layers
-        for layer in self.layers:
-            for m in layer.modules():
-                if isinstance(m, nn.Linear):
-                    nn.init.trunc_normal_(m.weight, std=0.2)
-                    if m.bias is not None:
-                        nn.init.constant_(m.bias, 0)
+        for name, param in self.named_parameters():
+            if "weight" in name:
+                nn.init.trunc_normal_(param, std=0.2)
+            if "bias" in name:
+                nn.init.constant_(param, 0)
+        # for layer in self.layers:
+        #     for m in layer.modules():
+        #         if isinstance(m, nn.Linear):
+        #             nn.init.trunc_normal_(m.weight, std=0.2)
+        #             if m.bias is not None:
+        #                 nn.init.constant_(m.bias, 0)
 
     def forward(self, graph: Data) -> Tensor:
         # nest cell indices from cat format

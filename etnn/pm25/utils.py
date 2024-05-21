@@ -8,6 +8,7 @@ from etnn.combinatorial_complexes import (
     CombinatorialComplexCollater,
 )
 
+
 class SpatialCC(InMemoryDataset):
     def __init__(
         self,
@@ -74,16 +75,15 @@ def add_pos_to_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
     data.x_0 = torch.cat([data.x_0, data.pos], dim=1)
     return data
 
-
 def squash_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
     x_0 = data.x_0
     for key, tensor in data.items():
         if key.startswith("x_") and key != "x_0":
-            #extract i from key
+            # extract i from key
             i = key.split("_")[1]
             x_0 = torch.cat((x_0, tensor[getattr(data, "index_" + i)]), dim=1)
             # remove the original tensor
-            delattr(data, key) # inplace
+            delattr(data, key)  # inplace
         elif key.startswith("adj_") and key != "adj_0_0":
             delattr(data, key)
         elif key.startswith("cell_") and key != "cell_0":
@@ -92,6 +92,7 @@ def squash_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
             delattr(data, key)
     data.x_0 = x_0
     return data
+
 
 def create_mask(
     data: CombinatorialComplexData, rate: float = 0.1, seed: int | None = None
@@ -115,7 +116,18 @@ def create_mask(
 
 
 def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData:
-    pass
+    # add a rank 3 tensor to x_0 with a single one dimension feature vector 0.0
+    data.x_3 = torch.tensor([[0.0]]).to(data.pos.device)
+    # add the 0-cell with 2 atoms
+    data.cell_3 = torch.tensor([0]).to(data.pos.device)
+    data.lengths_3 = torch.tensor([1]).to(data.pos.device)
+
+    # connect every two cell
+    data.adj_3_2 = torch.tensor([[0, i] for i in range(len(data.lengths_2))]).T.to(
+        data.pos.device
+    )
+
+    return data
 
 
 if __name__ == "__main__":

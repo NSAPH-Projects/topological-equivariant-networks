@@ -135,6 +135,11 @@ def randomize_x0(data: CombinatorialComplexData) -> CombinatorialComplexData:
     data.x_0 = data.x_0[perm]
     return data
 
+def x1_labels(data: CombinatorialComplexData) -> CombinatorialComplexData:
+    # add a label to x_1
+    data.y = data.x_1[data.index_1][:, :1]
+    return data
+
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader

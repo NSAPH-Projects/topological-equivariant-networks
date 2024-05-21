@@ -29,3 +29,5 @@ dataset:
           rate: 0.25
         - _target_: etnn.pm25.utils.randomize_x0
           _partial_: true
+        - _target_: etnn.pm25.utils.x1_labels
+          _partial_: true

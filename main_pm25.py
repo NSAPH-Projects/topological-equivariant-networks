@@ -152,8 +152,8 @@ def main(cfg: DictConfig):
         opt.zero_grad()
         outputs = model(batch)
         mask = batch.mask  # 1-0 mask of nodes used for training
-        loss_terms = loss_fn(outputs["0"].squeeze(-1), batch.y.squeeze(-1))
-        train_loss = (loss_terms * mask).sum() / mask.sum()
+        loss_terms = loss_fn(outputs["0"], batch.y)
+        train_loss = (loss_terms * mask.unsqueeze(-1)).sum() / mask.sum()
         train_loss.backward()  # backpropagate
         if cfg.training.clip is not None:
             torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
@@ -165,7 +165,7 @@ def main(cfg: DictConfig):
 
         # == end training step ==
         err2 = (outputs["0"].squeeze(-1) - batch.y.squeeze(-1)).pow(2)
-        eval_loss = (err2 * (1 - mask)).sum() / (1 - mask).sum()
+        eval_loss = (err2 * (1 - mask.unsqueeze(-1))).sum() / (1 - mask).sum()
 
         epoch_metrics["train_loss"].append(train_loss.item())
         epoch_metrics["eval_loss"].append(eval_loss.item())

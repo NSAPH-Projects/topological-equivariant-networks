@@ -154,7 +154,7 @@ def main(cfg: DictConfig):
         # == training step ==
         opt.zero_grad()
         outputs = model(batch)
-        mask = batch.mask  # 1-0 mask of nodes used for training
+        mask = batch.mask.bool()  # 1-0 mask of nodes used for training
         pred_train = outputs["0"].squeeze()[mask]
         target_train = batch.y.squeeze()[mask]
         loss_terms = loss_fn(pred_train, target_train)

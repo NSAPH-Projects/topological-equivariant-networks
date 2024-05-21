@@ -27,7 +27,7 @@ class SpatialCC(InMemoryDataset):
 
     @property
     def raw_file_names(self):
-        return ["point_to_cell.csv", "spatial_cc.json", "spatial_cc2.json"]
+        return ["point_to_cell.csv", "spatial_cc.json", "point_to_cell2.parquet", "spatial_cc2.json"]
 
     @property
     def processed_file_names(self):
@@ -38,16 +38,19 @@ class SpatialCC(InMemoryDataset):
         if self.version == "v1":
             path = f"{self.raw_dir}/{self.raw_file_names[1]}"
         elif self.version == "v2":
-            path = f"{self.raw_dir}/{self.raw_file_names[2]}"
+            path = f"{self.raw_dir}/{self.raw_file_names[3]}"
         else:
             raise ValueError("Version not supported")
         data = CombinatorialComplexData.from_json(path)
         data_list = [data]
 
         # Add road, tract indictor in the data
-        tract_indicator = pd.read_csv(f"{self.raw_dir}/{self.raw_file_names[0]}")
-        data.index_1 = torch.tensor(tract_indicator.road.values).to(data.pos.device)
-        data.index_2 = torch.tensor(tract_indicator.tract.values).to(data.pos.device)
+        if self.version == "v1":
+            node_cell_indicator = pd.read_csv(f"{self.raw_dir}/{self.raw_file_names[0]}")
+        elif self.version == "v2":
+            node_cell_indicator = pd.read_parquet(f"{self.raw_dir}/{self.raw_file_names[2]}")
+        data.index_1 = node_cell_indicator.road.values
+        data.index_2 = node_cell_indicator.tract.values
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
@@ -112,7 +115,10 @@ def squash_cc(data: CombinatorialComplexData, soft: bool = False) -> Combinatori
         if key.startswith("x_") and key != "x_0":
             # extract i from key
             i = key.split("_")[1]
-            x_0 = torch.cat((x_0, tensor[getattr(data, "index_" + i)]), dim=1)
+            # x_0 = torch.cat((x_0, tensor[getattr(data, "index_" + i)]), dim=1)
+            index_i = getattr(data, "index_" + i)
+            agg_feats = torch.stack([tensor[ix.tolist()].mean(0) for ix in index_i])
+            x_0 = torch.cat((x_0, agg_feats), dim=1)
             # remove the original tensor
         if not soft:
             if key.startswith("x_") and key != "x_0":
@@ -128,7 +134,7 @@ def squash_cc(data: CombinatorialComplexData, soft: bool = False) -> Combinatori
 
 
 def create_mask(
-    data: CombinatorialComplexData, rate: float = 0.25, seed: int | None = None
+    data: CombinatorialComplexData, rate: float = 0.2, seed: int | None = None
 ) -> CombinatorialComplexData:
     cell_2 = data.cell_2
     lengths_2 = data.lengths_2
@@ -168,8 +174,10 @@ def randomize(data: CombinatorialComplexData, keys=["x_0"]) -> CombinatorialComp
     # permute the x_0
     for key, val in data.items():
         if key in keys:
-            perm = torch.randperm(val.shape[0]).to(val.device)
-            setattr(data, key, val[perm])
+            new_val = torch.randn(val.shape).to(val.device) * 0.001
+            setattr(data, key, new_val)
+            # perm = torch.randperm(val.shape[0]).to(val.device)
+            # setattr(data, key, val[perm])
     return data
 
 

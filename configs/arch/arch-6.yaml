@@ -1,6 +1,7 @@
 #@package _global_
 defaults:
-  - override /loss_fn: mse
+  - _self_
+  - override /loss_fn: huber
 
 model:
   num_out: 1
@@ -8,11 +9,11 @@ model:
   num_layers: 4
   num_readout_layers: 1
   depth_etnn_layers: 1
-  dropout: 0.1
+  dropout: 0.5
 
 optimizer:
   lr: 0.01
-  weight_decay: 1e-4
+  weight_decay: 1e-3
 
 training:
   clip: 10.0
@@ -26,12 +27,12 @@ dataset:
       - - _target_: etnn.pm25.utils.create_mask
           _partial_: true
           seed: ${seed}
-          rate: 0.25
+          rate: 0.2
         # - _target_: etnn.pm25.utils.randomize
         #   _partial_: true
         #   keys: ['x_0']
         # - _target_: etnn.pm25.utils.x1_labels
         #   _partial_: true
-        # - _target_: etnn.pm25.utils.squash_cc
-        #   _partial_: true
-        #   soft: true
+        - _target_: etnn.pm25.utils.squash_cc
+          _partial_: true
+          soft: true

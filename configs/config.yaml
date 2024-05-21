@@ -16,7 +16,7 @@ training_name: ${hydra:runtime.choices.training}
 ckpt_prefix: null
 
 dataset:
-  version: v1
+  version: v2
 
 model:
   # defaults, other params changed by the runtime choices such as baseline, etc
@@ -35,7 +35,7 @@ collate_fn:
 
 training:
   # defaults, other params cchanged by training/ config files
-  clip: 10.0
+  clip: null
 
 wandb:
   entity: ten-harvard
@@ -50,8 +50,8 @@ wandb:
 
 optimizer:
   _target_: torch.optim.Adam
-  lr: 0.0003
-  weight_decay: 1e-6
+  lr: 0.01
+  weight_decay: 1e-4
 
 lr_scheduler:
   _target_: torch.optim.lr_scheduler.CosineAnnealingLR

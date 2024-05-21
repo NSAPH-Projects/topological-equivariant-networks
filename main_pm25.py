@@ -174,13 +174,10 @@ def main(cfg: DictConfig):
         model.eval()
         if model.dropout > 0:
             with torch.no_grad():
-                outputs_eval = model(batch)
+                pred_eval = model(batch)['0'].squeeze()[~mask]
         else:
-            outputs_eval = outputs.detach()
-
-        m_ = mask.squeeze().cpu().numpy().astype(bool)
-        pred_eval = outputs_eval["0"].detach().squeeze().cpu().numpy()[~m_]
-        target_eval = batch.y.squeeze().cpu().numpy()[~m_]
+            pred_eval = outputs["0"].squeeze().detach()[~mask]
+        target_eval = batch.y.squeeze()[~mask]
         eval_loss = (pred_eval - target_eval).var() / target_eval.var()
 
         epoch_metrics["train_loss"].append(train_loss.item())
@@ -204,11 +201,11 @@ def main(cfg: DictConfig):
 
         if epoch % (cfg.training.max_epochs // 10) == 0:
             fig, ax = plt.subplots(1, 2, figsize=(8, 4))
-            ax[0].scatter(target_train, pred_train.detach(), alpha=0.05)
+            ax[0].scatter(target_train, pred_train.detach(), alpha=0.1)
             ax[0].set_title("Train")
             ax[0].set_ylabel("Predicted")
             ax[0].set_xlabel("Real")
-            ax[1].scatter(target_eval, pred_eval, alpha=0.2)
+            ax[1].scatter(target_eval, pred_eval, alpha=0.3)
             ax[1].set_title("Eval")
             ax[1].set_ylabel("Predicted")
             ax[1].set_xlabel("Real")

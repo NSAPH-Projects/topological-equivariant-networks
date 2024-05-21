@@ -793,7 +793,7 @@ def compute_invariants(
 # compute_invariants.num_features_map = defaultdict(lambda: 5)
 
 
-@torch.jit.script
+# @torch.jit.script
 def compute_invariants2(
     cell_ind: dict[str, list[list[int]]],
     pos: torch.FloatTensor,
@@ -840,6 +840,12 @@ def compute_invariants2(
     # compute distances
     for rank_pair, cell_pairs in adj.items():
         send_rank, recv_rank = rank_pair.split("_")
+
+        # check if reverse message has been computed
+        flipped_rank_pair = f"{recv_rank}_{send_rank}"
+        if flipped_rank_pair in inv_list:
+            inv_list[rank_pair] = inv_list[flipped_rank_pair]
+            continue
 
         # centroid dist
         centroids_send: Tensor = centroids[send_rank][cell_pairs[0]]

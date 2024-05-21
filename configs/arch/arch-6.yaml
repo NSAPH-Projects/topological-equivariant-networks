@@ -31,6 +31,6 @@ dataset:
           _partial_: true
         - _target_: etnn.pm25.utils.x1_labels
           _partial_: true
-        - _target_: etnn.pm25.utils.squash_cc
-          _partial_: true
-          soft: true
+        # - _target_: etnn.pm25.utils.squash_cc
+        #   _partial_: true
+        #   soft: true

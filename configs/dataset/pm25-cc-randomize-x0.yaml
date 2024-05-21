@@ -14,5 +14,3 @@ dataset:
           seed: ${seed}
         - _target_: etnn.pm25.utils.randomize_x0
           _partial_: true
-        - _target_: etnn.pm25.utils.standardize_y
-          _partial_: true

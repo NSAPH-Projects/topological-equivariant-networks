@@ -1,6 +1,5 @@
 #@package _global_
 defaults:
-  - override /dataset: pm25-cc-randomize-x0
   - override /loss_fn: mse
 
 model:
@@ -18,3 +17,13 @@ training:
 
 lr_scheduler:
   final_div_factor: 1
+
+dataset:
+  transform:
+    _target_: torch_geometric.transforms.compose.Compose
+    _args_:
+      - - _target_: etnn.pm25.utils.create_mask
+          _partial_: true
+          seed: ${seed}
+        - _target_: etnn.pm25.utils.randomize_x0
+          _partial_: true

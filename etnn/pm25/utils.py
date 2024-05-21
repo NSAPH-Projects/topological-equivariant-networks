@@ -75,6 +75,27 @@ def add_pos_to_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
     data.x_0 = torch.cat([data.x_0, data.pos], dim=1)
     return data
 
+def squash_cc(data: CombinatorialComplexData, soft: bool = False) -> CombinatorialComplexData:
+    x_0 = data.x_0
+    for key, tensor in data.items():
+        if key.startswith("x_") and key != "x_0":
+            # extract i from key
+            i = key.split("_")[1]
+            x_0 = torch.cat((x_0, tensor[getattr(data, "index_" + i)]), dim=1)
+            # remove the original tensor
+        if not soft:
+            if key.startswith("x_") and key != "x_0":
+                delattr(data, key)  # inplace
+            elif key.startswith("adj_") and key != "adj_0_0":
+                delattr(data, key)
+            elif key.startswith("cell_") and key != "cell_0":
+                delattr(data, key)
+            elif key.startswith("lengths_") and key != "lengths_0":
+                delattr(data, key)
+    data.x_0 = x_0
+    return data
+
+
 def squash_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
     x_0 = data.x_0
     for key, tensor in data.items():

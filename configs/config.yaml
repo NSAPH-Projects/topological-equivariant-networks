@@ -15,9 +15,13 @@ loss_fn_name: ${hydra:runtime.choices.loss_fn}
 training_name: ${hydra:runtime.choices.training}
 ckpt_prefix: null
 
+dataset:
+  version: v1
+
 model:
   # defaults, other params changed by the runtime choices such as baseline, etc
   _target_: etnn.models.ETNN
+  dropout: 0.0
 
 loader:
   _target_: torch.utils.data.DataLoader 
@@ -50,8 +54,6 @@ optimizer:
   weight_decay: 1e-6
 
 lr_scheduler:
-  _target_: torch.optim.lr_scheduler.OneCycleLR
-  max_lr: 0.001
-  final_div_factor: 10
-  epochs: ${training.max_epochs}
-  steps_per_epoch: 1
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  eta_min: 0.001
+  T_max: ${training.max_epochs}

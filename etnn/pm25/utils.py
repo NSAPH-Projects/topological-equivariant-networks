@@ -17,7 +17,9 @@ class SpatialCC(InMemoryDataset):
         pre_transform=None,
         pre_filter=None,
         force_reload=False,
+        version="v1",
     ):
+        self.version = version
         super().__init__(
             root, transform, pre_transform, pre_filter, force_reload=force_reload
         )
@@ -25,20 +27,25 @@ class SpatialCC(InMemoryDataset):
 
     @property
     def raw_file_names(self):
-        return ["spatial_cc.json", "point_to_cell.csv"]
+        return ["point_to_cell.csv", "spatial_cc.json", "spatial_cc2.json"]
 
     @property
     def processed_file_names(self):
-        return ["spatial_cc.pt"]
+        return [f"spatial_cc_{self.version}.pt"]
 
     def process(self):
         # Read data into huge `Data` list.
-        path = f"{self.raw_dir}/{self.raw_file_names[0]}"
+        if self.version == "v1":
+            path = f"{self.raw_dir}/{self.raw_file_names[1]}"
+        elif self.version == "v2":
+            path = f"{self.raw_dir}/{self.raw_file_names[2]}"
+        else:
+            raise ValueError("Version not supported")
         data = CombinatorialComplexData.from_json(path)
         data_list = [data]
 
         # Add road, tract indictor in the data
-        tract_indicator = pd.read_csv(f"{self.raw_dir}/{self.raw_file_names[1]}")
+        tract_indicator = pd.read_csv(f"{self.raw_dir}/{self.raw_file_names[0]}")
         data.index_1 = torch.tensor(tract_indicator.road.values).to(data.pos.device)
         data.index_2 = torch.tensor(tract_indicator.tract.values).to(data.pos.device)
 
@@ -121,7 +128,7 @@ def squash_cc(data: CombinatorialComplexData, soft: bool = False) -> Combinatori
 
 
 def create_mask(
-    data: CombinatorialComplexData, rate: float = 0.1, seed: int | None = None
+    data: CombinatorialComplexData, rate: float = 0.25, seed: int | None = None
 ) -> CombinatorialComplexData:
     cell_2 = data.cell_2
     lengths_2 = data.lengths_2
@@ -152,6 +159,7 @@ def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData
     data.adj_3_2 = torch.tensor([[0, i] for i in range(len(data.lengths_2))]).T.to(
         data.pos.device
     )
+    data.adj_2_3 = data.adj_3_2.flip(0)
 
     return data
 

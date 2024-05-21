@@ -2,6 +2,7 @@ from functools import partial
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import Tensor
 from torch_geometric.data import Data
 from copy import deepcopy
@@ -78,7 +79,8 @@ class ETNN(nn.Module):
         diff_high_order: bool = False,
         pos_in_readout: bool = False,
         pos_dim: int = 2,
-        has_virtual_node: bool = False  # if so, removes Batch norm from top rank
+        has_virtual_node: bool = False,  # if so, removes Batch norm from top rank
+        dropout: float = 0.0,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
@@ -93,6 +95,7 @@ class ETNN(nn.Module):
         self.finv = partial(
             compute_invariants2, hausdorff=hausdorff, diff_high_order=diff_high_order
         )
+        self.dropout = dropout
 
         self.feature_embedding = nn.ModuleDict()
         out_dim = num_hidden if num_readout_layers > 0 else num_out
@@ -111,7 +114,8 @@ class ETNN(nn.Module):
                     self.num_inv_fts_map,
                     equivariant=self.equivariant,
                     num_layers=depth_etnn_layers,
-                    has_virtual_node=has_virtual_node
+                    has_virtual_node=has_virtual_node,
+                    dropout=dropout,
                 )
                 for _ in range(num_layers)
             ]
@@ -123,7 +127,7 @@ class ETNN(nn.Module):
 
         for dim in self.visible_dims:
             dim_in = num_hidden
-            if dim == '0' and pos_in_readout:
+            if dim == "0" and pos_in_readout:
                 dim_in += pos_dim
             self.readout[str(dim)] = etnn_block(
                 dim_in,
@@ -131,6 +135,7 @@ class ETNN(nn.Module):
                 num_out,
                 num_readout_layers,
                 batchnorm=False,
+                dropout=dropout,
                 last_act=nn.Identity,
             )
 
@@ -189,12 +194,16 @@ class ETNN(nn.Module):
                 if self.invariants:
                     inv = self.finv(cell_ind_inv, pos, adj, agg_indices)
 
+        # if dropout
+        if self.dropout > 0:
+            x = {dim: F.dropout(feat, p=self.dropout) for dim, feat in x.items()}
+
         # readout
         if self.pos_in_readout:
-            x['0'] = torch.cat([x['0'], pos], dim=1)
+            x["0"] = torch.cat([x["0"], pos], dim=1)
 
         if self.num_readout_layers > 0:
-            x = {dim: self.readout[dim](feature) for dim, feature in x.items()}
+            x = {dim: self.readout[dim](feat) for dim, feat in x.items()}
 
         return x
 

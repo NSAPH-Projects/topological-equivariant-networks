@@ -2,6 +2,7 @@ from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import Tensor
 from etnn.utils import scatter_add
 
@@ -17,6 +18,7 @@ def etnn_block(
     last_act: nn.Module | None = None,
     batchnorm: bool = True,
     batchnorm_always: bool = True,
+    dropout: float = 0.0,
 ):
     if act is None:
         act = nn.Identity
@@ -27,6 +29,8 @@ def etnn_block(
         last_act = act
     dim_prev = dim_in
     for i in range(num_layers):
+        if dropout > 0:
+            layers.append(nn.Dropout(p=dropout))
         dim_next = dim_out if i == num_layers - 1 else dim_hidden
         act_next = act if i != num_layers - 1 else last_act
         layers.extend([nn.Linear(dim_prev, dim_next), act_next()])
@@ -55,6 +59,7 @@ class ETNNLayer(nn.Module):
         num_layers: int = 1,
         equivariant: bool = True,
         has_virtual_node: bool = False,
+        dropout: float = 0.0,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
@@ -71,10 +76,12 @@ class ETNNLayer(nn.Module):
                 self.num_features_map[adj],
                 num_layers,
                 batchnorm=use_batchnorm,
+                dropout=dropout,
             )
 
         # updates
         self.update = nn.ModuleDict()
+        self.acts = nn.ModuleDict()
         self.factor = {}
         for dim in self.visible_dims:
             use_batchnorm = not has_virtual_node or dim != max(self.visible_dims)
@@ -85,9 +92,11 @@ class ETNNLayer(nn.Module):
                 num_hidden,
                 num_hidden,
                 num_layers,
+                dropout=dropout,
                 last_act=nn.Identity,
                 batchnorm=use_batchnorm,
             )
+
         if self.equivariant:
             self.pos_update = nn.Linear(num_hidden, 1)
             nn.init.trunc_normal_(self.pos_update.weight, std=0.02)
@@ -126,7 +135,7 @@ class ETNNLayer(nn.Module):
             send_key, rec_key = adj_type.split("_")[:2]
             h[rec_key] = torch.cat((h[rec_key], adj_mes), dim=1)
         h = {dim: layer_(h[dim]) for dim, layer_ in self.update.items()}
-        x = {dim: feature + h[dim] for dim, feature in x.items()}
+        x = {dim: F.silu(feature + h[dim]) for dim, feature in x.items()}
 
         if self.equivariant:
             pos_delta = self.get_pos_delta(pos, mes, adj)
@@ -140,7 +149,12 @@ class ETNNMessagerLayer(nn.Module):
     def __init__(self, num_hidden: int, num_inv: int, num_layers=1, **kwargs):
         super().__init__()
         self.message_mlp = etnn_block(
-            2 * num_hidden + num_inv, num_hidden, num_hidden, num_layers, **kwargs
+            2 * num_hidden + num_inv,
+            num_hidden,
+            num_hidden,
+            num_layers,
+            last_act=nn.Identity,
+            **kwargs
         )
         self.edge_inf_mlp = nn.Sequential(nn.Linear(num_hidden, 1), nn.Sigmoid())
 

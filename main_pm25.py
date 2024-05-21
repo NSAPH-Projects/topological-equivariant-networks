@@ -2,6 +2,8 @@ import os
 import json
 import hydra
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
 import wandb
 import torch
 from hydra.utils import instantiate
@@ -17,6 +19,8 @@ from torch.optim.lr_scheduler import LRScheduler
 from etnn.models import ETNN
 from etnn.utils import set_seed
 
+# change matplotlib backend to avoid conflicts with vscode
+matplotlib.use("TkAgg")
 
 def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
     current_device = next(model.parameters()).device
@@ -136,14 +140,13 @@ def main(cfg: DictConfig):
             if isinstance(v, torch.Tensor):
                 state[k] = v.to(dev)
 
-    model.train()
-
     # since only one batch is used, move it to the device
     batch = batch.to(dev)
 
     # get training params from config
     pbar = trange(start_epoch, cfg.training.max_epochs, desc="", leave=True)
     for epoch in pbar:
+        model.train()
         epoch_metrics = defaultdict(list)
         # for batch in loader:
         # batch = batch.to(dev)
@@ -151,9 +154,11 @@ def main(cfg: DictConfig):
         # == training step ==
         opt.zero_grad()
         outputs = model(batch)
-        mask = batch.mask.unsqueeze(-1)  # 1-0 mask of nodes used for training
-        loss_terms = loss_fn(outputs["0"], batch.y)
-        train_loss = (loss_terms * mask).sum() / mask.sum()
+        mask = batch.mask  # 1-0 mask of nodes used for training
+        pred_train = outputs["0"].squeeze()[mask]
+        target_train = batch.y.squeeze()[mask]
+        loss_terms = loss_fn(pred_train, target_train)
+        train_loss = loss_terms.mean()
         train_loss.backward()  # backpropagate
         if cfg.training.clip is not None:
             torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
@@ -164,8 +169,19 @@ def main(cfg: DictConfig):
             torch.cuda.empty_cache()
 
         # == end training step ==
-        err2 = (outputs["0"] - batch.y).pow(2)
-        eval_loss = (err2 * (1 - mask)).sum() / (1 - mask).sum()
+
+        # == eval step ===
+        model.eval()
+        if model.dropout > 0:
+            with torch.no_grad():
+                outputs_eval = model(batch)
+        else:
+            outputs_eval = outputs.detach()
+
+        m_ = mask.squeeze().cpu().numpy().astype(bool)
+        pred_eval = outputs_eval["0"].detach().squeeze().cpu().numpy()[~m_]
+        target_eval = batch.y.squeeze().cpu().numpy()[~m_]
+        eval_loss = (pred_eval - target_eval).var() / target_eval.var()
 
         epoch_metrics["train_loss"].append(train_loss.item())
         epoch_metrics["eval_loss"].append(eval_loss.item())
@@ -185,6 +201,21 @@ def main(cfg: DictConfig):
         # log metrics to wandb and to a file
         mean_metrics = {k: np.mean(v) for k, v in epoch_metrics.items()}
         wandb.log(mean_metrics, step=epoch)
+
+        if epoch % (cfg.training.max_epochs // 10) == 0:
+            pred_train = pred.detach().cpu().numpy()
+            target_train = target.cpu().numpy()
+            fig, ax = plt.subplots(1, 2, figsize=(8, 4))
+            ax[0].scatter(real_train, pred_train, alpha=0.05)
+            ax[0].set_title("Train")
+            ax[0].set_ylabel("Predicted")
+            ax[0].set_xlabel("Real")
+            ax[1].scatter(target_eval, pred_eval, alpha=0.2)
+            ax[1].set_title("Eval")
+            ax[1].set_ylabel("Predicted")
+            ax[1].set_xlabel("Real")
+            wandb.log({"scatter": wandb.Image(fig)}, step=epoch)
+            plt.close(fig)
 
         logline = json.dumps({"epoch": epoch, **mean_metrics})
         with open(f"checkpoints/{cfg.baseline_name}_{cfg.seed}.jsonl", "a") as f:

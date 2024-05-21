@@ -4,27 +4,22 @@ defaults:
 
 model:
   num_out: 1
-  num_hidden: 8
+  num_hidden: 32
   num_layers: 4
   num_readout_layers: 1
   depth_etnn_layers: 1
+  dropout: 0.1
 
 optimizer:
-  weight_decay: 1e-10
-  lr: 0.003
+  lr: 0.01
+  weight_decay: 1e-4
 
 training:
-  clip: null
-
-lr_scheduler:
-  max_lr: 0.01
-  final_div_factor: 10
-  epochs: ${training.max_epochs}
-  steps_per_epoch: 1
-
+  clip: 10.0
 
 # this one will fail with graphs
 dataset:
+  version: v2
   transform:
     _target_: torch_geometric.transforms.compose.Compose
     _args_:
@@ -32,11 +27,11 @@ dataset:
           _partial_: true
           seed: ${seed}
           rate: 0.25
-        - _target_: etnn.pm25.utils.randomize
-          _partial_: true
-          keys: ['x_0']
+        # - _target_: etnn.pm25.utils.randomize
+        #   _partial_: true
+        #   keys: ['x_0']
         # - _target_: etnn.pm25.utils.x1_labels
         #   _partial_: true
-        - _target_: etnn.pm25.utils.squash_cc
-          _partial_: true
-          soft: true
+        # - _target_: etnn.pm25.utils.squash_cc
+        #   _partial_: true
+        #   soft: true

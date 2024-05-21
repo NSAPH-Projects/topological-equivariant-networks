@@ -14,6 +14,3 @@ optimizer:
 
 training:
   clip: null
-
-lr_scheduler:
-  final_div_factor: 1

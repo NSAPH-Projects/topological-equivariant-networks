@@ -12,7 +12,6 @@ model:
 optimizer:
   weight_decay: 1e-10
   lr: 0.003
-  weight_decay: 1e-6
 
 training:
   clip: null

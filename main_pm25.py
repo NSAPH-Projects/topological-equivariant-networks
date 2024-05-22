@@ -153,6 +153,7 @@ def main(cfg: DictConfig):
 
     # get training params from config
     pbar = trange(start_epoch, cfg.training.max_epochs, desc="", leave=True)
+    epochs_without_improvement = 0
     for epoch in pbar:
         model.train()
         epoch_metrics = defaultdict(list)
@@ -202,6 +203,16 @@ def main(cfg: DictConfig):
         # update lr scheduler
         sched.step()
 
+        # save checkpoint
+        save_checkpoint(epoch, model, opt, sched, run_id, checkpoint_path)
+
+        # log metrics to wandb and to a file
+        mean_metrics = {k: np.mean(v) for k, v in epoch_metrics.items()}
+        wandb.log(mean_metrics, step=epoch)
+        logline = json.dumps({"epoch": epoch, **mean_metrics})
+        with open(f"checkpoints/{cfg.baseline_name}_{cfg.seed}.jsonl", "a") as f:
+            f.write(logline + "\n")
+
         # save checkpoint if validation R2 improves
         if val_r2 > best_val_r2:
             best_val_r2 = val_r2
@@ -209,9 +220,14 @@ def main(cfg: DictConfig):
             wandb.run.summary["best_val_r2"] = val_r2
             wandb.run.summary["best_model_test_r2"] = test_r2
             wandb.run.summary["best_model_test_mse"] = test_mse
-
-        # save checkpoint
-        save_checkpoint(epoch, model, opt, sched, run_id, checkpoint_path)
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement > cfg.training.patience:
+                print(
+                    f"Early stopping at epoch {epoch}. Best model test R2: {best_model_test_r2:.4f}"
+                )
+                break
 
         # update progress bar
         msg = [
@@ -222,10 +238,6 @@ def main(cfg: DictConfig):
         msg = ", ".join(msg)
         pbar.set_description(msg)
         pbar.refresh()
-
-        # log metrics to wandb and to a file
-        mean_metrics = {k: np.mean(v) for k, v in epoch_metrics.items()}
-        wandb.log(mean_metrics, step=epoch)
 
         # if epoch % (cfg.training.max_epochs // 3) == 0:
         #     fig, ax = plt.subplots(1, 2, figsize=(8, 4))
@@ -240,9 +252,6 @@ def main(cfg: DictConfig):
         #     wandb.log({"scatter": wandb.Image(fig)}, step=epoch)
         #     plt.close(fig)
 
-        logline = json.dumps({"epoch": epoch, **mean_metrics})
-        with open(f"checkpoints/{cfg.baseline_name}_{cfg.seed}.jsonl", "a") as f:
-            f.write(logline + "\n")
 
 
 if __name__ == "__main__":

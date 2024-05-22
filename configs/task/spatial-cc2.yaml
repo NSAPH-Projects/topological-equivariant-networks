@@ -28,6 +28,7 @@ training:
   # defaults, other params changed by training/ config files
   max_epochs: 500
   clip: 1.0
+  patience: 50  # max number of epochs without improvement
 
 wandb:
   entity: ten-harvard

@@ -20,7 +20,7 @@ from etnn.models import ETNN
 from etnn.utils import set_seed
 
 # change matplotlib backend to avoid conflicts with vscode
-matplotlib.use("TkAgg")
+# matplotlib.use("TkAgg")
 
 
 def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
@@ -227,18 +227,18 @@ def main(cfg: DictConfig):
         mean_metrics = {k: np.mean(v) for k, v in epoch_metrics.items()}
         wandb.log(mean_metrics, step=epoch)
 
-        if epoch % (cfg.training.max_epochs // 3) == 0:
-            fig, ax = plt.subplots(1, 2, figsize=(8, 4))
-            ax[0].scatter(target_train, pred_train.detach(), alpha=0.1)
-            ax[0].set_title("Train")
-            ax[0].set_ylabel("Predicted")
-            ax[0].set_xlabel("Real")
-            ax[1].scatter(target_val, pred_val, alpha=0.5)
-            ax[1].set_title("Eval")
-            ax[1].set_ylabel("Predicted")
-            ax[1].set_xlabel("Real")
-            wandb.log({"scatter": wandb.Image(fig)}, step=epoch)
-            plt.close(fig)
+        # if epoch % (cfg.training.max_epochs // 3) == 0:
+        #     fig, ax = plt.subplots(1, 2, figsize=(8, 4))
+        #     ax[0].scatter(target_train, pred_train.detach(), alpha=0.1)
+        #     ax[0].set_title("Train")
+        #     ax[0].set_ylabel("Predicted")
+        #     ax[0].set_xlabel("Real")
+        #     ax[1].scatter(target_val, pred_val, alpha=0.5)
+        #     ax[1].set_title("Eval")
+        #     ax[1].set_ylabel("Predicted")
+        #     ax[1].set_xlabel("Real")
+        #     wandb.log({"scatter": wandb.Image(fig)}, step=epoch)
+        #     plt.close(fig)
 
         logline = json.dumps({"epoch": epoch, **mean_metrics})
         with open(f"checkpoints/{cfg.baseline_name}_{cfg.seed}.jsonl", "a") as f:

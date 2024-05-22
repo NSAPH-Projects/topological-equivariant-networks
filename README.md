@@ -3,7 +3,7 @@ Topological Equivariant Networks (TEN)
 
 ## Setup instructions
 ```
-git clone git@github.com:NSAPH-Projects/topological-equivariant-networks.git
+git clone https://anonymous.4open.science/r/topological-equivariant-networks-06C9
 cd topological-equivariant-networks
 chmod +x env_builder.sh
 source env_builder.sh

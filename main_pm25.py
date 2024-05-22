@@ -22,6 +22,7 @@ from etnn.utils import set_seed
 # change matplotlib backend to avoid conflicts with vscode
 matplotlib.use("TkAgg")
 
+
 def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
     current_device = next(model.parameters()).device
     torch.save(
@@ -39,14 +40,15 @@ def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
 
 def load_checkpoint(filepath, model, optimizer, scheduler):
     if os.path.isfile(filepath):
-        checkpoint = torch.load(filepath)
         curr_dev = next(model.parameters()).device
         model = model.to("cpu")
         # try loading in cpu and if it fails try cuda
         try:
+            checkpoint = torch.load(filepath)
             model.load_state_dict(checkpoint["model_state_dict"])
         except RuntimeError:
-            model.load_state_dict(checkpoint["model_state_dict"], map_location="cuda")
+            checkpoint = torch.load(filepath, map_location="cuda")
+            model.load_state_dict(checkpoint["model_state_dict"])
         model = model.to(curr_dev)
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
@@ -69,7 +71,7 @@ def main(cfg: DictConfig):
     loader: DataLoader = instantiate(cfg.loader, dataset, collate_fn=collate_fn)
 
     # determine number of features per rank
-    batch = next(iter(loader))   # get the first element to compute number of features
+    batch = next(iter(loader))  # get the first element to compute number of features
     # to create the model
     num_feats = {
         k.split("_")[1]: v.shape[1] for k, v in batch.items() if k.startswith("x_")
@@ -80,7 +82,7 @@ def main(cfg: DictConfig):
     adjacencies = list(sorted(adjacencies, reverse=True))
 
     # instantiate model, optimizer, learning rate scheduler, loss fn
-    has_virtual_node = ("virtual" in cfg.dataset_name)
+    has_virtual_node = "virtual" in cfg.dataset_name
     model: ETNN = instantiate(
         cfg.model,
         num_features_per_rank=num_feats,
@@ -101,7 +103,10 @@ def main(cfg: DictConfig):
 
     # Check for force restart flag
     if not cfg.force_restart:
-        start_epoch, run_id, = load_checkpoint(checkpoint_path, model, opt, sched)
+        (
+            start_epoch,
+            run_id,
+        ) = load_checkpoint(checkpoint_path, model, opt, sched)
     else:
         start_epoch, run_id = 0, None
 
@@ -141,7 +146,10 @@ def main(cfg: DictConfig):
                 state[k] = v.to(dev)
 
     # since only one batch is used, move it to the device
-    batch = batch.to(dev)
+    batch = batch.to(dev)  # TODO: remove
+
+    best_val_r2 = float("-inf")
+    best_model_test_r2 = float("-inf")
 
     # get training params from config
     pbar = trange(start_epoch, cfg.training.max_epochs, desc="", leave=True)
@@ -154,9 +162,9 @@ def main(cfg: DictConfig):
         # == training step ==
         opt.zero_grad()
         outputs = model(batch)
-        mask = batch.mask.bool()  # 1-0 mask of nodes used for training
-        pred_train = outputs["0"].squeeze()[mask]
-        target_train = batch.y.squeeze()[mask]
+        training_mask = batch.training_mask  # 1-0 mask of nodes used for training
+        pred_train = outputs["0"].squeeze()[training_mask]
+        target_train = batch.y.squeeze()[training_mask]
         loss_terms = loss_fn(pred_train, target_train)
         train_loss = loss_terms.mean()
         train_loss.backward()  # backpropagate
@@ -174,24 +182,44 @@ def main(cfg: DictConfig):
         model.eval()
         if model.dropout > 0:
             with torch.no_grad():
-                pred_eval = model(batch)['0'].squeeze()[~mask]
+                pred_eval = model(batch)["0"].squeeze()
         else:
-            pred_eval = outputs["0"].squeeze().detach()[~mask]
-        target_eval = batch.y.squeeze()[~mask]
-        eval_loss = (pred_eval - target_eval).var() / target_eval.var()
+            pred_eval = outputs["0"].squeeze().detach()
+        pred_test = pred_eval[batch.test_mask]
+        pred_val = pred_eval[batch.validation_mask]
+        target_test = batch.y.squeeze()[batch.test_mask]
+        target_val = batch.y.squeeze()[batch.validation_mask]
+
+        val_r2 = 1 - (pred_val - target_val).var() / target_val.var()
+        test_r2 = 1 - (pred_test - target_test).var() / target_test.var()
+        test_mse = (pred_test - target_test).pow(2).mean()
 
         epoch_metrics["train_loss"].append(train_loss.item())
-        epoch_metrics["eval_loss"].append(eval_loss.item())
+        epoch_metrics["val_r2"].append(val_r2.item())
+        epoch_metrics["test_r2"].append(test_r2.item())
         epoch_metrics["lr"].append(opt.param_groups[0]["lr"])
 
         # update lr scheduler
         sched.step()
 
+        # save checkpoint if validation R2 improves
+        if val_r2 > best_val_r2:
+            best_val_r2 = val_r2
+            best_model_test_r2 = test_r2
+            wandb.run.summary["best_val_r2"] = val_r2
+            wandb.run.summary["best_model_test_r2"] = test_r2
+            wandb.run.summary["best_model_test_mse"] = test_mse
+
         # save checkpoint
         save_checkpoint(epoch, model, opt, sched, run_id, checkpoint_path)
 
         # update progress bar
-        msg = f"Train loss: {train_loss.item():.4f}, Eval loss: {eval_loss.item():.4f}"
+        msg = [
+            f"Train loss: {train_loss.item():.4f}",
+            f"Val R2: {val_r2:.4f}",
+            f"Best Model Test R2: {best_model_test_r2:.4f}",
+        ]
+        msg = ", ".join(msg)
         pbar.set_description(msg)
         pbar.refresh()
 
@@ -199,13 +227,13 @@ def main(cfg: DictConfig):
         mean_metrics = {k: np.mean(v) for k, v in epoch_metrics.items()}
         wandb.log(mean_metrics, step=epoch)
 
-        if epoch % (cfg.training.max_epochs // 10) == 0:
+        if epoch % (cfg.training.max_epochs // 3) == 0:
             fig, ax = plt.subplots(1, 2, figsize=(8, 4))
             ax[0].scatter(target_train, pred_train.detach(), alpha=0.1)
             ax[0].set_title("Train")
             ax[0].set_ylabel("Predicted")
             ax[0].set_xlabel("Real")
-            ax[1].scatter(target_eval, pred_eval, alpha=0.3)
+            ax[1].scatter(target_val, pred_val, alpha=0.5)
             ax[1].set_title("Eval")
             ax[1].set_ylabel("Predicted")
             ax[1].set_xlabel("Real")

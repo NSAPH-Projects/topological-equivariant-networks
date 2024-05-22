@@ -27,7 +27,12 @@ class SpatialCC(InMemoryDataset):
 
     @property
     def raw_file_names(self):
-        return ["point_to_cell.csv", "spatial_cc.json", "point_to_cell2.parquet", "spatial_cc2.json"]
+        return [
+            "point_to_cell.csv",
+            "spatial_cc.json",
+            "point_to_cell2.parquet",
+            "spatial_cc2.json",
+        ]
 
     @property
     def processed_file_names(self):
@@ -46,9 +51,13 @@ class SpatialCC(InMemoryDataset):
 
         # Add road, tract indictor in the data
         if self.version == "v1":
-            node_cell_indicator = pd.read_csv(f"{self.raw_dir}/{self.raw_file_names[0]}")
+            node_cell_indicator = pd.read_csv(
+                f"{self.raw_dir}/{self.raw_file_names[0]}"
+            )
         elif self.version == "v2":
-            node_cell_indicator = pd.read_parquet(f"{self.raw_dir}/{self.raw_file_names[2]}")
+            node_cell_indicator = pd.read_parquet(
+                f"{self.raw_dir}/{self.raw_file_names[2]}"
+            )
         data.index_1 = node_cell_indicator.road.values
         data.index_2 = node_cell_indicator.tract.values
 
@@ -109,7 +118,9 @@ def squash_cc(
     return data
 
 
-def squash_cc(data: CombinatorialComplexData, soft: bool = False) -> CombinatorialComplexData:
+def squash_cc(
+    data: CombinatorialComplexData, soft: bool = False
+) -> CombinatorialComplexData:
     x_0 = data.x_0
     for key, tensor in data.items():
         if key.startswith("x_") and key != "x_0":
@@ -134,7 +145,7 @@ def squash_cc(data: CombinatorialComplexData, soft: bool = False) -> Combinatori
 
 
 def create_mask(
-    data: CombinatorialComplexData, rate: float = 0.2, seed: int | None = None
+    data: CombinatorialComplexData, rate: float = 0.3, seed: int | None = None
 ) -> CombinatorialComplexData:
     cell_2 = data.cell_2
     lengths_2 = data.lengths_2
@@ -142,14 +153,34 @@ def create_mask(
     n = len(lengths_2)
     m = int(rate * n)
     rng = np.random.default_rng(seed)
-    mask_vals = rng.choice(range(n), m, replace=False)
-    to_mask = []
-    for i in mask_vals:
-        to_mask.extend(cell_ind_2[i].tolist())
-    to_mask = np.array(to_mask)
-    masked = np.ones(len(data.lengths_0))
-    masked[np.array(list(to_mask))] = 0
-    data.mask = torch.tensor(masked).float().to(data.pos.device)
+    train_mask_cells = rng.choice(range(n), m, replace=False)
+    remaining_cells = list(set(range(n)) - set(train_mask_cells))
+    remaining_cells = np.random.permutation(remaining_cells)
+    val_mask_cells = remaining_cells[: ((n - m) // 2)]
+    test_mask_cells = remaining_cells[((n - m) // 2) :]
+
+    # create the mask
+    test = []
+    val = []
+    train = []
+    for i in range(n):
+        if i in train_mask_cells:
+            train.extend(cell_ind_2[i].tolist())
+        elif i in test_mask_cells:
+            test.extend(cell_ind_2[i].tolist())
+        elif i in val_mask_cells:
+            val.extend(cell_ind_2[i].tolist())
+
+    # create the mask
+    k = len(data.lengths_0)
+    dev = data.pos.device
+    data.training_mask = torch.zeros(k, dtype=torch.bool, device=dev)
+    data.validation_mask = torch.zeros(k, dtype=torch.bool, device=dev)
+    data.test_mask = torch.zeros(k, dtype=torch.bool, device=dev)
+
+    data.training_mask[train] = 1
+    data.validation_mask[val] = 1
+    data.test_mask[test] = 1
 
     return data
 

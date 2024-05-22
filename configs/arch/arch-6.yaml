@@ -5,18 +5,23 @@ defaults:
 
 model:
   num_out: 1
-  num_hidden: 32
+  num_hidden: 4
   num_layers: 4
   num_readout_layers: 1
   depth_etnn_layers: 1
-  dropout: 0.5
+  dropout: 0.25
 
 optimizer:
-  lr: 0.01
+  lr: 0.001
   weight_decay: 1e-3
 
+lr_scheduler:
+  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+  eta_min: 0.0003
+  T_max: ${training.max_epochs}
+
 training:
-  clip: 10.0
+  clip: 1.0
 
 # this one will fail with graphs
 dataset:
@@ -33,6 +38,6 @@ dataset:
         #   keys: ['x_0']
         # - _target_: etnn.pm25.utils.x1_labels
         #   _partial_: true
-        - _target_: etnn.pm25.utils.squash_cc
-          _partial_: true
-          soft: true
+        # - _target_: etnn.pm25.utils.squash_cc
+        #   _partial_: true
+        #   soft: true

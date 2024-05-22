@@ -1,7 +1,8 @@
 defaults:
   - _self_
   - loss_fn: huber
-  - training: fast
+  - task: spatial-cc2
+  - lr: low
   - dataset: pm25-cc
   - arch: arch-0
   - baseline: invariant
@@ -14,46 +15,3 @@ arch_name: ${hydra:runtime.choices.arch}
 loss_fn_name: ${hydra:runtime.choices.loss_fn}
 training_name: ${hydra:runtime.choices.training}
 ckpt_prefix: null
-
-dataset:
-  version: v2
-
-model:
-  # defaults, other params changed by the runtime choices such as baseline, etc
-  _target_: etnn.models.ETNN
-  dropout: 0.0
-
-loader:
-  _target_: torch.utils.data.DataLoader 
-  num_workers: 0
-  batch_size: 1
-  persistent_workers: false
-  pin_memory: true
-
-collate_fn:
-  _target_: etnn.combinatorial_complexes.CombinatorialComplexCollater
-
-training:
-  # defaults, other params cchanged by training/ config files
-  clip: null
-
-wandb:
-  entity: ten-harvard
-  project: spatial-cc
-  config:
-    baseline: ${hydra:runtime.choices.baseline}
-    seed: ${seed}
-    lr: ${optimizer.lr}
-    max_epochs: ${training.max_epochs}
-    loss_fn: ${hydra:runtime.choices.loss_fn}
-    clip: ${training.clip}
-
-optimizer:
-  _target_: torch.optim.Adam
-  lr: 0.01
-  weight_decay: 1e-4
-
-lr_scheduler:
-  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-  eta_min: 0.001
-  T_max: ${training.max_epochs}

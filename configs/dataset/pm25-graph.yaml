@@ -11,6 +11,7 @@ dataset:
     _args_:
       - - _target_: etnn.pm25.utils.create_mask
           _partial_: true
-          seed: ${seed}   
+          seed: ${seed}
+          rate: 0.3
         - _target_: etnn.pm25.utils.squash_cc
           _partial_: true

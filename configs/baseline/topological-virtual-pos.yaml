@@ -1,7 +1,7 @@
 #@package _global_
 model:
-  equivariant: true
-  hausdorff: true
+  invariants: false
+
 
 dataset:
   version: v2

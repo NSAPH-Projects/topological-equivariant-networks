@@ -1,6 +1,16 @@
 #@package _global_
-defaults:
-  - override /dataset: pm25-cc-pos
-
 model:
   invariants: false
+
+
+dataset:
+  version: v2
+  transform:
+    _target_: torch_geometric.transforms.compose.Compose
+    _args_:
+      - - _target_: etnn.pm25.utils.create_mask
+          _partial_: true
+          seed: ${seed}
+          rate: 0.3
+        - _target_: etnn.pm25.utils.add_pos_to_cc
+          _partial_: true

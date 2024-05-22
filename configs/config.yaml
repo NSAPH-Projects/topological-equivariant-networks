@@ -4,7 +4,7 @@ defaults:
   - task: spatial-cc2
   - lr: low
   - dataset: pm25-cc
-  - arch: arch-0
+  - arch: arch-cc2-1
   - baseline: invariant
 
 seed: 42

@@ -147,11 +147,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         "dim",
         "dis",
     ]
-    data_path = (
-        "/n/home02/ekaraismailoglu/ten.git/datasets/QM9_CC_"
-        + generate_dataset_dir_name(args, relevant_args)
-        + ".jsonl"
-    )
+    data_path = "../../datasets/QM9_CC_" + generate_dataset_dir_name(args, relevant_args) + ".jsonl"
 
     # Check if data path already exists
     if not os.path.exists(data_path):
@@ -167,7 +163,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     num_samples = len(json_list)
 
     # Compute split indices
-    with open("/n/home02/ekaraismailoglu/ten.git/misc/egnn_splits.pkl", "rb") as f:
+    with open("../../misc/egnn_splits.pkl", "rb") as f:
         egnn_splits = pickle.load(f)
 
     if args.splits == "egnn":

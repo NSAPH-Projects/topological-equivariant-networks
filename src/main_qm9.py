@@ -12,7 +12,8 @@ import wandb
 from combinatorial_data.lifter import Lifter
 from qm9.lifts.registry import lifter_registry
 from qm9.utils import calc_mean_mad
-from utils import get_adjacency_types, get_loaders, get_model, merge_adjacencies, set_seed
+from utils import (get_adjacency_types, get_loaders, get_model,
+                   merge_adjacencies, set_seed)
 
 torch.set_float32_matmul_precision("high")
 os.environ["WANDB__SERVICE_WAIT"] = "600"
@@ -119,7 +120,7 @@ def main(args):
             resume="must",
         )
     else:
-        wandb.init(entity="ten-harvard", project="QM9-Super-Saiyan")
+        wandb.init(project="QM9-Super-Saiyan")
         run_id = wandb.run.id
         run_name = wandb.run.name
 

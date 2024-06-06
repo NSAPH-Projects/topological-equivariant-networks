@@ -113,7 +113,6 @@ def main(args):
     # Setup wandb
     if run_id and run_name:
         wandb.init(
-            entity="ten-harvard",
             project="QM9-Super-Saiyan",
             id=run_id,
             name=run_name,

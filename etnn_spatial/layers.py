@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from etnn.utils import scatter_add
+from etnn_spatial.utils import scatter_add
 
 # from torch_scatter import scatter_add
 

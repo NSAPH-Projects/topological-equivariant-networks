@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 
 from torch_geometric.data import InMemoryDataset
-from etnn.combinatorial_complexes import (
+from etnn_spatial.combinatorial_complexes import (
     CombinatorialComplexData,
     CombinatorialComplexCollater,
 )
@@ -220,7 +220,7 @@ def x1_labels(data: CombinatorialComplexData) -> CombinatorialComplexData:
 
 if __name__ == "__main__":
     from torch.utils.data import DataLoader
-    from etnn.combinatorial_complexes import CombinatorialComplexCollater
+    from etnn_spatial.combinatorial_complexes import CombinatorialComplexCollater
     from torch_geometric.transforms import Compose
 
     # quick test

@@ -7,10 +7,10 @@ from torch import Tensor
 from torch_geometric.data import Data
 from copy import deepcopy
 
-from etnn.layers import ETNNLayer, etnn_block
+from etnn_spatial.layers import ETNNLayer, etnn_block
 
 # from etnn.invariants import compute_invariants
-from etnn.utils import (
+from etnn_spatial.utils import (
     compute_invariants,
     compute_invariants2,
     fast_agg_indices,
@@ -212,8 +212,8 @@ class ETNN(nn.Module):
 
 
 if __name__ == "__main__":
-    from etnn.pm25.utils import SpatialCC
-    from etnn.combinatorial_complexes import CombinatorialComplexCollater
+    from etnn_spatial.pm25.utils import SpatialCC
+    from etnn_spatial.combinatorial_complexes import CombinatorialComplexCollater
     from torch.utils.data import DataLoader
     import time
 

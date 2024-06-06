@@ -12,7 +12,7 @@ from torch_geometric.data import Batch, Data
 from torch_geometric.loader.dataloader import Collater
 from torch_geometric.transforms import BaseTransform
 
-from etnn.combinatorial_complexes.lifter import Lifter
+from etnn_spatial.combinatorial_complexes.lifter import Lifter
 
 
 class CombinatorialComplexCollater(Collater):

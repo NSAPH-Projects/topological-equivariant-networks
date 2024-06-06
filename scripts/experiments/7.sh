@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# interrank: atoms + bonds + (functional groups + rings)
+
 # DEFINE EXP ARGUMENTS
 LIFTERS=("atom:0" "bond:1" "ring:2" "functional_group:2" "supercell:3")
 DIM=3

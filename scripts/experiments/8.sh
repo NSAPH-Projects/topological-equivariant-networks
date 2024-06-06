@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# EGNN-like, no VC
+
 # DEFINE EXP ARGUMENTS
 LIFTERS=("atom:0" "bond:1")
 DIM=1

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# interrank: atoms + bonds. rings instead of VC
+
 # DEFINE EXP ARGUMENTS
 LIFTERS=("atom:0" "bond:1" "ring:1")
 DIM=2

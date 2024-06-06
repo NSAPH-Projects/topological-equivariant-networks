@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# isolated ranks: atoms + bonds. no hetero features
+
 # DEFINE EXP ARGUMENTS
 LIFTERS=("atom:0" "bond:1" "supercell:2")
 DIM=2

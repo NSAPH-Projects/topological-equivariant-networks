@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# EGNN-like
+
 # DEFINE EXP ARGUMENTS
 LIFTERS=("atom:0" "supercell:1")
 DIM=1

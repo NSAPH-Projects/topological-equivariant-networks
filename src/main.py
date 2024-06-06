@@ -15,7 +15,9 @@ from utils import (
     set_seed,
     task_settings,
 )
+
 torch.autograd.set_detect_anomaly(True)
+
 
 def main(args):
     # # Generate model
@@ -27,7 +29,7 @@ def main(args):
     print(model)
 
     # Setup wandb
-    # wandb.init(entity="ten-harvard", project=f"{args.dataset.upper()}-{args.target_name}")
+    # wandb.init(project=f"{args.dataset.upper()}-{args.target_name}")
     # wandb.config.update(vars(args))
 
     # # Get loaders
@@ -167,10 +169,10 @@ if __name__ == "__main__":
              matrix""",
     )
     parser.add_argument(
-    "--equivariant",
-    action="store_true",
-    default=False,
-    help="""specifies whether to enable the equivariant mode of the model""",
+        "--equivariant",
+        action="store_true",
+        default=False,
+        help="""specifies whether to enable the equivariant mode of the model""",
     )
     parser.add_argument(
         "--visible_dims",

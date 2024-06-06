@@ -19,7 +19,7 @@ def main(args):
     print(model)
 
     # Setup wandb
-    wandb.init(entity="ten-harvard", project=f"Synth-{args.target_name}")
+    wandb.init(project=f"Synth-{args.target_name}")
     wandb.config.update(vars(args))
 
     # # Get loaders

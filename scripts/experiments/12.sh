@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # DEFINE EXP ARGUMENTS
-LIFTERS=("atom:0" "bond:1" "supercell:2")
+LIFTERS=("atom:0" "bond:1" "ring:1")
 DIM=2
 VISIBLE_DIMS=(0 1)
-INITIAL_FEATURES="node"
+INITIAL_FEATURES="hetero"
 NEIGHBOR_TYPES="max"
-CONNECTIVITY="self"
+CONNECTIVITY="all_to_all"
 EPOCHS=350
-NUM_HIDDEN=128
+NUM_HIDDEN=100
 
 # Constants
 BATCH_SIZE=96
@@ -85,4 +85,3 @@ done
 echo "All jobs have been launched."
 wait
 echo "All jobs have been completed."
-

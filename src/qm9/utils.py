@@ -4,11 +4,8 @@ import os
 import pickle
 import random
 from argparse import Namespace
-from typing import Dict, List, Tuple
 
 import torch
-from rdkit import Chem
-from rdkit.Chem import AllChem, rdMolDescriptors
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torch_geometric.data import Data
@@ -20,8 +17,8 @@ from combinatorial_data.combinatorial_data_utils import (
     CombinatorialComplexTransform,
     CustomCollater,
 )
-from combinatorial_data.lifter import Lifter
-from qm9.lifts.registry import lifter_registry
+from combinatorial_data.lifts import get_lifters
+from combinatorial_data.ranker import get_ranker
 
 
 def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
@@ -94,9 +91,11 @@ def lift_qm9_to_cc(args: Namespace) -> list[dict]:
     """
     qm9 = QM9("./datasets/QM9")
     # Create the transform
-    lifter = Lifter(args, lifter_registry)
+    lifters = get_lifters(args)
+    ranker = get_ranker(args.lifters)
     transform = CombinatorialComplexTransform(
-        lifter=lifter,
+        lifters=lifters,
+        ranker=ranker,
         dim=args.dim,
         adjacencies=args.adjacencies,
         processed_adjacencies=args.processed_adjacencies,
@@ -199,7 +198,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     index = targets.index(target_map[args.target_name])
 
     # Create DataLoader kwargs
-    follow_batch = [f"cell_{i}" for i in range(args.dim + 1)] + ["x"]
+    follow_batch = [f"x_{i}" for i in range(args.dim + 1)] + ["x"]
     dataloader_kwargs = {
         "batch_size": args.batch_size,
         "num_workers": args.num_workers,

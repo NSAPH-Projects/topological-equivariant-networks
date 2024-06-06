@@ -15,7 +15,7 @@ class TEN(nn.Module):
 
     def __init__(
         self,
-        num_features_per_rank: dict[int, int],
+        num_input: int,
         num_hidden: int,
         num_out: int,
         num_layers: int,
@@ -46,12 +46,8 @@ class TEN(nn.Module):
                 {adj: nn.BatchNorm1d(self.num_inv_fts_map[adj]) for adj in self.adjacencies}
             )
 
-        self.feature_embedding = nn.ModuleDict(
-            {
-                str(dim): nn.Linear(num_features_per_rank[dim], num_hidden)
-                for dim in self.visible_dims
-            }
-        )
+        self.feature_embedding = nn.Linear(num_input, num_hidden)
+
         self.layers = nn.ModuleList(
             [
                 EMPSNLayer(
@@ -81,7 +77,7 @@ class TEN(nn.Module):
 
     def forward(self, graph: Data) -> Tensor:
         device = graph.pos.device
-        cell_ind = {str(i): getattr(graph, f"cell_{i}") for i in self.visible_dims}
+        x_ind = {str(i): getattr(graph, f"x_{i}") for i in self.visible_dims}
 
         mem = {i: getattr(graph, f"mem_{i}") for i in self.visible_dims}
 
@@ -98,29 +94,28 @@ class TEN(nn.Module):
         }
 
         # compute initial features
-        features = {}
-        for feature_type in self.initial_features:
-            features[feature_type] = {}
-            for i in self.visible_dims:
-                if feature_type == "node":
-                    features[feature_type][str(i)] = compute_centroids(cell_ind[str(i)], graph.x)
-                elif feature_type == "mem":
-                    features[feature_type][str(i)] = mem[i].float()
-                elif feature_type == "hetero":
-                    features[feature_type][str(i)] = getattr(graph, f"x_{i}")
+        node_features = {}
+        for i in self.visible_dims:
+            node_features[str(i)] = compute_centroids(x_ind[str(i)], graph.x)
 
-        x = {
-            str(i): torch.cat(
-                [features[feature_type][str(i)] for feature_type in self.initial_features], dim=1
-            )
-            for i in self.visible_dims
-        }
+        mem_features = {str(i): mem[i].float() for i in self.visible_dims}
 
-        cell_batch = {str(i): getattr(graph, f"cell_{i}_batch") for i in self.visible_dims}
+        if self.initial_features == "node":
+            x = node_features
+        elif self.initial_features == "mem":
+            x = mem_features
+        elif self.initial_features == "both":
+            # concatenate
+            x = {
+                str(i): torch.cat([node_features[str(i)], mem_features[str(i)]], dim=1)
+                for i in self.visible_dims
+            }
+
+        x_batch = {str(i): getattr(graph, f"x_{i}_batch") for i in self.visible_dims}
 
         # embed features and E(n) invariant information
-        x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
-        inv = self.compute_invariants(cell_ind, graph.pos, adj, inv_ind, device)
+        x = {dim: self.feature_embedding(feature) for dim, feature in x.items()}
+        inv = self.compute_invariants(x_ind, graph.pos, adj, inv_ind, device)
         if self.normalize_invariants:
             inv = {adj: self.inv_normalizer[adj](feature) for adj, feature in inv.items()}
         # message passing
@@ -139,12 +134,12 @@ class TEN(nn.Module):
             )
             for dim, feature in x.items()
         }
-        cell_batch = {
+        x_batch = {
             dim: torch.cat((indices, torch.tensor(range(batch_size)).to(device)))
-            for dim, indices in cell_batch.items()
+            for dim, indices in x_batch.items()
         }
 
-        x = {dim: global_add_pool(x[dim], cell_batch[dim]) for dim, feature in x.items()}
+        x = {dim: global_add_pool(x[dim], x_batch[dim]) for dim, feature in x.items()}
         state = torch.cat(
             tuple([feature for dim, feature in x.items()]),
             dim=1,

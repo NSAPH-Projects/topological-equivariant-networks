@@ -26,4 +26,4 @@ source scripts/experiments/1.sh 1 # reproduces the results for the first 6 targe
 source scripts/experiments/1.sh 2 # reproduces the results for the last 6 targets
 ```
 
-The code to reproduce the spatial task is in the anonymized branch `https://anonymous.4open.science/r/topological-equivariant-networks-625B`. The code to reproduce the synthetic tasks is in the anonymized branch `https://anonymous.4open.science/r/topological-equivariant-networks-06C9`. We plan to shortly merge these together under a single branch.
+The code to reproduce the spatial task is in the anonymized branch `https://anonymous.4open.science/r/topological-equivariant-networks-27DB`. The code to reproduce the synthetic tasks is in the anonymized branch `https://anonymous.4open.science/r/topological-equivariant-networks-06C9`. We plan to shortly merge these together under a single branch.

@@ -19,7 +19,7 @@ MIN_LR=0
 NUM_LAYERS=7
 MODEL_NAME="ten"
 SPLITS="egnn"
-CHECKPOINT_DIR="/content/drive/MyDrive/checkpoints"
+CHECKPOINT_DIR="checkpoints/"
 
 
 # Define the predefined target names lists

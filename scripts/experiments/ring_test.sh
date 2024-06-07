@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# EGNN-W
+# interrank: atoms + bonds + rings
 
 # DEFINE EXP ARGUMENTS
-LIFTERS=("atom:0" "supercell:1")
-DIM=1
-VISIBLE_DIMS=(0)
+LIFTERS=("atom:0" "bond:1" "ring:2")
+DIM=2
+VISIBLE_DIMS=(0 1 2)
 INITIAL_FEATURES="hetero"
 NEIGHBOR_TYPES="max"
-CONNECTIVITY="self"
+CONNECTIVITY="all_to_all"
 EPOCHS=350
-NUM_HIDDEN=182
+NUM_HIDDEN=100
 
 # Constants
 BATCH_SIZE=96
@@ -87,4 +87,3 @@ done
 echo "All jobs have been launched."
 wait
 echo "All jobs have been completed."
-

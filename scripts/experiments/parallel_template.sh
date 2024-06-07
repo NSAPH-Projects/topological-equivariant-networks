@@ -15,7 +15,7 @@ NUM_LAYERS=7
 NUM_HIDDEN=128
 MODEL_NAME="ten"
 SPLITS="egnn"
-CHECKPOINT_DIR="/content/drive/MyDrive/checkpoints"
+CHECKPOINT_DIR="checkpoints/"
 
 # Define the predefined target names lists
 TARGET_NAMES_0=("")

@@ -16,6 +16,7 @@ dependencies:
   - pip=23.2.1
   - conda-forge::pre-commit=3.6.0
   - pyg::pyg
+  - pyg::pytorch-scatter
   - pygments
   - pexpect
   - pytest=7.4.4

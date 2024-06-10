@@ -1,0 +1,6 @@
+#@package _global_
+model:
+  num_out: 1
+  num_hidden: 32
+  num_layers: 4
+  num_readout_layers: 3

@@ -159,11 +159,10 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# The datasets folder
+# My folders
+.vscode/
 datasets/
-
-# Weights and Biases
+job_outputs/
 wandb/
-
-# TopoNetX
-TopoNetX/
+debug/
+checkpoints/

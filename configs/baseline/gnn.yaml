@@ -1,0 +1,19 @@
+#@package _global_
+defaults:
+  - _self_
+  - override /dataset: pm25-graph
+
+model:
+  invariants: false
+
+dataset:
+  version: v2
+  transform:
+    _target_: torch_geometric.transforms.compose.Compose
+    _args_:
+      - - _target_: etnn.pm25.utils.create_mask
+          _partial_: true
+          seed: ${seed}
+          rate: 0.3
+        - _target_: etnn.pm25.utils.squash_cc
+          _partial_: true

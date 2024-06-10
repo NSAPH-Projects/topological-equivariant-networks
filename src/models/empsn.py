@@ -1,20 +1,10 @@
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import torch
 import torch.nn as nn
 from torch import Tensor
+from torch_scatter import scatter_add
 
-
-def scatter_add(
-    src: Tensor,
-    index: Tensor,
-    dim: int = 0,
-    dim_size: Optional[int] = None,
-):
-    src_shape = list(src.shape)
-    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
-    aux = src.new_zeros(src_shape)
-    return aux.index_add(dim, index, src)
 
 class EMPSNLayer(nn.Module):
     """

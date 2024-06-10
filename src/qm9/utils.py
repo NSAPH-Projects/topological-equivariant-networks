@@ -21,6 +21,17 @@ from combinatorial_data.lifter import Lifter
 from qm9.lifts.registry import lifter_registry
 from qm9.qm9_cc import QM9_CC
 
+dataset_args = [
+    "lifters",
+    "neighbor_types",
+    "connectivity",
+    "visible_dims",
+    "merge_neighbors",
+    "initial_features",
+    "dim",
+    "dis",
+]
+
 
 def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
     """Return mean and mean average deviation of target in loader."""
@@ -70,6 +81,42 @@ def prepare_data(graph: Data, index: int, target_name: str) -> Data:
     return graph
 
 
+def process_qm9_dataset(args: Namespace):
+    """
+    Process the QM9 dataset.
+
+    Parameters
+    ----------
+    args : Namespace
+        The command-line arguments parsed using argparse.
+
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    This function computes the data path based on the relevant arguments provided in `args`. It then
+    lifts samples of the QM9 dataset to combinatorial complexes using the `lift_qm9_to_cc` function.
+    Finally, it saves the lifted QM9 dataset to the specified data path using the `save_lifted_qm9`
+    function.
+    """
+
+    # Compute the data path
+    filtered_args = {key: value for key, value in vars(args).items() if key in dataset_args}
+    data_path = "datasets/QM9_CC_" + generate_dataset_dir_name(filtered_args) + ".jsonl"
+
+    if os.path.exists(data_path):
+        print(f"File '{data_path}' already exists.")
+        return
+
+    # Lift the QM9 dataset to CombinatorialComplexData format
+    qm9_cc = lift_qm9_to_cc(args)
+
+    # Save the lifted QM9 dataset to the specified data path
+    save_lifted_qm9(data_path, qm9_cc)
+
+
 def lift_qm9_to_cc(args: Namespace) -> list[dict]:
     """
     Lift QM9 dataset to CombinatorialComplexData format.
@@ -100,9 +147,6 @@ def lift_qm9_to_cc(args: Namespace) -> list[dict]:
         merge_neighbors=args.merge_neighbors,
     )
     qm9_cc = QM9_CC("./datasets/QM9_CC", pre_transform=transform.graph_to_ccdict)
-    # qm9_cc = []
-    # for graph in tqdm(qm9, desc="Lifting QM9 samples"):
-    #    qm9_cc.append(transform.graph_to_ccdict(graph))
     return qm9_cc
 
 
@@ -138,22 +182,12 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     # Load the QM9 dataset
 
     # Compute the data path
-    relevant_args = [
-        "lifters",
-        "neighbor_types",
-        "connectivity",
-        "visible_dims",
-        "merge_neighbors",
-        "dim",
-        "dis",
-    ]
-    data_path = "datasets/QM9_CC_" + generate_dataset_dir_name(args, relevant_args) + ".jsonl"
+    filtered_args = {key: value for key, value in vars(args).items() if key in dataset_args}
+    data_path = "datasets/QM9_CC_" + generate_dataset_dir_name(filtered_args) + ".jsonl"
 
     # Check if data path already exists
     if not os.path.exists(data_path):
-        qm9_cc = lift_qm9_to_cc(args)
-        save_lifted_qm9(data_path, qm9_cc)
-        del qm9_cc  # free memory
+        raise FileNotFoundError(f"File '{data_path}' does not exist.")
 
     # Load the data
     json_list = []
@@ -258,25 +292,18 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     return tuple(loaders.values())
 
 
-def generate_dataset_dir_name(args, relevant_args) -> str:
+def generate_dataset_dir_name(dataset_args: dict) -> str:
     """
     Generate a directory name based on a subset of script arguments.
 
     Parameters:
-    args (dict): A dictionary of all script arguments.
-    relevant_args (list): A list of argument names that are relevant to dataset generation.
+    dataset_args (dict): A dictionary of arguments that are relevant to dataset generation.
 
     Returns:
     str: A hash-based directory name representing the relevant arguments.
     """
-    # Convert Namespace to a dictionary
-    args_dict = vars(args)
-
-    # Filter the arguments, keeping only the relevant ones
-    filtered_args = {key: args_dict[key] for key in relevant_args if key in args_dict}
-
     # Convert relevant arguments to a JSON string for consistent ordering
-    args_str = json.dumps(filtered_args, sort_keys=True)
+    args_str = json.dumps(dataset_args, sort_keys=True)
 
     # Create a hash of the relevant arguments string
     hash_obj = hashlib.sha256(args_str.encode())

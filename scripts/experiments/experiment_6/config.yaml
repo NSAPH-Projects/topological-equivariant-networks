@@ -1,0 +1,13 @@
+experiment_name: "experiment_6"
+description: "isolated ranks: atoms + bonds. no hetero features"
+
+# Dataset args
+lifters: ["atom:0", "bond:1", "supercell:2"]
+neighbor_types: "max"
+connectivity: "self"
+visible_dims: [0, 1]
+initial_features: "node"
+dim: 2
+
+# Model args
+num_hidden: 128

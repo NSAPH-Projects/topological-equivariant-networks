@@ -1,0 +1,13 @@
+experiment_name: "experiment_10"
+description: "EGNN-like"
+
+# Dataset args
+lifters: ["atom:0", "supercell:1"]
+neighbor_types: "max"
+connectivity: "self"
+visible_dims: [0]
+initial_features: "hetero"
+dim: 1
+
+# Model args
+num_hidden: 128

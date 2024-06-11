@@ -3,6 +3,7 @@
 # Training script for experiment_12
 
 # DEFINE EXP ARGUMENTS
+EXP_NAME=experiment_12
 LIFTERS=(atom:0 bond:1 ring:1)
 DIM=2
 VISIBLE_DIMS=(0 1)
@@ -76,6 +77,7 @@ do
                            --splits "$SPLITS" \
                            --normalize_invariants \
                            --clip_gradient \
+                           --run_name "${EXP_NAME} ${TARGET_NAME}" \
                            --checkpoint_dir "$CHECKPOINT_DIR" &
     
     # Wait for 30 minutes before moving to the next iteration

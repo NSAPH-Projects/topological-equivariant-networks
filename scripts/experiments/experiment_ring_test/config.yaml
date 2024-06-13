@@ -8,6 +8,8 @@ connectivity: "all_to_all"
 visible_dims: [0, 1, 2]
 initial_features: "hetero"
 dim: 2
+triangles_only: true
 
 # Model args
 num_hidden: 100
+use_geometry: false

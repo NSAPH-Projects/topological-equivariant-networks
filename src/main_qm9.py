@@ -110,16 +110,14 @@ def main(args):
     )
 
     # Setup wandb
+    config = vars(args)
     if run_id and run_name:
         wandb.init(
-            project="QM9-clean-experiments",
-            id=run_id,
-            name=run_name,
-            resume="must",
+            project="QM9-clean-experiments", id=run_id, name=run_name, resume="must", config=config
         )
     else:
         run_name = args.run_name
-        wandb.init(project="QM9-clean-experiments", name=run_name)
+        wandb.init(project="QM9-clean-experiments", name=run_name, config=config)
         run_id = wandb.run.id
 
     for epoch in tqdm(range(start_epoch, args.epochs)):

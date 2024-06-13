@@ -8,11 +8,10 @@ import time
 import torch
 from tqdm import tqdm
 
+import parser_utils
 import wandb
-from combinatorial_data.lifter import Lifter
-from qm9.lifts.registry import lifter_registry
 from qm9.utils import calc_mean_mad
-from utils import get_adjacency_types, get_loaders, get_model, merge_adjacencies, set_seed
+from utils import get_loaders, get_model, set_seed
 
 torch.set_float32_matmul_precision("high")
 os.environ["WANDB__SERVICE_WAIT"] = "600"
@@ -225,6 +224,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser = parser_utils.add_common_arguments(parser)
 
     # General parameters
     parser.add_argument("--epochs", type=int, default=1000, help="number of epochs")
@@ -248,49 +248,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_hidden", type=int, default=77, help="hidden features")
     parser.add_argument("--num_layers", type=int, default=7, help="number of layers")
     parser.add_argument("--act_fn", type=str, default="silu", help="activation function")
-    parser.add_argument(
-        "--lifters",
-        nargs="+",
-        help="list of lifters to apply and their ranking logic",
-        default="identity:c functional_group:2 ring:2",
-        required=True,
-    )
-    parser.add_argument(
-        "--initial_features",
-        nargs="+",
-        type=str,
-        default=["node"],
-        help="features to use",
-    )
-    parser.add_argument(
-        "--connectivity",
-        type=str,
-        default="self_and_next",
-        help="connectivity pattern between ranks",
-    )
-    parser.add_argument(
-        "--neighbor_types",
-        nargs="+",
-        type=str,
-        default=["+1"],
-        help="""How adjacency between cells of same rank is defined. Default is +1, meaning that
-                two cells of rank i are connected if they are both connected to the same cell of 
-                rank i+1. See src.utils.py::get_adjacencies for a list of possible values.""",
-    )
-    parser.add_argument(
-        "--merge_neighbors",
-        action="store_true",
-        default=False,
-        help="""if all the neighbors of different types should be represented as a single adjacency
-             matrix""",
-    )
-    parser.add_argument(
-        "--visible_dims",
-        nargs="+",
-        type=int,
-        default=None,
-        help="specifies which ranks to explicitly represent as nodes",
-    )
+
     parser.add_argument(
         "--normalize_invariants",
         action="store_true",
@@ -329,28 +287,12 @@ if __name__ == "__main__":
     # Dataset arguments
     parser.add_argument("--dataset", type=str, default="qm9", help="dataset")
     parser.add_argument("--target_name", type=str, default="H", help="regression task")
-    parser.add_argument("--dim", type=int, default=2, help="ASC dimension")
-    parser.add_argument("--dis", type=float, default=4.0, help="radius Rips complex")
     parser.add_argument("--num_samples", type=int, default=None, help="num samples to to train on")
-    parser.add_argument("--seed", type=int, default=42, help="random seed")
     parser.add_argument("--splits", type=str, default="egnn", help="split type")
 
     parsed_args = parser.parse_args()
-    parsed_args.adjacencies = get_adjacency_types(
-        parsed_args.dim,
-        parsed_args.connectivity,
-        parsed_args.neighbor_types,
-        parsed_args.visible_dims,
-    )
-    # If merge_neighbors is True, the adjacency types we feed to the model will be the merged ones
-    if parsed_args.merge_neighbors:
-        parsed_args.processed_adjacencies = merge_adjacencies(parsed_args.adjacencies)
-    else:
-        parsed_args.processed_adjacencies = parsed_args.adjacencies
-
+    parsed_args = parser_utils.add_common_derived_arguments(parsed_args)
     parsed_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    parsed_args.initial_features = sorted(parsed_args.initial_features)
-    parsed_args.lifter = Lifter(parsed_args, lifter_registry)
 
     set_seed(parsed_args.seed)
     main(parsed_args)

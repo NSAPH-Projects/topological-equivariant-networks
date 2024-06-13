@@ -108,12 +108,12 @@ def lift_qm9_to_cc(args: Namespace) -> list[dict]:
 
 def save_lifted_qm9(storage_path: str, lifted_qm9: QM9_CC) -> None:
     """
-    Save the lifted QM9 samples to individual JSON files.
+    Save the lifted QM9 samples to a single JSON Lines (.jsonl) file.
 
     Parameters
     ----------
     storage_path : str
-        The path to the directory where the JSON files will be saved.
+        The path to the .jsonl file where the data will be saved.
     samples : list[dict]
         The list of lifted QM9 samples.
 
@@ -123,15 +123,14 @@ def save_lifted_qm9(storage_path: str, lifted_qm9: QM9_CC) -> None:
     """
 
     samples = lifted_qm9.data_list
-    if os.path.exists(storage_path):
-        raise FileExistsError(f"Path '{storage_path}' already exists.")
-    os.makedirs(storage_path, exist_ok=True)
 
-    for idx, sample in tqdm(enumerate(samples), desc="Saving lifted QM9 samples"):
-        file_name = f"{idx}.json"
-        file_path = f"{storage_path}/{file_name}"
-        with open(file_path, "w") as f:
+    if os.path.exists(storage_path):
+        raise FileExistsError(f"File '{storage_path}' already exists.")
+
+    with open(storage_path, "w") as f:
+        for sample in tqdm(samples, desc="Saving lifted QM9 samples"):
             json.dump(sample, f)
+            f.write("\n")
 
 
 def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
@@ -148,14 +147,20 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
         "dim",
         "dis",
     ]
-    data_path = "./datasets/QM9_CC_" + generate_dataset_dir_name(args, relevant_args)
+    data_path = "datasets/QM9_CC_" + generate_dataset_dir_name(args, relevant_args) + ".jsonl"
 
     # Check if data path already exists
     if not os.path.exists(data_path):
         qm9_cc = lift_qm9_to_cc(args)
         save_lifted_qm9(data_path, qm9_cc)
-    data_files = sorted(os.listdir(data_path))
-    num_samples = len(data_files)
+        del qm9_cc  # free memory
+
+    # Load the data
+    json_list = []
+    with open(data_path, "r") as f:
+        for line in tqdm(f):
+            json_list.append(json.loads(line))
+    num_samples = len(json_list)
 
     # Compute split indices
     with open("misc/egnn_splits.pkl", "rb") as f:
@@ -227,13 +232,7 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     for split in ["train", "valid", "test"]:
 
         # Filter out the relevant data files
-        split_files = [data_files[i] for i in split_indices[split]]
-
-        # Load the ccdicts from the data files
-        split_ccdicts = []
-        for file in tqdm(split_files, desc="Reading lifted QM9 samples"):
-            with open(f"{data_path}/{file}", "r") as f:
-                split_ccdicts.append(json.load(f))
+        split_ccdicts = [json_list[i] for i in split_indices[split]]
 
         # Convert the dictionaries to CombinatorialComplexData objects
         split_dataset = []

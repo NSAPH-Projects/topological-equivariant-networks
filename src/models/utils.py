@@ -1,8 +1,19 @@
 from collections import defaultdict
-
+from typing import Optional
 import torch
 import torch.nn as nn
-from torch_scatter import scatter_add
+from torch import Tensor
+
+def scatter_add(
+    src: Tensor,
+    index: Tensor,
+    dim: int = 0,
+    dim_size: Optional[int] = None,
+):
+    src_shape = list(src.shape)
+    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+    aux = src.new_zeros(src_shape)
+    return aux.index_add(dim, index, src)
 
 
 class MessageLayer(nn.Module):

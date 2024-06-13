@@ -16,6 +16,9 @@ module load cuda/12.2.0-fasrc01
 source ~/.bashrc
 conda activate ten
 
+TARGET_NAME="alpha"
+LR=5e-4
+
 # Train EGNN
 python src/main_qm9.py --lifters "atom:0" "supercell:1" \
                        --target_name "$TARGET_NAME" \
@@ -32,4 +35,4 @@ python src/main_qm9.py --lifters "atom:0" "supercell:1" \
                        --model_name "ten" \
                        --dim 1 \
                        --compile \
-                       --splits "egnn" \
+                       --splits "egnn"

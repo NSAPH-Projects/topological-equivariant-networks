@@ -79,7 +79,8 @@ do
                            --clip_gradient \
                            --run_name "${EXP_NAME} ${TARGET_NAME}" \
                            --checkpoint_dir "$CHECKPOINT_DIR" \
-                          {% if triangles_only == true %} --triangles_only {% endif %} &
+                          {% if triangles_only == true %} --triangles_only {% endif %} \
+                          {% if use_geometry == false %} --no_geometry {% endif %} &
     
     # Wait for 30 minutes before moving to the next iteration
     sleep 1800

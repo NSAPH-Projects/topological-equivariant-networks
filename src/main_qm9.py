@@ -271,6 +271,12 @@ if __name__ == "__main__":
         help="""if a lean architecture should be used. drops up to half of the layers depending on
              the number of message passing layers""",
     )
+    parser.add_argument(
+        "--no_geometry",
+        action="store_true",
+        default=False,
+        help="if set, all node positions will be set to the origin, deleting the geometry",
+    )
     # Optimizer parameters
     parser.add_argument("--lr", type=float, default=5e-4, help="learning rate")
     parser.add_argument("--min_lr", type=float, default=0, help="learning rate")

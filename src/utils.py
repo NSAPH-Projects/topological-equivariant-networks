@@ -214,6 +214,7 @@ def get_model(args: Namespace) -> nn.Module:
         visible_dims=args.visible_dims,
         batch_norm=args.batch_norm,
         lean=args.lean,
+        use_geometry=not args.no_geometry,
     )
     return model
 

@@ -27,6 +27,7 @@ class TEN(nn.Module):
         compute_invariants: callable = compute_invariants,
         batch_norm: bool = False,
         lean: bool = True,
+        use_geometry: bool = True,
     ) -> None:
         super().__init__()
 
@@ -38,6 +39,7 @@ class TEN(nn.Module):
         self.normalize_invariants = normalize_invariants
         self.batch_norm = batch_norm
         self.lean = lean
+        self.use_geometry = use_geometry
 
         if visible_dims is not None:
             self.visible_dims = visible_dims
@@ -132,6 +134,9 @@ class TEN(nn.Module):
 
         # embed features and E(n) invariant information
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
+        # do not use positions
+        if not self.use_geometry:
+            graph.pos = torch.zeros_like(graph.pos, dtype=torch.float)
         inv = self.compute_invariants(cell_ind, graph.pos, adj, inv_ind, device)
         if self.normalize_invariants:
             inv = {adj: self.inv_normalizer[adj](feature) for adj, feature in inv.items()}

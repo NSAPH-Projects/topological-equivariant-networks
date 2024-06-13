@@ -1,6 +1,7 @@
 import networkx as nx
 import torch_geometric.utils as pyg_utils
 from rdkit import Chem
+from rdkit.Chem.AllChem import AtomValenceException
 from torch_geometric.data import Data
 
 from qm9.molecule_utils import molecule_from_data
@@ -103,23 +104,29 @@ def ring_lift(graph: Data) -> set[Cell]:
     """
     cells = set()
     mol = graph.mol
-    ring_info = mol.GetRingInfo()
-    for ring in ring_info.AtomRings():
-        node_idc = frozenset(ring)
-        feature_vector = compute_ring_features(node_idc, mol)
-        cells.add((node_idc, feature_vector))
+    mol_copy = Chem.Mol(mol)
+    try:
+        # We need to sanitize the molecule to get the ring information
+        Chem.SanitizeMol(mol_copy)
+        ring_info = mol_copy.GetRingInfo()
+        for ring in ring_info.AtomRings():
+            node_idc = frozenset(ring)
+            feature_vector = compute_ring_features(node_idc, mol_copy)
+            cells.add((node_idc, feature_vector))
 
-    # Remove rings with less than 3 atoms
-    cells = {cell for cell in cells if len(cell[0]) >= 3}
+        # Remove rings with less than 3 atoms
+        cells = {cell for cell in cells if len(cell[0]) >= 3}
 
-    # Filter out rings that contain simpler rings within themselves
-    filtered_cells = {
-        cell
-        for cell in cells
-        if not any(cell[0] > other_cell[0] for other_cell in cells if cell != other_cell)
-    }
+        # Filter out rings that contain simpler rings within themselves
+        filtered_cells = {
+            cell
+            for cell in cells
+            if not any(cell[0] > other_cell[0] for other_cell in cells if cell != other_cell)
+        }
 
-    return filtered_cells
+        return filtered_cells
+    except AtomValenceException:
+        return set()
 
 
 ring_lift.num_features = 4

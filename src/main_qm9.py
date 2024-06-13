@@ -111,6 +111,7 @@ def main(args):
 
     # Setup wandb
     config = vars(args)
+    config["num_trainable_params"] = num_params
     wandb_kwargs = {
         "project": "QM9-clean-experiments",
         "name": run_name,

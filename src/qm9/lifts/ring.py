@@ -66,7 +66,7 @@ def cycle_lift(graph: Data) -> set[Cell]:
 cycle_lift.num_features = NUM_FEATURES
 
 
-def ring_lift(graph: Data) -> set[Cell]:
+def ring_lift(graph: Data, triangles_only: bool = False) -> set[Cell]:
     """
     Identify rings in a graph.
 
@@ -78,6 +78,8 @@ def ring_lift(graph: Data) -> set[Cell]:
     ----------
     graph : torch.Tensor
         The input graph represented as a PyTorch tensor.
+    triangles_only : bool, optional
+        If True, only return triangles. Default is False.
 
     Returns
     -------
@@ -116,6 +118,10 @@ def ring_lift(graph: Data) -> set[Cell]:
 
         # Remove rings with less than 3 atoms
         cells = {cell for cell in cells if len(cell[0]) >= 3}
+
+        if triangles_only:
+            # Filter out rings that are not triangles
+            cells = {cell for cell in cells if len(cell[0]) == 3}
 
         # Filter out rings that contain simpler rings within themselves
         filtered_cells = {

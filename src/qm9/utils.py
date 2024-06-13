@@ -30,6 +30,7 @@ dataset_args = [
     "initial_features",
     "dim",
     "dis",
+    "triangles_only",
 ]
 
 

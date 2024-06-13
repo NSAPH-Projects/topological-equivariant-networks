@@ -48,6 +48,12 @@ def add_common_arguments(parser: argparse.ArgumentParser):
         default=["node"],
         help="Features to use.",
     )
+    parser.add_argument(
+        "--triangles_only",
+        action="store_true",
+        default=False,
+        help="""If set, only triangles will be considered as rings.""",
+    )
     parser.add_argument("--dim", type=int, default=2, help="ASC dimension.")
     parser.add_argument("--dis", type=float, default=4.0, help="Radius for Rips complex.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")

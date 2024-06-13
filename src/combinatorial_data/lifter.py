@@ -216,6 +216,9 @@ def get_lifters(
         if method_str == "rips":
             lifter = partial(lifter_registry[method_str], dim=args.dim, dis=args.dis)
             lifter.num_features = lifter_registry[method_str].num_features
+        elif method_str == "ring":
+            lifter = partial(lifter_registry[method_str], triangles_only=args.triangles_only)
+            lifter.num_features = lifter_registry[method_str].num_features
         else:
             lifter = lifter_registry[method_str]
 

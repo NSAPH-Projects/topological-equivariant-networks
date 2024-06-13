@@ -78,7 +78,9 @@ do
                            --normalize_invariants \
                            --clip_gradient \
                            --run_name "${EXP_NAME} ${TARGET_NAME}" \
-                           --checkpoint_dir "$CHECKPOINT_DIR" &
+                           --checkpoint_dir "$CHECKPOINT_DIR" \
+                           --triangles_only  \
+                           --no_geometry  &
     
     # Wait for 30 minutes before moving to the next iteration
     sleep 1800

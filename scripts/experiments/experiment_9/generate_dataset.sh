@@ -16,4 +16,5 @@ python src/create_dataset.py --lifters "${LIFTERS[@]}" \
                              --connectivity "$CONNECTIVITY" \
                              --visible_dims "${VISIBLE_DIMS[@]}" \
                              --initial_features "$INITIAL_FEATURES" \
-                             --dim "$DIM"
+                             --dim "$DIM" \
+                            

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Dataset generation script for {{ experiment_name }}
+
+# DEFINE EXP ARGUMENTS
+LIFTERS=({{ lifters | join(' ') }})
+NEIGHBOR_TYPES="{{ neighbor_types }}"
+CONNECTIVITY="{{ connectivity }}"
+VISIBLE_DIMS=({{ visible_dims | join(' ') }})
+INITIAL_FEATURES="{{ initial_features }}"
+DIM={{ dim }}
+
+# Command to generate dataset
+python src/create_dataset.py --lifters "${LIFTERS[@]}" \
+                             --neighbor_types "$NEIGHBOR_TYPES" \
+                             --connectivity "$CONNECTIVITY" \
+                             --visible_dims "${VISIBLE_DIMS[@]}" \
+                             --initial_features "$INITIAL_FEATURES" \
+                             --dim "$DIM"

@@ -118,9 +118,9 @@ def main(args):
             resume="must",
         )
     else:
-        wandb.init(project="QM9-clean-experiments")
+        run_name = args.run_name
+        wandb.init(project="QM9-clean-experiments", name=run_name)
         run_id = wandb.run.id
-        run_name = wandb.run.name
 
     for epoch in tqdm(range(start_epoch, args.epochs)):
         epoch_start_time, epoch_mae_train, epoch_mae_val = time.time(), 0, 0
@@ -289,6 +289,9 @@ if __name__ == "__main__":
     parser.add_argument("--target_name", type=str, default="H", help="regression task")
     parser.add_argument("--num_samples", type=int, default=None, help="num samples to to train on")
     parser.add_argument("--splits", type=str, default="egnn", help="split type")
+
+    # wandb arguments
+    parser.add_argument("--run_name", type=str, default=None, help="run name")
 
     parsed_args = parser.parse_args()
     parsed_args = parser_utils.add_common_derived_arguments(parsed_args)

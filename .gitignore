@@ -165,3 +165,10 @@ datasets/
 job_outputs/
 wandb/
 debug/
+
+# Ignore all auto-generated scripts
+scripts/experiments/**/generate_dataset.sh
+scripts/experiments/**/train_etnn.sh
+
+# Ensure config.yaml files are not ignored
+!scripts/experiments/**/config.yaml

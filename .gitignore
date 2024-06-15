@@ -165,4 +165,3 @@ datasets/
 job_outputs/
 wandb/
 debug/
-checkpoints/

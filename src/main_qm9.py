@@ -6,12 +6,18 @@ import os
 import time
 
 import torch
+from dotenv import load_dotenv
 from tqdm import tqdm
 
 import parser_utils
 import wandb
 from qm9.utils import calc_mean_mad
 from utils import get_loaders, get_model, set_seed
+
+# Load environment variables from .env file
+load_dotenv()
+if not os.getenv("STORAGE_PATH"):
+    raise ValueError("STORAGE_PATH environment variable is not set.")
 
 torch.set_float32_matmul_precision("high")
 os.environ["WANDB__SERVICE_WAIT"] = "600"

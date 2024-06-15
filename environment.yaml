@@ -22,6 +22,7 @@ dependencies:
   - pexpect
   - pytest=7.4.4
   - python=3.10
+  - python-dotenv
   - pytorch=2.1.0
   - pytorch-cuda=11.8
   - rdkit

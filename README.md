@@ -10,6 +10,12 @@ source env_builder.sh
 ```
 This will create and activate a new conda environment called "ten" that contains all the packages necessary to run the code in this repository.
 
+Next, copy the `.env.example` file and define your environment variables:
+```
+cp env.example .env
+vim .env # define your environment variables
+```
+
 To reproduce EGNN within the ETNN framework, run the following command:
 
 ```

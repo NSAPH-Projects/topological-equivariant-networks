@@ -103,19 +103,16 @@ def process_qm9_dataset(args: Namespace):
     function.
     """
 
-    # Compute the data path
-    filtered_args = {key: value for key, value in vars(args).items() if key in dataset_args}
-    data_path = "datasets/QM9_CC_" + generate_dataset_dir_name(filtered_args) + ".jsonl"
-
-    if os.path.exists(data_path):
-        print(f"File '{data_path}' already exists.")
+    # If the required dataset was already preprocessed before, we are done
+    if os.path.exists(args.data_path):
+        print(f"File '{args.data_path}' already exists.")
         return
 
     # Lift the QM9 dataset to CombinatorialComplexData format
     qm9_cc = lift_qm9_to_cc(args)
 
     # Save the lifted QM9 dataset to the specified data path
-    save_lifted_qm9(data_path, qm9_cc)
+    save_lifted_qm9(args.data_path, qm9_cc)
 
 
 def lift_qm9_to_cc(args: Namespace) -> list[dict]:
@@ -169,6 +166,9 @@ def save_lifted_qm9(storage_path: str, lifted_qm9: QM9_CC) -> None:
 
     samples = lifted_qm9.data_list
 
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(storage_path), exist_ok=True)
+
     if os.path.exists(storage_path):
         raise FileExistsError(f"File '{storage_path}' already exists.")
 
@@ -182,17 +182,13 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
 
     # Load the QM9 dataset
 
-    # Compute the data path
-    filtered_args = {key: value for key, value in vars(args).items() if key in dataset_args}
-    data_path = "datasets/QM9_CC_" + generate_dataset_dir_name(filtered_args) + ".jsonl"
-
     # Check if data path already exists
-    if not os.path.exists(data_path):
-        raise FileNotFoundError(f"File '{data_path}' does not exist.")
+    if not os.path.exists(args.data_path):
+        raise FileNotFoundError(f"File '{args.data_path}' does not exist.")
 
     # Load the data
     json_list = []
-    with open(data_path, "r") as f:
+    with open(args.data_path, "r") as f:
         for line in tqdm(f):
             json_list.append(json.loads(line))
     num_samples = len(json_list)

@@ -108,7 +108,7 @@ def main(args):
     # Create checkpoint filename based on args hash
     args_hash = args_to_hash(args)
     checkpoint_filename = f"checkpoint_{args_hash}.pth.tar"
-    checkpoint_path = os.path.join(args.checkpoint_dir, checkpoint_filename)
+    checkpoint_path = os.path.join(args.storage_path, "checkpoints", checkpoint_filename)
 
     # Load checkpoint if exists
     start_epoch, best_val_mae, model, best_model, optimizer, scheduler, run_id, run_name = (
@@ -238,14 +238,6 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=1000, help="number of epochs")
     parser.add_argument("--batch_size", type=int, default=96, help="batch size")
     parser.add_argument("--num_workers", type=int, default=0, help="num workers")
-
-    # Checkpoint parameters
-    parser.add_argument(
-        "--checkpoint_dir",
-        type=str,
-        default="checkpoints/",
-        help="directory to save/load checkpoints",
-    )
 
     # Model parameters
     parser.add_argument(

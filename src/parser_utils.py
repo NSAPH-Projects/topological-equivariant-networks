@@ -1,7 +1,9 @@
 import argparse
+import os
 
 from combinatorial_data.lifter import Lifter
 from qm9.lifts.registry import lifter_registry
+from qm9.utils import dataset_args, generate_dataset_dir_name
 from utils import get_adjacency_types, merge_adjacencies
 
 
@@ -58,6 +60,13 @@ def add_common_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("--dis", type=float, default=4.0, help="Radius for Rips complex.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
 
+    parser.add_argument(
+        "--storage_path",
+        type=str,
+        default=os.getenv("STORAGE_PATH"),
+        help="Path to store data, model checkpoints, etc.",
+    )
+
     return parser
 
 
@@ -76,5 +85,11 @@ def add_common_derived_arguments(parsed_args):
 
     parsed_args.initial_features = sorted(parsed_args.initial_features)
     parsed_args.lifter = Lifter(parsed_args, lifter_registry)
+    filtered_args = {key: value for key, value in vars(parsed_args).items() if key in dataset_args}
+    parsed_args.data_path = os.path.join(
+        parsed_args.storage_path,
+        "datasets",
+        "QM9_CC_" + generate_dataset_dir_name(filtered_args) + ".jsonl",
+    )
 
     return parsed_args

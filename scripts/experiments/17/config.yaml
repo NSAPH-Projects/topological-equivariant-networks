@@ -1,5 +1,5 @@
-experiment_name: "experiment_7"
-description: "interrank: atoms + bonds + (functional groups + rings)"
+experiment_name: "17"
+description: "interrank: atoms + bonds + (functional groups + rings) no geo features no VC"
 
 # Dataset args
 lifters: ["atom:0", "bond:1", "ring:2", "functional_group:2"]

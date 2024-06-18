@@ -1,5 +1,5 @@
-experiment_name: "experiment_2"
-description: "isolated ranks: atoms + bonds + functional groups"
+experiment_name: "3"
+description: "isolated ranks: atoms + bonds + rings"
 
 # Dataset args
 lifters: ["atom:0", "bond:1", "ring:2", "supercell:3"]

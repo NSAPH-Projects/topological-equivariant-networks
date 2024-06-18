@@ -1,4 +1,4 @@
-experiment_name: "experiment_9"
+experiment_name: "10"
 description: "interrank: atoms + bonds + (functional groups + rings). no VC"
 
 # Dataset args

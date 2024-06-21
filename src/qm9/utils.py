@@ -22,18 +22,6 @@ from qm9.lifts.registry import lifter_registry
 from qm9.qm9_cc import QM9_CC
 from utils import get_adjacency_types, merge_adjacencies
 
-dataset_args = [
-    "lifters",
-    "neighbor_types",
-    "connectivity",
-    "visible_dims",
-    "merge_neighbors",
-    "initial_features",
-    "dim",
-    "dis",
-]
-
-
 def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
     """Return mean and mean average deviation of target in loader."""
     values = [graph.y for graph in loader.dataset]
@@ -110,9 +98,17 @@ def process_qm9_dataset(lifter_names, neighbor_types, connectivity, visible_dims
 
     # Compute the data path
     data_path = (
-        "data/qm9_cc/QM9_CC_" + 
-        generate_dataset_dir_name(lifter_names, neighbor_types, connectivity, visible_dims, merge_neighbors, initial_features, dim, dis) + 
-        ".jsonl"
+        "data/qm9_cc_" + 
+        generate_dataset_dir_name(
+            lifter_names, 
+            neighbor_types, 
+            connectivity, 
+            visible_dims, 
+            merge_neighbors, 
+            initial_features, 
+            dim, 
+            dis
+        )
     )
 
     if os.path.exists(data_path):
@@ -122,8 +118,7 @@ def process_qm9_dataset(lifter_names, neighbor_types, connectivity, visible_dims
     # Lift the QM9 dataset to CombinatorialComplexData format
     qm9_cc = lift_qm9_to_cc(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors)
 
-    # Save the lifted QM9 dataset to the specified data path
-    save_lifted_qm9(data_path, qm9_cc)
+    print(f"Lifted QM9 dataset generated and stored in '{qm9_cc.root}'.")
 
 def lift_qm9_to_cc(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors) -> list[dict]:
     """
@@ -194,38 +189,44 @@ def lift_qm9_to_cc(lifter_names, neighbor_types, connectivity, visible_dims, ini
         merge_neighbors=merge_neighbors,
     )
 
-    qm9_cc = QM9_CC("data/qm9_cc", pre_transform=transform.graph_to_ccdict) 
+    # Compute the data path
+    data_path = (
+        "data/qm9_cc_" + 
+        generate_dataset_dir_name(lifter_names, neighbor_types, connectivity, visible_dims, merge_neighbors, initial_features, dim, dis)
+    )
+
+    qm9_cc = QM9_CC(data_path, pre_transform=transform.graph_to_ccdict) 
     # the QM9_CC class in an InMemoryDataset, so we can pass the pre_transform argument to the constructor
     # the self.root is the root path that determines self.raw_dir and self.processed_dir
     # by default is self.raw_dir=<self.root>/raw self.processed_dir=<self.root>/processed
     return qm9_cc
 
 
-def save_lifted_qm9(storage_path: str, lifted_qm9: QM9_CC) -> None:
-    """
-    Save the lifted QM9 samples to a single JSON Lines (.jsonl) file.
+# def save_lifted_qm9(storage_path: str, lifted_qm9: QM9_CC) -> None:
+#     """
+#     Save the lifted QM9 samples to a single JSON Lines (.jsonl) file.
 
-    Parameters
-    ----------
-    storage_path : str
-        The path to the .jsonl file where the data will be saved.
-    samples : list[dict]
-        The list of lifted QM9 samples.
+#     Parameters
+#     ----------
+#     storage_path : str
+#         The path to the .jsonl file where the data will be saved.
+#     samples : list[dict]
+#         The list of lifted QM9 samples.
 
-    Returns
-    -------
-    None
-    """
+#     Returns
+#     -------
+#     None
+#     """
 
-    samples = lifted_qm9.data_list
+#     samples = lifted_qm9.data_list
 
-    if os.path.exists(storage_path):
-        raise FileExistsError(f"File '{storage_path}' already exists.")
+#     if os.path.exists(storage_path):
+#         raise FileExistsError(f"File '{storage_path}' already exists.")
 
-    with open(storage_path, "w") as f:
-        for sample in tqdm(samples, desc="Saving lifted QM9 samples"):
-            json.dump(sample, f)
-            f.write("\n")
+#     with open(storage_path, "w") as f:
+#         for sample in tqdm(samples, desc="Saving lifted QM9 samples"):
+#             json.dump(sample, f)
+#             f.write("\n")
 
 
 def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
@@ -233,6 +234,16 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     # Load the QM9 dataset
 
     # Compute the data path
+    dataset_args = [
+        "lifters",
+        "neighbor_types",
+        "connectivity",
+        "visible_dims",
+        "merge_neighbors",
+        "initial_features",
+        "dim",
+        "dis",
+    ]
     filtered_args = {key: value for key, value in vars(args).items() if key in dataset_args}
     data_path = "datasets/QM9_CC_" + generate_dataset_dir_name(filtered_args) + ".jsonl"
 

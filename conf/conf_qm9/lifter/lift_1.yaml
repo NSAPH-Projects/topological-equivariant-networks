@@ -1,0 +1,22 @@
+# LIFTERS=(atom:0 bond:1 supercell:2)
+# NEIGHBOR_TYPES="max"
+# CONNECTIVITY="self"
+# VISIBLE_DIMS=(0 1)
+# INITIAL_FEATURES="hetero"
+# DIM=2
+
+lifter_names: # List of lifters to apply and their ranking logic.
+  - "atom:0"
+  - "bond:1"
+  - "supercell:2"
+neighbor_types: # Defines adjacency between cells of the same rank. For '+1', two cells of rank i are connected if they are both connected to the same cell of rank i+1.
+  - "max"
+connectivity: self # Connectivity pattern between ranks.
+visible_dims: # Specifies which ranks to explicitly represent as nodes.
+  - 0
+  - 1
+# initial_features: # List of features to use.
+#   - hetero
+dim: 2 # ASC dimension
+dis: 4.0 # Radius for Rips complex.
+    

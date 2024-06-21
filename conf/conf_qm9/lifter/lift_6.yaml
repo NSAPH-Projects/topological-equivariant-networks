@@ -1,0 +1,7 @@
+lifters: ["atom:0", "bond:1", "supercell:2"]
+neighbor_types: "max"
+connectivity: "self"
+visible_dims: [0, 1]
+initial_features: "node"
+dim: 2
+dis: 4.0

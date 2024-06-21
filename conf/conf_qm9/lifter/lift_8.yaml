@@ -1,0 +1,7 @@
+lifters: ["atom:0", "bond:1"]
+neighbor_types: "max"
+connectivity: "self"
+visible_dims: [0]
+initial_features: "hetero"
+dim: 1
+dis: 4.0

@@ -20,6 +20,7 @@ from combinatorial_data.combinatorial_data_utils import (
 from combinatorial_data.lifter import Lifter
 from qm9.lifts.registry import lifter_registry
 from qm9.qm9_cc import QM9_CC
+from utils import get_adjacency_types, merge_adjacencies
 
 dataset_args = [
     "lifters",
@@ -80,15 +81,20 @@ def prepare_data(graph: Data, index: int, target_name: str) -> Data:
 
     return graph
 
-
-def process_qm9_dataset(args: Namespace):
+def process_qm9_dataset(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors):
     """
     Process the QM9 dataset.
 
     Parameters
     ----------
-    args : Namespace
-        The command-line arguments parsed using argparse.
+    lifter_names : list[str]
+    neighbor_types : list[str]
+    connectivity : str
+    visible_dims : list[int]
+    initial_features : str
+    dim : int
+    dis : bool
+    merge_neighbors : bool
 
     Returns
     -------
@@ -103,28 +109,44 @@ def process_qm9_dataset(args: Namespace):
     """
 
     # Compute the data path
-    filtered_args = {key: value for key, value in vars(args).items() if key in dataset_args}
-    data_path = "datasets/QM9_CC_" + generate_dataset_dir_name(filtered_args) + ".jsonl"
+    data_path = (
+        "data/qm9_cc/QM9_CC_" + 
+        generate_dataset_dir_name(lifter_names, neighbor_types, connectivity, visible_dims, merge_neighbors, initial_features, dim, dis) + 
+        ".jsonl"
+    )
 
     if os.path.exists(data_path):
         print(f"File '{data_path}' already exists.")
         return
 
     # Lift the QM9 dataset to CombinatorialComplexData format
-    qm9_cc = lift_qm9_to_cc(args)
+    qm9_cc = lift_qm9_to_cc(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors)
 
     # Save the lifted QM9 dataset to the specified data path
     save_lifted_qm9(data_path, qm9_cc)
 
-
-def lift_qm9_to_cc(args: Namespace) -> list[dict]:
+def lift_qm9_to_cc(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors) -> list[dict]:
     """
     Lift QM9 dataset to CombinatorialComplexData format.
 
     Parameters
     ----------
-    args : Namespace
-        Command-line arguments.
+    lifter_names : list[str]
+        The names of the lifters to apply.
+    neighbor_types : list[str]
+        The types of neighbors to consider. Defines adjacency between cells of the same rank.
+    connectivity : str
+        The connectivity pattern between ranks.
+    visible_dims : list[int]
+        Specifies which ranks to explicitly represent as nodes.
+    initial_features : list[str]
+        The initial features to use.
+    dim : int
+        The ASC dimension.
+    dis : bool
+        Radius for Rips complex
+    merge_neighbors : bool
+        Whether to merge neighbors.
 
     Returns
     -------
@@ -138,15 +160,44 @@ def lift_qm9_to_cc(args: Namespace) -> list[dict]:
     JSON files.
     """
 
-    # Create the transform
-    transform = CombinatorialComplexTransform(
-        lifter=args.lifter,
-        dim=args.dim,
-        adjacencies=args.adjacencies,
-        processed_adjacencies=args.processed_adjacencies,
-        merge_neighbors=args.merge_neighbors,
+    #dim : int
+    #neighbor_types : list[str]
+    #connectivity : str
+    #visible_dims : list[int]
+    adjacencies = get_adjacency_types(
+        dim,
+        connectivity,
+        neighbor_types,
+        visible_dims,
     )
-    qm9_cc = QM9_CC("./datasets/QM9_CC", pre_transform=transform.graph_to_ccdict)
+    # If merge_neighbors is True, the adjacency types we feed to the model will be the merged ones
+    if merge_neighbors:
+        processed_adjacencies = merge_adjacencies(adjacencies)
+    else:
+        processed_adjacencies = adjacencies
+
+    initial_features = sorted(initial_features)
+    #lifter_names : list[str]
+    #initial_features : str
+    #dim : int
+    #dis : bool
+    lifter = Lifter(lifter_names, initial_features, dim, dis, lifter_registry)
+
+    # Create the transform lifter, dim, adjacencies, processed_adjacencies, merge_neighbors
+    #dim : int
+    #merge_neighbors : bool
+    transform = CombinatorialComplexTransform(
+        lifter=lifter,
+        dim=dim,
+        adjacencies=adjacencies,
+        processed_adjacencies=processed_adjacencies,
+        merge_neighbors=merge_neighbors,
+    )
+
+    qm9_cc = QM9_CC("data/qm9_cc", pre_transform=transform.graph_to_ccdict) 
+    # the QM9_CC class in an InMemoryDataset, so we can pass the pre_transform argument to the constructor
+    # the self.root is the root path that determines self.raw_dir and self.processed_dir
+    # by default is self.raw_dir=<self.root>/raw self.processed_dir=<self.root>/processed
     return qm9_cc
 
 
@@ -292,16 +343,36 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     return tuple(loaders.values())
 
 
-def generate_dataset_dir_name(dataset_args: dict) -> str:
+def generate_dataset_dir_name(lifters, neighbor_types, connectivity, visible_dims, merge_neighbors, initial_features, dim, dis) -> str:
     """
-    Generate a directory name based on a subset of script arguments.
+    Generate a directory name based on molecule characteristics.
 
-    Parameters:
-    dataset_args (dict): A dictionary of arguments that are relevant to dataset generation.
+    Parameters
+    ----------
+    lifters : list[str]
+    neighbor_types : list[str]
+    connectivity : str
+    visible_dims : list[int]
+    initial_features : str
+    dim : int
+    dis : bool
+    merge_neighbors : bool
 
-    Returns:
+    Returns
+    -------
     str: A hash-based directory name representing the relevant arguments.
     """
+    dataset_args = {
+        "lifters": lifters,
+        "neighbor_types": neighbor_types,
+        "connectivity": connectivity,
+        "visible_dims": visible_dims,
+        "merge_neighbors": merge_neighbors,
+        "initial_features": initial_features,
+        "dim": dim,
+        "dis": dis,
+    }
+
     # Convert relevant arguments to a JSON string for consistent ordering
     args_str = json.dumps(dataset_args, sort_keys=True)
 

@@ -7,18 +7,22 @@ from torch_geometric.data import Data
 
 from qm9.lifts.common import Cell
 
-
 class Lifter:
 
-    def __init__(self, args: Namespace, lifter_registry: dict[str, callable]) -> "Lifter":
+    def __init__(self, lifter_names, initial_features, dim, dis, lifter_registry: dict[str, callable]) -> "Lifter":
         """
         Initialize the Lifter object.
 
         Parameters
         ----------
-        args : argparse.Namespace
-            The parsed command line arguments. It should contain 'lifters', a list of lifter names,
-            and additional arguments like 'dim' and 'dis' for specific lifters.
+        lifter_names : list[str]
+            A list of lifter names and their ranking logic to be applied to the input data.
+        initial_features : list[str]
+            A list of initial features.
+        dim : int
+            The dimension of the ASC.
+        dis : float
+            The radius for the Rips complex.
         lifter_registry : dict[str, callable]
             A dictionary of lifter names and corresponding functions.
 
@@ -30,9 +34,9 @@ class Lifter:
 
         # TODO: check inputs: a lift with hetero features may not be used with cardinality
 
-        self.lifters = get_lifters(args, lifter_registry)
+        self.lifters = get_lifters(lifter_names, dim, dis, lifter_registry)
         self.num_features_dict = get_num_features_dict(self.lifters)
-        self.dim = args.dim
+        self.dim = dim
 
     def lift(self, graph: Data) -> dict[int, dict[Cell, list[bool]]]:
         """
@@ -183,8 +187,7 @@ class Lifter:
         return min(ranks)
 
 
-def get_lifters(
-    args: Namespace, lifter_registry: dict[str, callable]
+def get_lifters(lifter_names, dim, dis, lifter_registry: dict[str, callable]
 ) -> list[tuple[callable, int | str]]:
     """
     Construct a list of lifter functions based on provided arguments.
@@ -195,9 +198,12 @@ def get_lifters(
 
     Parameters
     ----------
-    args : argparse.Namespace
-        The parsed command line arguments. It should contain 'lifters', a list of lifter names, and
-        additional arguments like 'dim' and 'dis' for specific lifters.
+    lifter_names : list[str]
+        A list of lifter names and their ranking logic to be applied to the input data.
+    dim : int
+        The dimension of the ASC.
+    dis : float
+        The radius for the Rips complex.
 
     lifter_registry : dict[str, callable]
         A dictionary of known lifter names and corresponding functions.
@@ -209,12 +215,12 @@ def get_lifters(
         logic.
     """
     lifters = []
-    for lifter_str in args.lifters:
+    for lifter_str in lifter_names:
         # Create the callable
         parts = lifter_str.split(":")
         method_str = parts[0]
         if method_str == "rips":
-            lifter = partial(lifter_registry[method_str], dim=args.dim, dis=args.dis)
+            lifter = partial(lifter_registry[method_str], dim=dim, dis=dis)
             lifter.num_features = lifter_registry[method_str].num_features
         else:
             lifter = lifter_registry[method_str]

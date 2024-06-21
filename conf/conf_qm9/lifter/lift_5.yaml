@@ -1,0 +1,8 @@
+lifters: ["atom:0", "bond:1", "functional_group:2", "supercell:3"]
+neighbor_types: "max"
+connectivity: "all_to_all"
+visible_dims: [0, 1, 2]
+initial_features: "hetero"
+dim: 3
+dis: 4.0
+merge_neighbors: False

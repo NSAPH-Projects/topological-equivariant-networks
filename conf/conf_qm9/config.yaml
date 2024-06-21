@@ -1,0 +1,5 @@
+defaults:
+  - _self_
+  - lifter: lift_1
+
+lifter_name: ${hydra:runtime.choices.lifter}

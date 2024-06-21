@@ -1,0 +1,8 @@
+lifters: ["atom:0", "supercell:1"]
+neighbor_types: "max"
+connectivity: "self"
+visible_dims: [0]
+initial_features: "hetero"
+dim: 1
+dis: 4.0
+merge_neighbors: False

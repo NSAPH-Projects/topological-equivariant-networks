@@ -1,5 +1,5 @@
 import hydra
-from qm9.utils import lift_qm9_to_cc
+from qm9.qm9_cc import QM9_CC
 from omegaconf import DictConfig
 #from utils import set_seed
 
@@ -8,7 +8,8 @@ def main(cfg: DictConfig):
     #set_seed(args.seed)
 
     # Lift the QM9 dataset to CombinatorialComplexData format
-    qm9_cc = lift_qm9_to_cc(
+    qm9_cc = QM9_CC(
+        f"data/qm9_cc_{cfg.lifter_name}",
         list(cfg.lifter.lifter_names), 
         list(cfg.lifter.neighbor_types), 
         cfg.lifter.connectivity, 

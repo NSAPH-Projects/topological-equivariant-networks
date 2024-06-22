@@ -9,6 +9,11 @@ from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zi
 from torch_geometric.utils import one_hot, scatter
 from tqdm import tqdm
 
+from combinatorial_data.lifter import Lifter
+from qm9.lifts.registry import lifter_registry
+from utils import get_adjacency_types, merge_adjacencies
+from combinatorial_data.combinatorial_data_utils import CombinatorialComplexTransform
+
 HAR2EV = 27.211386246
 KCALMOL2EV = 0.04336414
 
@@ -47,7 +52,29 @@ atomrefs = {
 
 
 class QM9_CC(InMemoryDataset):
-    r"""The QM9 dataset from the `"MoleculeNet: A Benchmark for Molecular
+    r"""
+    Lift QM9 to a CombinatorialComplexData.
+
+    Parameters
+    ----------
+    lifter_names : list[str]
+        The names of the lifters to apply.
+    neighbor_types : list[str]
+        The types of neighbors to consider. Defines adjacency between cells of the same rank.
+    connectivity : str
+        The connectivity pattern between ranks.
+    visible_dims : list[int]
+        Specifies which ranks to explicitly represent as nodes.
+    initial_features : list[str]
+        The initial features to use.
+    dim : int
+        The ASC dimension.
+    dis : bool
+        Radius for Rips complex
+    merge_neighbors : bool
+        Whether to merge neighbors.
+    
+    The QM9 dataset from the `"MoleculeNet: A Benchmark for Molecular
     Machine Learning" <https://arxiv.org/abs/1703.00564>`_ paper, consisting of
     about 130,000 molecules with 19 regression targets.
     Each molecule includes complete spatial information for the single low
@@ -145,6 +172,7 @@ class QM9_CC(InMemoryDataset):
     def __init__(
         self,
         root: str,
+        lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors,
         transform: Optional[Callable] = None,
         pre_transform: Optional[Callable] = None,
         pre_filter: Optional[Callable] = None,
@@ -154,6 +182,33 @@ class QM9_CC(InMemoryDataset):
             root, transform, pre_transform, pre_filter, force_reload=force_reload
         )
         self.load(self.processed_paths[0])
+
+        #dim : int
+        #neighbor_types : list[str]
+        #connectivity : str
+        #visible_dims : list[int]
+        adjacencies = get_adjacency_types(
+            dim,
+            connectivity,
+            neighbor_types,
+            visible_dims,
+        )
+        # If merge_neighbors is True, the adjacency types we feed to the model will be the merged ones
+        if merge_neighbors:
+            processed_adjacencies = merge_adjacencies(adjacencies)
+        else:
+            processed_adjacencies = adjacencies
+
+        initial_features = sorted(initial_features)
+        #lifter_names : list[str]
+        #initial_features : str
+        #dim : int
+        #dis : bool
+        self.lifter = Lifter(lifter_names, initial_features, dim, dis, lifter_registry)
+        self.adjacencies = adjacencies
+        self.processed_adjacencies = processed_adjacencies
+        self.dim = dim
+        self.merge_neighbors = merge_neighbors
 
     def mean(self, target: int) -> float:
         y = torch.cat([self.get(i).y for i in range(len(self))], dim=0)
@@ -249,6 +304,17 @@ class QM9_CC(InMemoryDataset):
 
         suppl = Chem.SDMolSupplier(self.raw_paths[0], removeHs=False, sanitize=False)
 
+        # Create the transform lifter, dim, adjacencies, processed_adjacencies, merge_neighbors
+        #dim : int
+        #merge_neighbors : bool
+        lift = CombinatorialComplexTransform(
+            lifter=self.lifter,
+            dim=self.dim,
+            adjacencies=self.adjacencies,
+            processed_adjacencies=self.processed_adjacencies,
+            merge_neighbors=self.merge_neighbors,
+        ).graph_to_ccdict
+
         data_list = []
         for i, mol in enumerate(tqdm(suppl)):
             if i in skip:
@@ -321,10 +387,13 @@ class QM9_CC(InMemoryDataset):
                 mol=mol,
             )
 
+            data = lift(data)
+
             if self.pre_filter is not None and not self.pre_filter(data):
                 continue
             if self.pre_transform is not None:
                 data = self.pre_transform(data)
 
             data_list.append(data)
+
         self.save(data_list, self.processed_paths[0])

@@ -178,10 +178,7 @@ class QM9_CC(InMemoryDataset):
         pre_filter: Optional[Callable] = None,
         force_reload: bool = False,
     ) -> None:
-        super().__init__(
-            root, transform, pre_transform, pre_filter, force_reload=force_reload
-        )
-        self.load(self.processed_paths[0])
+        # Initialize subclass-specific attributes
 
         #dim : int
         #neighbor_types : list[str]
@@ -209,6 +206,12 @@ class QM9_CC(InMemoryDataset):
         self.processed_adjacencies = processed_adjacencies
         self.dim = dim
         self.merge_neighbors = merge_neighbors
+
+        super().__init__(
+            root, 
+            transform, pre_transform, pre_filter, force_reload=force_reload
+        )
+        self.load(self.processed_paths[0])
 
     def mean(self, target: int) -> float:
         y = torch.cat([self.get(i).y for i in range(len(self))], dim=0)

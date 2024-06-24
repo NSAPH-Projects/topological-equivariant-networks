@@ -69,137 +69,137 @@ def prepare_data(graph: Data, index: int, target_name: str) -> Data:
 
     return graph
 
-def process_qm9_dataset(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors):
-    """
-    Process the QM9 dataset.
+# def process_qm9_dataset(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors):
+#     """
+#     Process the QM9 dataset.
 
-    Parameters
-    ----------
-    lifter_names : list[str]
-    neighbor_types : list[str]
-    connectivity : str
-    visible_dims : list[int]
-    initial_features : str
-    dim : int
-    dis : bool
-    merge_neighbors : bool
+#     Parameters
+#     ----------
+#     lifter_names : list[str]
+#     neighbor_types : list[str]
+#     connectivity : str
+#     visible_dims : list[int]
+#     initial_features : str
+#     dim : int
+#     dis : bool
+#     merge_neighbors : bool
 
-    Returns
-    -------
-    None
+#     Returns
+#     -------
+#     None
 
-    Notes
-    -----
-    This function computes the data path based on the relevant arguments provided in `args`. It then
-    lifts samples of the QM9 dataset to combinatorial complexes using the `lift_qm9_to_cc` function.
-    Finally, it saves the lifted QM9 dataset to the specified data path using the `save_lifted_qm9`
-    function.
-    """
+#     Notes
+#     -----
+#     This function computes the data path based on the relevant arguments provided in `args`. It then
+#     lifts samples of the QM9 dataset to combinatorial complexes using the `lift_qm9_to_cc` function.
+#     Finally, it saves the lifted QM9 dataset to the specified data path using the `save_lifted_qm9`
+#     function.
+#     """
 
-    # Compute the data path
-    data_path = (
-        "data/qm9_cc_" + 
-        generate_dataset_dir_name(
-            lifter_names, 
-            neighbor_types, 
-            connectivity, 
-            visible_dims, 
-            merge_neighbors, 
-            initial_features, 
-            dim, 
-            dis
-        )
-    )
+#     # Compute the data path
+#     data_path = (
+#         "data/qm9_cc_" + 
+#         generate_dataset_dir_name(
+#             lifter_names, 
+#             neighbor_types, 
+#             connectivity, 
+#             visible_dims, 
+#             merge_neighbors, 
+#             initial_features, 
+#             dim, 
+#             dis
+#         )
+#     )
 
-    if os.path.exists(data_path):
-        print(f"File '{data_path}' already exists.")
-        return
+#     if os.path.exists(data_path):
+#         print(f"File '{data_path}' already exists.")
+#         return
 
-    # Lift the QM9 dataset to CombinatorialComplexData format
-    qm9_cc = lift_qm9_to_cc(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors)
+#     # Lift the QM9 dataset to CombinatorialComplexData format
+#     qm9_cc = lift_qm9_to_cc(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors)
 
-    print(f"Lifted QM9 dataset generated and stored in '{qm9_cc.root}'.")
+#     print(f"Lifted QM9 dataset generated and stored in '{qm9_cc.root}'.")
 
-def lift_qm9_to_cc(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors) -> list[dict]:
-    """
-    Lift QM9 dataset to CombinatorialComplexData format.
+# def lift_qm9_to_cc(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors) -> list[dict]:
+#     """
+#     Lift QM9 dataset to CombinatorialComplexData format.
 
-    Parameters
-    ----------
-    lifter_names : list[str]
-        The names of the lifters to apply.
-    neighbor_types : list[str]
-        The types of neighbors to consider. Defines adjacency between cells of the same rank.
-    connectivity : str
-        The connectivity pattern between ranks.
-    visible_dims : list[int]
-        Specifies which ranks to explicitly represent as nodes.
-    initial_features : list[str]
-        The initial features to use.
-    dim : int
-        The ASC dimension.
-    dis : bool
-        Radius for Rips complex
-    merge_neighbors : bool
-        Whether to merge neighbors.
+#     Parameters
+#     ----------
+#     lifter_names : list[str]
+#         The names of the lifters to apply.
+#     neighbor_types : list[str]
+#         The types of neighbors to consider. Defines adjacency between cells of the same rank.
+#     connectivity : str
+#         The connectivity pattern between ranks.
+#     visible_dims : list[int]
+#         Specifies which ranks to explicitly represent as nodes.
+#     initial_features : list[str]
+#         The initial features to use.
+#     dim : int
+#         The ASC dimension.
+#     dis : bool
+#         Radius for Rips complex
+#     merge_neighbors : bool
+#         Whether to merge neighbors.
 
-    Returns
-    -------
-    list[dict]
-        List of Combinatorial Complex representations of QM9 molecules.
+#     Returns
+#     -------
+#     list[dict]
+#         List of Combinatorial Complex representations of QM9 molecules.
 
-    Notes
-    -----
-    The QM9 dataset is loaded and each sample is transformed into a dictionary representation of
-    the CombinatorialComplexData class. We transform to dictionary format to allow for storage as
-    JSON files.
-    """
+#     Notes
+#     -----
+#     The QM9 dataset is loaded and each sample is transformed into a dictionary representation of
+#     the CombinatorialComplexData class. We transform to dictionary format to allow for storage as
+#     JSON files.
+#     """
 
-    #dim : int
-    #neighbor_types : list[str]
-    #connectivity : str
-    #visible_dims : list[int]
-    adjacencies = get_adjacency_types(
-        dim,
-        connectivity,
-        neighbor_types,
-        visible_dims,
-    )
-    # If merge_neighbors is True, the adjacency types we feed to the model will be the merged ones
-    if merge_neighbors:
-        processed_adjacencies = merge_adjacencies(adjacencies)
-    else:
-        processed_adjacencies = adjacencies
+#     #dim : int
+#     #neighbor_types : list[str]
+#     #connectivity : str
+#     #visible_dims : list[int]
+#     adjacencies = get_adjacency_types(
+#         dim,
+#         connectivity,
+#         neighbor_types,
+#         visible_dims,
+#     )
+#     # If merge_neighbors is True, the adjacency types we feed to the model will be the merged ones
+#     if merge_neighbors:
+#         processed_adjacencies = merge_adjacencies(adjacencies)
+#     else:
+#         processed_adjacencies = adjacencies
 
-    initial_features = sorted(initial_features)
-    #lifter_names : list[str]
-    #initial_features : str
-    #dim : int
-    #dis : bool
-    lifter = Lifter(lifter_names, initial_features, dim, dis, lifter_registry)
+#     initial_features = sorted(initial_features)
+#     #lifter_names : list[str]
+#     #initial_features : str
+#     #dim : int
+#     #dis : bool
+#     lifter = Lifter(lifter_names, initial_features, dim, dis, lifter_registry)
 
-    # Create the transform lifter, dim, adjacencies, processed_adjacencies, merge_neighbors
-    #dim : int
-    #merge_neighbors : bool
-    transform = CombinatorialComplexTransform(
-        lifter=lifter,
-        dim=dim,
-        adjacencies=adjacencies,
-        processed_adjacencies=processed_adjacencies,
-        merge_neighbors=merge_neighbors,
-    )
+#     # Create the transform lifter, dim, adjacencies, processed_adjacencies, merge_neighbors
+#     #dim : int
+#     #merge_neighbors : bool
+#     transform = CombinatorialComplexTransform(
+#         lifter=lifter,
+#         dim=dim,
+#         adjacencies=adjacencies,
+#         processed_adjacencies=processed_adjacencies,
+#         merge_neighbors=merge_neighbors,
+#     )
 
-    # Compute the data path
-    data_path = (
-        "data/qm9_cc_" + 
-        generate_dataset_dir_name(lifter_names, neighbor_types, connectivity, visible_dims, merge_neighbors, initial_features, dim, dis)
-    )
+#     # Compute the data path
+#     data_path = (
+#         "data/qm9_cc_" + 
+#         generate_dataset_dir_name(lifter_names, neighbor_types, connectivity, visible_dims, merge_neighbors, initial_features, dim, dis)
+#     )
 
-    qm9_cc = QM9_CC(data_path, pre_transform=transform.graph_to_ccdict) 
-    # the QM9_CC class in an InMemoryDataset, so we can pass the pre_transform argument to the constructor
-    # the self.root is the root path that determines self.raw_dir and self.processed_dir
-    # by default is self.raw_dir=<self.root>/raw self.processed_dir=<self.root>/processed
-    return qm9_cc
+#     qm9_cc = QM9_CC(data_path, pre_transform=transform.graph_to_ccdict) 
+#     # the QM9_CC class in an InMemoryDataset, so we can pass the pre_transform argument to the constructor
+#     # the self.root is the root path that determines self.raw_dir and self.processed_dir
+#     # by default self.raw_dir=<self.root>/raw and self.processed_dir=<self.root>/processed
+#     return qm9_cc
 
 
 # def save_lifted_qm9(storage_path: str, lifted_qm9: QM9_CC) -> None:

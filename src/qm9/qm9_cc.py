@@ -11,10 +11,7 @@ from tqdm import tqdm
 
 from combinatorial_data.lifter import Lifter
 from qm9.lifts.registry import lifter_registry
-from combinatorial_data.combinatorial_data_utils import (
-    CombinatorialComplexTransform, 
-    CombinatorialComplexData
-)
+from combinatorial_data.combinatorial_data_utils import CombinatorialComplexTransform
 
 HAR2EV = 27.211386246
 KCALMOL2EV = 0.04336414

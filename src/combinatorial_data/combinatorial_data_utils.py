@@ -183,7 +183,8 @@ class CombinatorialComplexData(Data):
         else:
             return 0
 
-    def from_json(self, data: dict[str, any]) -> "CombinatorialComplexData":
+    @classmethod
+    def from_ccdict(cls, data: dict[str, any]) -> "CombinatorialComplexData":
         """
         Convert a dictionary of data to a CombinatorialComplexData object.
 
@@ -205,9 +206,10 @@ class CombinatorialComplexData(Data):
         to initialize tensors with the correct size.
 
         """
+        attr = {}
 
         for key in ["x", "pos", "y"]:
-            setattr(self, key, torch.tensor(data[key]))
+            setattr(attr, key, torch.tensor(data[key]))
 
         for key, value in data.items():
 
@@ -216,45 +218,54 @@ class CombinatorialComplexData(Data):
                 if len(value) == 0:
                     rank = key.split("_")[1]
                     num_features = data["num_features_dict"][rank]
-                    attr_value = torch.empty((0, num_features), dtype=self.attribute_dtype["x_"])
+                    attr_value = torch.empty(
+                        (0, num_features), dtype=attr.attribute_dtype["x_"]
+                    )
                 else:
-                    attr_value = torch.tensor(value, dtype=self.attribute_dtype["x_"])
-                setattr(self, key, attr_value)
+                    attr_value = torch.tensor(value, dtype=attr.attribute_dtype["x_"])
+                setattr(attr, key, attr_value)
 
             # cast the cell_i
             elif "cell_" in key:
                 if len(value) == 0:
-                    attr_value = torch.empty((0, 0), dtype=self.attribute_dtype["cell_"])
+                    attr_value = torch.empty(
+                        (0, 0), dtype=attr.attribute_dtype["cell_"]
+                    )
                 else:
                     attr_value = torch.tensor(
-                        pad_lists_to_same_length(value), dtype=self.attribute_dtype["cell_"]
+                        pad_lists_to_same_length(value),
+                        dtype=attr.attribute_dtype["cell_"],
                     )
-                setattr(self, key, attr_value)
+                setattr(attr, key, attr_value)
 
             # cast the mem_i
             elif "mem_" in key:
                 num_lifters = len(data["mem_0"][0])
                 if len(value) == 0:
-                    attr_value = torch.empty((0, num_lifters), dtype=self.attribute_dtype["mem_"])
+                    attr_value = torch.empty(
+                        (0, num_lifters), dtype=attr.attribute_dtype["mem_"]
+                    )
                 else:
-                    attr_value = torch.tensor(value, dtype=self.attribute_dtype["mem_"])
-                setattr(self, key, attr_value)
+                    attr_value = torch.tensor(value, dtype=cls.attribute_dtype["mem_"])
+                setattr(attr, key, attr_value)
 
             # cast the adj_i_j[_foo]
             elif "adj_" in key:
-                setattr(self, key, torch.tensor(value, dtype=self.attribute_dtype["adj_"]))
+                setattr(
+                    attr, key, torch.tensor(value, dtype=cls.attribute_dtype["adj_"])
+                )
 
             # cast the inv_i_j[_foo]
             elif "inv_" in key:
                 if len(value) == 0:
-                    attr_value = torch.empty((0, 0), dtype=self.attribute_dtype["inv_"])
+                    attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["inv_"])
                 else:
                     attr_value = torch.tensor(
-                        pad_lists_to_same_length(value), dtype=self.attribute_dtype["inv_"]
+                        pad_lists_to_same_length(value), dtype=cls.attribute_dtype["inv_"]
                     ).t()
-                setattr(self, key, attr_value)
+                setattr(attr, key, attr_value)
 
-        return self
+        return cls.from_dict(attr)
 
 
 class CombinatorialComplexTransform(BaseTransform):

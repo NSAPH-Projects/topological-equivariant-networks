@@ -484,7 +484,7 @@ class QM9_CC(InMemoryDataset):
             adjacencies=self.adjacencies,
             processed_adjacencies=self.processed_adjacencies,
             merge_neighbors=self.merge_neighbors,
-        ).graph_to_ccdict
+        )
 
         data_list = []
         for i, mol in enumerate(tqdm(suppl)):
@@ -560,7 +560,6 @@ class QM9_CC(InMemoryDataset):
 
             data = lift(data)
 
-            data = CombinatorialComplexData().from_json(data)
             if self.pre_filter is not None and not self.pre_filter(data):
                 continue
             if self.pre_transform is not None:

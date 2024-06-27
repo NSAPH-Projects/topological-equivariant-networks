@@ -3,7 +3,7 @@ from qm9.qm9_cc import QM9_CC
 from omegaconf import DictConfig
 #from utils import set_seed
 
-@hydra.main(config_path="../conf/conf_qm9", config_name="config", version_base=None)
+@hydra.main(config_path="conf/conf_qm9", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     #set_seed(args.seed)
 

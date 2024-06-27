@@ -5,13 +5,13 @@ from typing import Callable, List, Optional
 
 import torch
 from torch import Tensor
-from torch_geometric.data import Data, InMemoryDataset, download_url, extract_zip
+from torch_geometric.data import Data, download_url, extract_zip
 from torch_geometric.utils import one_hot, scatter
 from tqdm import tqdm
 
 from combinatorial_data.lifter import Lifter
 from qm9.lifts.registry import lifter_registry
-from combinatorial_data.combinatorial_data_utils import CombinatorialComplexTransform
+from combinatorial_data.combinatorial_data_utils import CombinatorialComplexTransform, InMemoryCCDataset
 
 HAR2EV = 27.211386246
 KCALMOL2EV = 0.04336414
@@ -216,7 +216,7 @@ def merge_adjacencies(adjacencies: list[str]) -> list[str]:
     """
     return list(set(["_".join(adj_type.split("_")[:2]) for adj_type in adjacencies]))
 
-class QM9_CC(InMemoryDataset):
+class QM9_CC(InMemoryCCDataset):
     r"""
     Lift QM9 to a CombinatorialComplexData.
 

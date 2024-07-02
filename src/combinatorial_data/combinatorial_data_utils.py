@@ -157,20 +157,18 @@ class CombinatorialComplexData(Data):
             the number of nodes for `inv_i_j` and `cell_i` attributes, or calls the superclass's
             `__inc__` method for other attributes.
         """
-        num_nodes = getattr(self, "cell_0").size(0)
         # The adj_i_j attribute holds cell indices, increment each dim by the number of cells of
         # corresponding rank
         if re.match(r"adj_(\d+_\d+|\d+_\d+_\d+)", key):
             i, j = key.split("_")[1:3]
-            return torch.tensor(
-                [
-                    [getattr(self, f"cell_{i}").size(0)],
-                    [getattr(self, f"cell_{j}").size(0)],
-                ]
-            )
+            return torch.tensor([[self.num_cells(rank=i)], [self.num_cells(rank=j)]])
+
         # The inv_i_j and cell_i attributes hold node indices, they should be incremented
-        elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"cell_\d+", key):
-            return num_nodes
+        # elif re.match(r"inv_(\d+_\d+|\d+_\d+_\d+)", key) or re.match(r"cell_\d+", key):
+        #     return num_nodes
+        elif re.match(re.match(r"_cells_\d+", key)):
+            return self.num_cells(rank=0)
+
         else:
             return super().__inc__(key, value, *args, **kwargs)
 
@@ -230,6 +228,10 @@ class CombinatorialComplexData(Data):
             return cell_lists
         else:
             raise ValueError(f"Unknown format: {format}")
+
+    def num_cells(self, rank: int) -> int:
+        """Return the number of cells of a given rank."""
+        return len(getattr(self, f"_slices_{rank}"))
 
     @classmethod
     def from_ccdict(cls, data: dict[str, any]) -> "CombinatorialComplexData":

@@ -1,6 +1,9 @@
 ## hydra
 /outputs
 
+## MacOS
+**/.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -12,6 +15,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+cache/
 develop-eggs/
 dist/
 downloads/

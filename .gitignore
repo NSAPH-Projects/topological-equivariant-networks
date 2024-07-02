@@ -1,6 +1,11 @@
 ## hydra
 /outputs
 
+## data
+data/input/
+!data/input/geospatialcc.json
+!data/input/coarse_pm25_bronx_tract_wei_et_al_2023.parquet
+
 ## MacOS
 **/.DS_Store
 

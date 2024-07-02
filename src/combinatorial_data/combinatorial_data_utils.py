@@ -1,3 +1,4 @@
+import itertools
 import re
 from collections.abc import Iterable
 from types import MappingProxyType
@@ -16,7 +17,7 @@ from torch_geometric.transforms import BaseTransform
 from combinatorial_data.lifter import Lifter
 from qm9.lifts.common import Cell
 
-from typing import Iterable, Optional
+from typing import Iterable, Literal, Optional, Union
 
 
 # class CustomCollater(Collater):
@@ -109,25 +110,31 @@ class CombinatorialComplexData(Data):
         Positions of rank 0 cells (atoms). Expected to have shape (num_atoms, 3).
     x_i : torch.FloatTensor
         Features of cells of rank i, where i is a non-negative integer.
-    cell_i : torch.FloatTensor
-        Node indices associated with cells of rank i, where i is a non-negative integer.
     adj_i_j : torch.LongTensor
         Adjacency tensors representing the relationships (edges) between cells of rank i and j,
         where i and j are non-negative integers.
+    _cells_i : torch.FloatTensor
+        Concatenated list of node indices associated with cells of rank i. Note: Use the cell_list
+        method to split this tensor into individual cells.
+    _slices_i : torch.LongTensor
+        Slices to split the concatenated cell_i tensor into individual cells. Note: Use the cell_list
+        method to split this tensor into individual cells.
     mem_i : torch.BoolTensor
         Optional. Lifters associated with cells of rank i, where i is a non-negative integer.
-    inv_i_j : torch.FloatTensor
-        Optional. Node indices that can be used to compute legacy geometric features for each cell
-        pair.
+    # inv_i_j : torch.FloatTensor
+    #     Optional. Node indices that can be used to compute legacy geometric features for each cell
+    #     pair.
     """
 
-    attribute_dtype = MappingProxyType(
+    attr_dtype = MappingProxyType(
         {
             "x_": torch.float32,
-            "cell_": torch.float64,
+            # "cell_": torch.float64,
+            "_cells_": torch.long,
+            "_slices_": torch.long,
             "mem_": torch.bool,
             "adj_": torch.int64,
-            "inv_": torch.float64,
+            # "inv_": torch.float64,
         }
     )
 
@@ -186,10 +193,43 @@ class CombinatorialComplexData(Data):
             The dimension over which to concatenate the attribute `key`. Returns 1 for `adj_i_j` and
             `inv_i_j` attributes, and 0 otherwise.
         """
-        if re.match(r"(adj|inv)_\d+_\d+", key):
+        # if re.match(r"(adj|inv)_\d+_\d+", key):
+        if re.match(r"adj_\d+_\d+", key):
             return 1
         else:
             return 0
+
+    def cell_list(
+        self,
+        rank: int,
+        format: Literal["list", "padded"] = "list",
+        pad_value: float = torch.nan,
+    ) -> Union[list[Tensor], Tensor]:
+        """Return the list of cells of a given rank.
+
+        Parameters
+        ----------
+        rank : int
+            The rank of the cells to return.
+        as_padded_tensor : bool, optional
+            Whether to return the cells as a padded tensor, by default False.
+
+        Returns
+        -------
+        Union[list[Tensor], Tensor]
+            The list of cells of the given rank. Each cell is a tensor of node indices.
+        """
+        concatenated_cells = getattr(self, f"_cells_{rank}")
+        slices = getattr(self, f"_slices_{rank}")
+        cell_lists = torch.split(concatenated_cells, slices.tolist())
+
+        if format == "padded":
+            cell_lists = torch.nested.as_nested_tensor(cell_lists, dtype=torch.float)
+            return cell_lists.to_padded_tensor(padding=pad_value)
+        elif format == "list":
+            return cell_lists
+        else:
+            raise ValueError(f"Unknown format: {format}")
 
     @classmethod
     def from_ccdict(cls, data: dict[str, any]) -> "CombinatorialComplexData":
@@ -226,48 +266,54 @@ class CombinatorialComplexData(Data):
                     rank = key.split("_")[1]
                     num_features = data["num_features_dict"][rank]
                     attr_value = torch.empty(
-                        (0, num_features), dtype=cls.attribute_dtype["x_"]
+                        (0, num_features), dtype=cls.attr_dtype["x_"]
                     )
                 else:
-                    attr_value = torch.tensor(value, dtype=cls.attribute_dtype["x_"])
+                    attr_value = torch.tensor(value, dtype=cls.attr_dtype["x_"])
                 attr[key] = attr_value
 
             # cast the cell_i
             elif "cell_" in key:
+                # each cell is recorded as a concatenated list of nodes and slices
+                # use the cell_list() method to split the cells into a list of tensors
                 if len(value) == 0:
-                    attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["cell_"])
+                    slices_val = torch.empty((0,), dtype=cls.attr_dtype["_slices_"])
+                    cell_val = torch.empty((0,), dtype=cls.attr_dtype["_cells_"])
                 else:
-                    attr_value = torch.tensor(
-                        pad_lists_to_same_length(value),
-                        dtype=cls.attribute_dtype["cell_"],
-                    )
-                attr[key] = attr_value
+                    lens = [len(cell) for cell in value]
+                    vals = list(itertools.chain.from_iterable(value))
+                    cell_val = torch.tensor(vals, dtype=cls.attr_dtype["_cells_"])
+                    slices_val = torch.tensor(lens, dtype=cls.attr_dtype["_slices_"])
+
+                rank = key.split("_")[1]
+                attr[f"_cells_{rank}"] = cell_val
+                attr[f"_slices_{rank}"] = slices_val
 
             # cast the mem_i
             elif "mem_" in key:
                 num_lifters = len(data["mem_0"][0])
                 if len(value) == 0:
                     attr_value = torch.empty(
-                        (0, num_lifters), dtype=cls.attribute_dtype["mem_"]
+                        (0, num_lifters), dtype=cls.attr_dtype["mem_"]
                     )
                 else:
-                    attr_value = torch.tensor(value, dtype=cls.attribute_dtype["mem_"])
+                    attr_value = torch.tensor(value, dtype=cls.attr_dtype["mem_"])
                 attr[key] = attr_value
 
             # cast the adj_i_j[_foo]
             elif "adj_" in key:
-                attr[key] = torch.tensor(value, dtype=cls.attribute_dtype["adj_"])
+                attr[key] = torch.tensor(value, dtype=cls.attr_dtype["adj_"])
 
-            # cast the inv_i_j[_foo]
-            elif "inv_" in key:
-                if len(value) == 0:
-                    attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["inv_"])
-                else:
-                    attr_value = torch.tensor(
-                        pad_lists_to_same_length(value),
-                        dtype=cls.attribute_dtype["inv_"],
-                    ).t()
-                attr[key] = attr_value
+            # # cast the inv_i_j[_foo]
+            # elif "inv_" in key:
+            #     # if len(value) == 0:
+            #     #     attr_value = torch.empty((0, 0), dtype=cls.attribute_dtype["inv_"])
+            #     # else:
+            #     #     attr_value = torch.tensor(
+            #     #         pad_lists_to_same_length(value),
+            #     #         dtype=cls.attribute_dtype["inv_"],
+            #     #     ).t()
+            #     attr[key] = attr_value
 
         return cls.from_dict(attr)
 
@@ -285,7 +331,7 @@ class InMemoryCCDataset(InMemoryDataset):
             return data_list[0], None
 
         max_cols = {}
-        max_rows = {}
+        # max_rows = {}
 
         for data in data_list:
             for attr_name in data.keys():
@@ -294,24 +340,25 @@ class InMemoryCCDataset(InMemoryDataset):
                     max_cols[attr_name] = max(
                         max_cols.get(attr_name, 0), tensor.size(1)
                     )
-                elif re.match(r"inv_\d+_\d+", attr_name):
-                    tensor = getattr(data, attr_name)
-                    max_rows[attr_name] = max(
-                        max_rows.get(attr_name, 0), tensor.size(0)
-                    )
+                # elif re.match(r"inv_\d+_\d+", attr_name):
+                #     tensor = getattr(data, attr_name)
+                #     max_rows[attr_name] = max(
+                #         max_rows.get(attr_name, 0), tensor.size(0)
+                #     )
 
         for data in data_list:
             for attr_name in data.keys():
                 if attr_name in max_cols:
                     tensor = getattr(data, attr_name)
                     setattr(data, attr_name, pad_tensor(tensor, max_cols[attr_name], 1))
-                elif attr_name in max_rows:
-                    tensor = getattr(data, attr_name)
-                    setattr(data, attr_name, pad_tensor(tensor, max_rows[attr_name], 0))
+                # elif attr_name in max_rows:
+                #     tensor = getattr(data, attr_name)
+                #     setattr(data, attr_name, pad_tensor(tensor, max_rows[attr_name], 0))
 
-        follow_batch = [
-            attr_name for attr_name in data_list[0].keys() if "cell_" in attr_name
-        ]
+        follow_batch = []
+        for attr_name in data_list[0].keys():
+            if any(attr_name.startswith(s) for s in ["cell_", "slices", "x_"]):
+                follow_batch.append(attr_name)
 
         data, slices, _ = collate(
             data_list[0].__class__,

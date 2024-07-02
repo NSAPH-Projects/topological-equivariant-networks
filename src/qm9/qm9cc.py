@@ -216,7 +216,7 @@ def merge_adjacencies(adjacencies: list[str]) -> list[str]:
     """
     return list(set(["_".join(adj_type.split("_")[:2]) for adj_type in adjacencies]))
 
-class QM9_CC(InMemoryCCDataset):
+class QM9CC(InMemoryCCDataset):
     r"""
     Lift QM9 to a CombinatorialComplexData.
 

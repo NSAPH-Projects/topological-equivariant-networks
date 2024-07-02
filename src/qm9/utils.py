@@ -19,7 +19,7 @@ from combinatorial_data.combinatorial_data_utils import (
 )
 from combinatorial_data.lifter import Lifter
 from qm9.lifts.registry import lifter_registry
-from qm9.qm9_cc import QM9_CC
+from src.qm9.qm9cc import QM9CC
 # from utils import get_adjacency_types, merge_adjacencies
 
 def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:

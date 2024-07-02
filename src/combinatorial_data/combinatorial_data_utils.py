@@ -216,10 +216,9 @@ class CombinatorialComplexData(Data):
         """
         attr = {}
 
-        for key in ["x", "pos", "y"]:
-            attr[key] = torch.tensor(data[key])
-
         for key, value in data.items():
+            if any(key.startswith(s) for s in ["pos", "y"]):
+                attr[key] = torch.tensor(value)
 
             # cast the x_i
             if "x_" in key:

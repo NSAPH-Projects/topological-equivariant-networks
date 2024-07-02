@@ -219,13 +219,13 @@ class CombinatorialComplexData(Data):
         """
         concatenated_cells = getattr(self, f"_cells_{rank}")
         slices = getattr(self, f"_slices_{rank}")
-        cell_lists = torch.split(concatenated_cells, slices.tolist())
+        cell_list = list(torch.split(concatenated_cells, slices.tolist()))
 
         if format == "padded":
-            cell_lists = torch.nested.as_nested_tensor(cell_lists, dtype=torch.float)
-            return cell_lists.to_padded_tensor(padding=pad_value)
+            cell_list = torch.nested.as_nested_tensor(cell_list, dtype=torch.float)
+            return cell_list.to_padded_tensor(padding=pad_value)
         elif format == "list":
-            return cell_lists
+            return cell_list
         else:
             raise ValueError(f"Unknown format: {format}")
 

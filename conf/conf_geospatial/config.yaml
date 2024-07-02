@@ -3,3 +3,4 @@ defaults:
   - dataset: virtual-node
 
 dataset_name: ${hydra:runtime.choices.dataset}
+force_reload: false

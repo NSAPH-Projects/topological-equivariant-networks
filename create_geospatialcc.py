@@ -28,6 +28,7 @@ def main(cfg: DictConfig):
     dataset = geospatialcc.GeospatialCC(
         f"data/geospatialcc_{cfg.dataset_name}",
         pre_transform=pre_transform,
+        force_reload=cfg.force_reload,
     )
     logger.info(
         f"Lifted GeospatialCC dataset generated and stored in '{dataset.root}'."

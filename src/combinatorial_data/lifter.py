@@ -9,7 +9,7 @@ from qm9.lifts.common import Cell
 
 class Lifter:
 
-    def __init__(self, lifter_names, initial_features, dim, dis, lifter_registry: dict[str, callable]) -> "Lifter":
+    def __init__(self, lifter_names, dim, dis, lifter_registry: dict[str, callable]) -> 'Lifter':
         """
         Initialize the Lifter object.
 
@@ -17,8 +17,6 @@ class Lifter:
         ----------
         lifter_names : list[str]
             A list of lifter names and their ranking logic to be applied to the input data.
-        initial_features : list[str]
-            A list of initial features.
         dim : int
             The dimension of the ASC.
         dis : float

@@ -2,19 +2,21 @@ import os
 import os.path as osp
 import sys
 from typing import Callable, List, Optional
+from enum import Enum, auto
 
 import torch
 from torch import Tensor
-from torch_geometric.data import Data, download_url, extract_zip
+from torch_geometric.data import Data, download_url, extract_zip, InMemoryDataset
 from torch_geometric.utils import one_hot, scatter
 from tqdm import tqdm
 
-from combinatorial_data.lifter import Lifter
-from qm9.lifts.registry import lifter_registry
-from combinatorial_data.combinatorial_data_utils import CombinatorialComplexTransform, InMemoryCCDataset
+from src.combinatorial_data.lifter import Lifter
+from src.qm9.lifts.registry import LIFTER_REGISTRY
+from src.combinatorial_data.combinatorial_data_utils import CombinatorialComplexTransform
 
 HAR2EV = 27.211386246
 KCALMOL2EV = 0.04336414
+
 
 conversion = torch.tensor(
     [
@@ -216,7 +218,7 @@ def merge_adjacencies(adjacencies: list[str]) -> list[str]:
     """
     return list(set(["_".join(adj_type.split("_")[:2]) for adj_type in adjacencies]))
 
-class QM9CC(InMemoryCCDataset):
+class QM9CC(InMemoryDataset):
     r"""
     Lift QM9 to a CombinatorialComplexData.
 
@@ -230,8 +232,6 @@ class QM9CC(InMemoryCCDataset):
         The connectivity pattern between ranks.
     visible_dims : list[int]
         Specifies which ranks to explicitly represent as nodes.
-    initial_features : list[str]
-        The initial features to use.
     dim : int
         The ASC dimension.
     dis : bool
@@ -334,10 +334,32 @@ class QM9CC(InMemoryCCDataset):
     raw_url2 = "https://ndownloader.figshare.com/files/3195404"
     processed_url = "https://data.pyg.org/datasets/qm9_v3.zip"
 
+    targets = [
+        "mu",
+        "alpha",
+        "homo",
+        "lumo",
+        "gap",
+        "r2",
+        "zpve",
+        "U0",
+        "U",
+        "H",
+        "G",
+        "Cv",
+        "U0_atom",
+        "U_atom",
+        "H_atom",
+        "G_atom",
+        "A",
+        "B",
+        "C",
+    ]
+
     def __init__(
         self,
         root: str,
-        lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors,
+        lifter_names, neighbor_types, connectivity, visible_dims, dim, dis, merge_neighbors,
         transform: Optional[Callable] = None,
         pre_transform: Optional[Callable] = None,
         pre_filter: Optional[Callable] = None,
@@ -345,10 +367,10 @@ class QM9CC(InMemoryCCDataset):
     ) -> None:
         # Initialize subclass-specific attributes
 
-        #dim : int
-        #neighbor_types : list[str]
-        #connectivity : str
-        #visible_dims : list[int]
+        # dim : int
+        # neighbor_types : list[str]
+        # connectivity : str
+        # visible_dims : list[int]
         adjacencies = get_adjacency_types(
             dim,
             connectivity,
@@ -361,12 +383,11 @@ class QM9CC(InMemoryCCDataset):
         else:
             processed_adjacencies = adjacencies
 
-        initial_features = sorted(initial_features)
-        #lifter_names : list[str]
-        #initial_features : str
-        #dim : int
-        #dis : bool
-        self.lifter = Lifter(lifter_names, initial_features, dim, dis, lifter_registry)
+        # lifter_names : list[str]
+        # initial_features : str
+        # dim : int
+        # dis : bool
+        self.lifter = Lifter(lifter_names, dim, dis, LIFTER_REGISTRY)
         self.adjacencies = adjacencies
         self.processed_adjacencies = processed_adjacencies
         self.dim = dim
@@ -473,8 +494,8 @@ class QM9CC(InMemoryCCDataset):
         suppl = Chem.SDMolSupplier(self.raw_paths[0], removeHs=False, sanitize=False)
 
         # Create the transform lifter, dim, adjacencies, processed_adjacencies, merge_neighbors
-        #dim : int
-        #merge_neighbors : bool
+        # dim : int
+        # merge_neighbors : bool
         lift = CombinatorialComplexTransform(
             lifter=self.lifter,
             dim=self.dim,

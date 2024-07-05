@@ -1,6 +1,14 @@
 ## hydra
 /outputs
 
+## data
+data/
+!data/input/geospatialcc.json
+!data/input/coarse_pm25_bronx_tract_wei_et_al_2023.parquet
+
+## MacOS
+**/.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -12,6 +20,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+cache/
 develop-eggs/
 dist/
 downloads/

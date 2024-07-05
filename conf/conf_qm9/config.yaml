@@ -3,3 +3,4 @@ defaults:
   - lifter: lift_1
 
 lifter_name: ${hydra:runtime.choices.lifter}
+force_reload: false

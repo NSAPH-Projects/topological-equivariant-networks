@@ -1,0 +1,5 @@
+standardize: true
+squash: false
+randomize_x0: false
+virtual_node: true
+add_positions: false

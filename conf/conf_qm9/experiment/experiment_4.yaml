@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - /dataset/lifters: atom_bond
+
+dataset:
+  supercell: true
+  connectivity: all_to_all
+
+model:
+  num_hidden: 100
+  visible_dims: [0, 1]

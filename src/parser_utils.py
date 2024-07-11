@@ -1,7 +1,7 @@
 import argparse
 
 from combinatorial_data.lifter import Lifter
-from qm9.lifts.registry import lifter_registry
+from qm9.lifts.registry import LIFTER_REGISTRY
 from utils import get_adjacency_types, merge_adjacencies
 
 
@@ -69,6 +69,6 @@ def add_common_derived_arguments(parsed_args):
         parsed_args.processed_adjacencies = parsed_args.adjacencies
 
     parsed_args.initial_features = sorted(parsed_args.initial_features)
-    parsed_args.lifter = Lifter(parsed_args, lifter_registry)
+    parsed_args.lifter = Lifter(parsed_args, LIFTER_REGISTRY)
 
     return parsed_args

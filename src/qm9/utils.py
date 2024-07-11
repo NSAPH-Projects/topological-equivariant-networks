@@ -12,15 +12,17 @@ from torch_geometric.data import Data
 from torch_geometric.datasets import QM9
 from tqdm import tqdm
 
-from combinatorial_data.combinatorial_data_utils import (
-    CombinatorialComplexData,
-    CombinatorialComplexTransform,
-    CustomCollater,
-)
+# from combinatorial_data.combinatorial_data_utils import (
+    # CombinatorialComplexData,
+    # CombinatorialComplexTransform,
+    # CustomCollater,
+# )
 from combinatorial_data.lifter import Lifter
-from qm9.lifts.registry import lifter_registry
+from qm9.lifts.registry import LIFTER_REGISTRY
+from src.combinatorial_data.combinatorial_data_utils import CombinatorialComplexData
 from src.qm9.qm9cc import QM9CC
 # from utils import get_adjacency_types, merge_adjacencies
+
 
 def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
     """Return mean and mean average deviation of target in loader."""
@@ -30,44 +32,84 @@ def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
     return mean, mad
 
 
-def prepare_data(graph: Data, index: int, target_name: str) -> Data:
-    """
-    Preprocesses the input graph data.
+# def prepare_targets(data: CombinatorialComplexData, index: int, target_name: str) -> Data:
+#     """
+#     Preprocesses the input graph data.
 
-    Two main modifications are made:
-    1. The target value is extracted and stored in the 'y' attribute. Since QM9 targets are
-    graph-level, we throw away the vector of 'y' values and only keep the target value of the
-    first node in the graph, at the given index.
-    2. If the target name is 'zpve', the target value is multiplied by 1e3. This is consistent with
-    EGNN.
-    3. The feature vector of each node  is computed as a concatenation of the one-hot encoding of
-    the atomic number, the atomic number scaled by 1/9, and the atomic number scaled by 1/9 squared.
+#     Two main modifications are made:
+#     1. The target value is extracted and stored in the 'y' attribute. Since QM9 targets are
+#     graph-level, we throw away the vector of 'y' values and only keep the target value of the
+#     first node in the graph, at the given index.
+#     2. If the target name is 'zpve', the target value is multiplied by 1e3. This is consistent with
+#     EGNN.
+#     3. The feature vector of each node  is computed as a concatenation of the one-hot encoding of
+#     the atomic number, the atomic number scaled by 1/9, and the atomic number scaled by 1/9 squared.
 
-    Parameters
-    ----------
-    graph : Data
-        The input graph data. It should be an instance of the torch_geometric.data.Data class.
-    index : int
-        The index of the target value to extract. It should be a non-negative integer.
-    target_name: str
-        The name of the target.
+#     Parameters
+#     ----------
+#     graph : Data
+#         The input graph data. It should be an instance of the torch_geometric.data.Data class.
+#     index : int
+#         The index of the target value to extract. It should be a non-negative integer.
+#     target_name: str
+#         The name of the target.
 
-    Returns
-    -------
-    Data
-        The preprocessed graph data. It is an instance of the Data class with modified features.
-    """
-    graph.y = graph.y[0, index]
-    one_hot = graph.x[:, :5]  # only get one_hot for cormorant
-    if target_name == "zpve":
-        graph.y *= 1e3
-    Z_max = 9
-    Z = graph.x[:, 5]
-    Z_tilde = (Z / Z_max).unsqueeze(1).repeat(1, 5)
+#     Returns
+#     -------
+#     Data
+#         The preprocessed graph data. It is an instance of the Data class with modified features.
+#     """
+#     graph.y = graph.y[0, index]
+#     one_hot = graph.x[:, :5]  # only get one_hot for cormorant
+#     if target_name == "zpve":
+#         graph.y *= 1e3
+#     Z_max = 9
+#     Z = graph.x[:, 5]
+#     Z_tilde = (Z / Z_max).unsqueeze(1).repeat(1, 5)
 
-    graph.x = torch.cat((one_hot, Z_tilde * one_hot, Z_tilde * Z_tilde * one_hot), dim=1)
+#     graph.x = torch.cat((one_hot, Z_tilde * one_hot, Z_tilde * Z_tilde * one_hot), dim=1)
 
-    return graph
+#     return graph
+
+
+# def prepare_data(graph: Data, index: int, target_name: str) -> Data:
+#     """
+#     Preprocesses the input graph data.
+
+#     Two main modifications are made:
+#     1. The target value is extracted and stored in the 'y' attribute. Since QM9 targets are
+#     graph-level, we throw away the vector of 'y' values and only keep the target value of the
+#     first node in the graph, at the given index.
+#     2. If the target name is 'zpve', the target value is multiplied by 1e3. This is consistent with
+#     EGNN.
+#     3. The feature vector of each node  is computed as a concatenation of the one-hot encoding of
+#     the atomic number, the atomic number scaled by 1/9, and the atomic number scaled by 1/9 squared.
+
+#     Parameters
+#     ----------
+#     graph : Data
+#         The input graph data. It should be an instance of the torch_geometric.data.Data class.
+#     index : int
+#         The index of the target value to extract. It should be a non-negative integer.
+#     target_name: str
+#         The name of the target.
+
+#     Returns
+#     -------
+#     Data
+#         The preprocessed graph data. It is an instance of the Data class with modified features.
+#     """
+#     graph.y = graph.y[0, index]
+#     one_hot = graph.x[:, :5]  # only get one_hot for cormorant
+#     if target_name == "zpve":
+#         graph.y *= 1e3
+#     Z_max = 9
+#     Z = graph.x[:, 5]
+#     Z_tilde = (Z / Z_max).unsqueeze(1).repeat(1, 5)
+
+#     graph.x = torch.cat((one_hot, Z_tilde * one_hot, Z_tilde * Z_tilde * one_hot), dim=1)
+
+#     return graph
 
 # def process_qm9_dataset(lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors):
 #     """
@@ -229,63 +271,63 @@ def prepare_data(graph: Data, index: int, target_name: str) -> Data:
 #             f.write("\n")
 
 
-def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
+# def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataLoader]:
 
-    # Load the QM9 dataset
+#     # Load the QM9 dataset
 
-    # Compute the data path
-    dataset_args = [
-        "lifters",
-        "neighbor_types",
-        "connectivity",
-        "visible_dims",
-        "merge_neighbors",
-        "initial_features",
-        "dim",
-        "dis",
-    ]
-    filtered_args = {key: value for key, value in vars(args).items() if key in dataset_args}
-    data_path = "datasets/QM9_CC_" + generate_dataset_dir_name(filtered_args) + ".jsonl"
+#     # # Compute the data path
+#     # dataset_args = [
+#     #     "lifters",
+#     #     "neighbor_types",
+#     #     "connectivity",
+#     #     "visible_dims",
+#     #     "merge_neighbors",
+#     #     "initial_features",
+#     #     "dim",
+#     #     "dis",
+#     # ]
+#     # filtered_args = {key: value for key, value in vars(args).items() if key in dataset_args}
+#     # data_path = "datasets/QM9_CC_" + generate_dataset_dir_name(filtered_args) + ".jsonl"
 
-    # Check if data path already exists
-    if not os.path.exists(data_path):
-        raise FileNotFoundError(f"File '{data_path}' does not exist.")
+#     # # Check if data path already exists
+#     # if not os.path.exists(data_path):
+#     #     raise FileNotFoundError(f"File '{data_path}' does not exist.")
 
-    # Load the data
-    json_list = []
-    with open(data_path, "r") as f:
-        for line in tqdm(f):
-            json_list.append(json.loads(line))
-    num_samples = len(json_list)
+#     # # Load the data
+#     # json_list = []
+#     # with open(data_path, "r") as f:
+#     #     for line in tqdm(f):
+#     #         json_list.append(json.loads(line))
+#     # num_samples = len(json_list)
 
-    # Compute split indices
-    with open("misc/egnn_splits.pkl", "rb") as f:
-        egnn_splits = pickle.load(f)
+#     # # Compute split indices
+#     # with open("misc/egnn_splits.pkl", "rb") as f:
+#     #     egnn_splits = pickle.load(f)
 
-    if args.splits == "egnn":
-        split_indices = egnn_splits
-        for split in egnn_splits.keys():
-            random.shuffle(egnn_splits[split])
-    elif args.splits == "random":
-        indices = list(range(num_samples))
-        random.shuffle(indices)
-        train_end_idx = len(egnn_splits["train"])
-        val_end_idx = train_end_idx + len(egnn_splits["valid"])
-        test_end_idx = val_end_idx + len(egnn_splits["test"])
-        split_indices = {
-            "train": indices[:train_end_idx],
-            "valid": indices[train_end_idx:val_end_idx],
-            "test": indices[val_end_idx:test_end_idx],
-        }
-    else:
-        raise ValueError(f"Unknown split type: {args.splits}")
+#     # if args.splits == "egnn":
+#     #     split_indices = egnn_splits
+#     #     for split in egnn_splits.keys():
+#     #         random.shuffle(egnn_splits[split])
+#     # elif args.splits == "random":
+#     #     indices = list(range(num_samples))
+#     #     random.shuffle(indices)
+#     #     train_end_idx = len(egnn_splits["train"])
+#     #     val_end_idx = train_end_idx + len(egnn_splits["valid"])
+#     #     test_end_idx = val_end_idx + len(egnn_splits["test"])
+#     #     split_indices = {
+#     #         "train": indices[:train_end_idx],
+#     #         "valid": indices[train_end_idx:val_end_idx],
+#     #         "test": indices[val_end_idx:test_end_idx],
+#     #     }
+#     # else:
+#     #     raise ValueError(f"Unknown split type: {args.splits}")
 
-    # Subsample if requested
-    for split in split_indices.keys():
-        n_split = len(split_indices[split])
-        if args.num_samples is not None:
-            n_split = min(args.num_samples, n_split)
-            split_indices[split] = split_indices[split][:n_split]
+#     # # Subsample if requested
+#     # for split in split_indices.keys():
+#     #     n_split = len(split_indices[split])
+#     #     if args.num_samples is not None:
+#     #         n_split = min(args.num_samples, n_split)
+#     #         split_indices[split] = split_indices[split][:n_split]
 
     # Compute the target index
     targets = [
@@ -312,46 +354,46 @@ def generate_loaders_qm9(args: Namespace) -> tuple[DataLoader, DataLoader, DataL
     target_map = {target: target for target in targets}
     for key in ["U0", "U", "H", "G"]:
         target_map[key] = f"{key}_atom"
-    assert target_map["U0"] == "U0_atom"
-    index = targets.index(target_map[args.target_name])
+    # assert target_map["U0"] == "U0_atom"
+    # index = targets.index(target_map[args.target_name])
 
-    # Create DataLoader kwargs
-    follow_batch = [f"cell_{i}" for i in range(args.dim + 1)] + ["x"]
-    dataloader_kwargs = {
-        "batch_size": args.batch_size,
-        "num_workers": args.num_workers,
-        "shuffle": True,
-    }
+    # # Create DataLoader kwargs
+    # follow_batch = [f"cell_{i}" for i in range(args.dim + 1)] + ["x"]
+    # dataloader_kwargs = {
+    #     "batch_size": args.batch_size,
+    #     "num_workers": args.num_workers,
+    #     "shuffle": True,
+    # }
 
-    # Process data splits
-    loaders = {}
-    for split in ["train", "valid", "test"]:
+    # # Process data splits
+    # loaders = {}
+    # for split in ["train", "valid", "test"]:
 
-        # Filter out the relevant data files
-        split_ccdicts = [json_list[i] for i in split_indices[split]]
+    #     # Filter out the relevant data files
+    #     split_ccdicts = [json_list[i] for i in split_indices[split]]
 
-        # Convert the dictionaries to CombinatorialComplexData objects
-        split_dataset = []
-        for ccdict in tqdm(
-            split_ccdicts, desc="Converting ccdicts to CombinatorialComplexData objects"
-        ):
-            ccdata = CombinatorialComplexData().from_json(ccdict)
-            split_dataset.append(ccdata)
+    #     # Convert the dictionaries to CombinatorialComplexData objects
+    #     split_dataset = []
+    #     for ccdict in tqdm(
+    #         split_ccdicts, desc="Converting ccdicts to CombinatorialComplexData objects"
+    #     ):
+    #         ccdata = CombinatorialComplexData().from_json(ccdict)
+    #         split_dataset.append(ccdata)
 
-        # Preprocess data
-        processed_split_dataset = []
-        for cc in tqdm(split_dataset, desc="Preparing data"):
-            preprocessed_graph = prepare_data(cc, index, args.target_name)
-            processed_split_dataset.append(preprocessed_graph)
+    #     # Preprocess data
+    #     processed_split_dataset = []
+    #     for cc in tqdm(split_dataset, desc="Preparing data"):
+    #         preprocessed_graph = prepare_data(cc, index, args.target_name)
+    #         processed_split_dataset.append(preprocessed_graph)
 
-        # Create DataLoader
-        loaders[split] = torch.utils.data.DataLoader(
-            processed_split_dataset,
-            collate_fn=CustomCollater(processed_split_dataset, follow_batch=follow_batch),
-            **dataloader_kwargs,
-        )
+    #     # Create DataLoader
+    #     loaders[split] = torch.utils.data.DataLoader(
+    #         processed_split_dataset,
+    #         collate_fn=CustomCollater(processed_split_dataset, follow_batch=follow_batch),
+    #         **dataloader_kwargs,
+    #     )
 
-    return tuple(loaders.values())
+    # return tuple(loaders.values())
 
 
 def generate_dataset_dir_name(lifters, neighbor_types, connectivity, visible_dims, merge_neighbors, initial_features, dim, dis) -> str:

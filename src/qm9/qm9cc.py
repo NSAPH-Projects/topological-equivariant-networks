@@ -5,16 +5,20 @@ from typing import Callable, List, Optional
 
 import torch
 from torch import Tensor
-from torch_geometric.data import Data, download_url, extract_zip
+from torch_geometric.data import Data, download_url, extract_zip, InMemoryDataset
 from torch_geometric.utils import one_hot, scatter
 from tqdm import tqdm
+import yaml
 
-from combinatorial_data.lifter import Lifter
-from qm9.lifts.registry import lifter_registry
-from combinatorial_data.combinatorial_data_utils import CombinatorialComplexTransform, InMemoryCCDataset
+from src.combinatorial_data.lifter import Lifter
+from src.qm9.lifts.registry import LIFTER_REGISTRY
+from src.combinatorial_data.combinatorial_data_utils import (
+    CombinatorialComplexTransform,
+)
 
 HAR2EV = 27.211386246
 KCALMOL2EV = 0.04336414
+
 
 conversion = torch.tensor(
     [
@@ -51,7 +55,10 @@ atomrefs = {
 
 
 def get_adjacency_types(
-    max_dim: int, connectivity: str, neighbor_types: list[str], visible_dims: list[int] | None
+    max_dim: int,
+    connectivity: str,
+    neighbor_types: list[str],
+    # visible_dims: list[int] | None
 ) -> list[str]:
     """
     Generate a list of adjacency type strings based on the specified connectivity pattern.
@@ -82,8 +89,6 @@ def get_adjacency_types(
         -1: two cells of same rank i are neighbors if they are both neighbors of a cell of rank i-1
         max: two cells of same rank i are neighbors if they are both neighbors of a cell of max rank
         min: two cells of same rank i are neighbors if they are both neighbors of a cell of min rank
-    visible_dims: list[int] | None
-        A list of ranks to explicitly represent as nodes. If None, all ranks are represented.
 
     Returns
     -------
@@ -161,7 +166,8 @@ def get_adjacency_types(
                 adj_types.append(f"{i}_{j}")
 
     else:
-        adj_types = ["0_0", "0_1", "1_1", "1_2"]
+        raise ValueError(f"{connectivity} is not a known connectivity pattern!")
+        # adj_types = ["0_0", "0_1", "1_1", "1_2"]
 
     # Add one adjacency type for each neighbor type
     new_adj_types = []
@@ -186,15 +192,16 @@ def get_adjacency_types(
     new_adj_types = list(set(new_adj_types))
     adj_types = new_adj_types
 
-    # Filter adjacencies with invisible ranks
-    if visible_dims is not None:
-        adj_types = [
-            adj_type
-            for adj_type in adj_types
-            if all(int(dim) in visible_dims for dim in adj_type.split("_")[:2])
-        ]
+    # # Filter adjacencies with invisible ranks
+    # if visible_dims is not None:
+    #     adj_types = [
+    #         adj_type
+    #         for adj_type in adj_types
+    #         if all(int(dim) in visible_dims for dim in adj_type.split("_")[:2])
+    #     ]
 
     return adj_types
+
 
 def merge_adjacencies(adjacencies: list[str]) -> list[str]:
     """
@@ -216,29 +223,23 @@ def merge_adjacencies(adjacencies: list[str]) -> list[str]:
     """
     return list(set(["_".join(adj_type.split("_")[:2]) for adj_type in adjacencies]))
 
-class QM9CC(InMemoryCCDataset):
+
+class QM9CC(InMemoryDataset):
     r"""
     Lift QM9 to a CombinatorialComplexData.
 
     Parameters
     ----------
-    lifter_names : list[str]
+    lifters : list[str]
         The names of the lifters to apply.
-    neighbor_types : list[str]
-        The types of neighbors to consider. Defines adjacency between cells of the same rank.
-    connectivity : str
-        The connectivity pattern between ranks.
-    visible_dims : list[int]
-        Specifies which ranks to explicitly represent as nodes.
-    initial_features : list[str]
-        The initial features to use.
-    dim : int
-        The ASC dimension.
-    dis : bool
-        Radius for Rips complex
-    merge_neighbors : bool
-        Whether to merge neighbors.
-    
+    # neighbor_types : list[str]
+    #     The types of neighbors to consider. Defines adjacency between cells of the same rank.
+    # connectivity : str
+    #     The connectivity pattern between ranks.
+    # merge_neighbors : bool
+    #     Whether to merge neighbors.
+    **lifter_kwargs: Additional keyword arguments for the lifter.
+
     The QM9 dataset from the `"MoleculeNet: A Benchmark for Molecular
     Machine Learning" <https://arxiv.org/abs/1703.00564>`_ paper, consisting of
     about 130,000 molecules with 19 regression targets.
@@ -311,6 +312,7 @@ class QM9CC(InMemoryCCDataset):
             final dataset. (default: :obj:`None`)
         force_reload (bool, optional): Whether to re-process the dataset.
             (default: :obj:`False`)
+        **lifter_kwargs: Additional keyword arguments for the lifter.
 
     **STATS:**
 
@@ -330,51 +332,83 @@ class QM9CC(InMemoryCCDataset):
           - 19
     """  # noqa: E501
 
-    raw_url = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/" "molnet_publish/qm9.zip"
+    raw_url = (
+        "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/"
+        "molnet_publish/qm9.zip"
+    )
     raw_url2 = "https://ndownloader.figshare.com/files/3195404"
     processed_url = "https://data.pyg.org/datasets/qm9_v3.zip"
+
+    targets = [
+        "mu",
+        "alpha",
+        "homo",
+        "lumo",
+        "gap",
+        "r2",
+        "zpve",
+        "U0",
+        "U",
+        "H",
+        "G",
+        "Cv",
+        "U0_atom",
+        "U_atom",
+        "H_atom",
+        "G_atom",
+        "A",
+        "B",
+        "C",
+    ]
 
     def __init__(
         self,
         root: str,
-        lifter_names, neighbor_types, connectivity, visible_dims, initial_features, dim, dis, merge_neighbors,
+        lifters: list[str],
+        neighbor_types: list[str],
+        # dim,
+        connectivity: str,
+        # merge_neighbors: str,
+        supercell: Optional[bool] = False,
         transform: Optional[Callable] = None,
         pre_transform: Optional[Callable] = None,
         pre_filter: Optional[Callable] = None,
         force_reload: bool = False,
+        **lifter_kwargs,
     ) -> None:
-        # Initialize subclass-specific attributes
+        # Store subclass-specific attributes
+        self.lifters = lifters
+        self.neighbor_types = neighbor_types
+        self.connectivity = connectivity
+        # self.merge_neighbors = merge_neighbors
+        self.supercell = supercell
+        self.dim = len(lifters) - 1
 
-        #dim : int
-        #neighbor_types : list[str]
-        #connectivity : str
-        #visible_dims : list[int]
-        adjacencies = get_adjacency_types(
-            dim,
+        # Update dimension and lifters if supercell
+        if supercell:
+            self.dim += 1
+            self.lifters.append("supercell:" + str(self.dim))
+
+        # Get lifter and adjacencies
+        self.adjacencies = get_adjacency_types(
+            self.dim,
             connectivity,
             neighbor_types,
-            visible_dims,
+            # visible_dims,
         )
         # If merge_neighbors is True, the adjacency types we feed to the model will be the merged ones
-        if merge_neighbors:
-            processed_adjacencies = merge_adjacencies(adjacencies)
-        else:
-            processed_adjacencies = adjacencies
+        # if merge_neighbors:
+        #     processed_adjacencies = merge_adjacencies(adjacencies)
+        # else:
+        #     processed_adjacencies = adjacencies
 
-        initial_features = sorted(initial_features)
-        #lifter_names : list[str]
-        #initial_features : str
-        #dim : int
-        #dis : bool
-        self.lifter = Lifter(lifter_names, initial_features, dim, dis, lifter_registry)
-        self.adjacencies = adjacencies
-        self.processed_adjacencies = processed_adjacencies
-        self.dim = dim
-        self.merge_neighbors = merge_neighbors
+        self.lifter = Lifter(self.lifters, LIFTER_REGISTRY, self.dim, **lifter_kwargs)
+        # self.adjacencies = adjacencies
+        # self.processed_adjacencies = processed_adjacencies
+        # self.merge_neighbors = merge_neighbors
 
         super().__init__(
-            root, 
-            transform, pre_transform, pre_filter, force_reload=force_reload
+            root, transform, pre_transform, pre_filter, force_reload=force_reload
         )
         self.load(self.processed_paths[0])
 
@@ -400,11 +434,11 @@ class QM9CC(InMemoryCCDataset):
 
             return ["gdb9.sdf", "gdb9.sdf.csv", "uncharacterized.txt"]
         except ImportError:
-            return ["qm9_v3.pt"] # not generated
+            return ["qm9_v3.pt"]  # not generated
 
     @property
     def processed_file_names(self) -> str:
-        return "data_v3.pt" # not generated
+        return ["data.pt"]  # not generated
 
     def download(self) -> None:
         try:
@@ -416,12 +450,23 @@ class QM9CC(InMemoryCCDataset):
 
             file_path = download_url(self.raw_url2, self.raw_dir)
             os.rename(
-                osp.join(self.raw_dir, "3195404"), osp.join(self.raw_dir, "uncharacterized.txt")
+                osp.join(self.raw_dir, "3195404"),
+                osp.join(self.raw_dir, "uncharacterized.txt"),
             )
         except ImportError:
             path = download_url(self.processed_url, self.raw_dir)
             extract_zip(path, self.raw_dir)
             os.unlink(path)
+
+        # save config for ease to interpret cached config
+        cfg_path = f"{self.raw_dir}/config.yaml"
+        with open(cfg_path, "w") as f:
+            D = {
+                "lifters": self.lifters,
+                "neighbor_types": self.neighbor_types,
+                "connectivity": self.connectivity,
+            }
+            yaml.dump(D, f)
 
     def process(self) -> None:
         try:
@@ -461,7 +506,8 @@ class QM9CC(InMemoryCCDataset):
 
         with open(self.raw_paths[1], "r") as f:
             target = [
-                [float(x) for x in line.split(",")[1:20]] for line in f.read().split("\n")[1:-1]
+                [float(x) for x in line.split(",")[1:20]]
+                for line in f.read().split("\n")[1:-1]
             ]
             y = torch.tensor(target, dtype=torch.float)
             y = torch.cat([y[:, 3:], y[:, :3]], dim=-1)
@@ -473,14 +519,12 @@ class QM9CC(InMemoryCCDataset):
         suppl = Chem.SDMolSupplier(self.raw_paths[0], removeHs=False, sanitize=False)
 
         # Create the transform lifter, dim, adjacencies, processed_adjacencies, merge_neighbors
-        #dim : int
-        #merge_neighbors : bool
         lift = CombinatorialComplexTransform(
             lifter=self.lifter,
-            dim=self.dim,
+            # dim=self.dim,
             adjacencies=self.adjacencies,
-            processed_adjacencies=self.processed_adjacencies,
-            merge_neighbors=self.merge_neighbors,
+            # processed_adjacencies=self.processed_adjacencies,
+            # merge_neighbors=self.merge_neighbors,
         )
 
         data_list = []
@@ -533,7 +577,9 @@ class QM9CC(InMemoryCCDataset):
 
             x1 = one_hot(torch.tensor(type_idx), num_classes=len(types))
             x2 = (
-                torch.tensor([atomic_number, aromatic, sp, sp2, sp3, num_hs], dtype=torch.float)
+                torch.tensor(
+                    [atomic_number, aromatic, sp, sp2, sp3, num_hs], dtype=torch.float
+                )
                 .t()
                 .contiguous()
             )

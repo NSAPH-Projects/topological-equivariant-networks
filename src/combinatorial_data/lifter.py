@@ -7,9 +7,16 @@ from torch_geometric.data import Data
 
 from qm9.lifts.common import Cell
 
+
 class Lifter:
 
-    def __init__(self, lifter_names, initial_features, dim, dis, lifter_registry: dict[str, callable]) -> "Lifter":
+    def __init__(
+        self,
+        lifter_names,
+        lifter_registry: dict[str, callable],
+        lifter_dim: int | None = None,
+        **lifter_kwargs,
+    ) -> "Lifter":
         """
         Initialize the Lifter object.
 
@@ -17,12 +24,8 @@ class Lifter:
         ----------
         lifter_names : list[str]
             A list of lifter names and their ranking logic to be applied to the input data.
-        initial_features : list[str]
-            A list of initial features.
         dim : int
             The dimension of the ASC.
-        dis : float
-            The radius for the Rips complex.
         lifter_registry : dict[str, callable]
             A dictionary of lifter names and corresponding functions.
 
@@ -34,9 +37,12 @@ class Lifter:
 
         # TODO: check inputs: a lift with hetero features may not be used with cardinality
 
-        self.lifters = get_lifters(lifter_names, dim, dis, lifter_registry)
+        self.lifters = get_lifters(lifter_names, lifter_registry, **lifter_kwargs)
         self.num_features_dict = get_num_features_dict(self.lifters)
-        self.dim = dim
+        if lifter_dim is None:
+            # choose dim as max rank
+            lifter_dim = max(int(x.split(":")[1]) for x in lifter_names)
+        self.dim = lifter_dim
 
     def lift(self, graph: Data) -> dict[int, dict[Cell, list[bool]]]:
         """
@@ -174,7 +180,9 @@ class Lifter:
         which is not allowed in TopoNetX.
         """
         if len(memberships) != len(self.lifters):
-            raise ValueError("The length of `memberships` does not match the number of lifters.")
+            raise ValueError(
+                "The length of `memberships` does not match the number of lifters."
+            )
 
         ranks = []
         for idx, is_member in enumerate(memberships):
@@ -187,7 +195,8 @@ class Lifter:
         return min(ranks)
 
 
-def get_lifters(lifter_names, dim, dis, lifter_registry: dict[str, callable]
+def get_lifters(
+    lifter_names, lifter_registry: dict[str, callable], **kwargs
 ) -> list[tuple[callable, int | str]]:
     """
     Construct a list of lifter functions based on provided arguments.
@@ -220,7 +229,7 @@ def get_lifters(lifter_names, dim, dis, lifter_registry: dict[str, callable]
         parts = lifter_str.split(":")
         method_str = parts[0]
         if method_str == "rips":
-            lifter = partial(lifter_registry[method_str], dim=dim, dis=dis)
+            lifter = partial(lifter_registry[method_str], **kwargs)
             lifter.num_features = lifter_registry[method_str].num_features
         else:
             lifter = lifter_registry[method_str]
@@ -238,7 +247,9 @@ def get_lifters(lifter_names, dim, dis, lifter_registry: dict[str, callable]
     return lifters
 
 
-def get_num_features_dict(lifters: list[tuple[callable, int | str]]) -> DefaultDict[int, int]:
+def get_num_features_dict(
+    lifters: list[tuple[callable, int | str]]
+) -> DefaultDict[int, int]:
     """
     Calculate the number of features for each rank in the given list of lifters.
 
@@ -308,10 +319,14 @@ def parse_ranking_logic(lifter_str: str) -> str | int:
     try:
         rank = int(rank_str)
     except ValueError:
-        raise ValueError(f"Invalid rank '{rank_str}' specified for lifter '{parts[0]}'.")
+        raise ValueError(
+            f"Invalid rank '{rank_str}' specified for lifter '{parts[0]}'."
+        )
 
     # Negative ranks are not allowed
     if rank < 0:
-        raise ValueError(f"Negative cell ranks are not allowed, but '{lifter_str}' was requested.")
+        raise ValueError(
+            f"Negative cell ranks are not allowed, but '{lifter_str}' was requested."
+        )
 
     return rank

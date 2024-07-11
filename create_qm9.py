@@ -10,18 +10,16 @@ logger = logging.getLogger(__name__)
 def main(cfg: DictConfig):
     # Lift the QM9 dataset to CombinatorialComplexData format
     dataset = QM9CC(
-        f"data/qm9cc_{cfg.lifter_name}",
-        list(cfg.lifter.lifter_names),
-        list(cfg.lifter.neighbor_types),
-        cfg.lifter.connectivity,
-        list(cfg.lifter.visible_dims),
-        list(cfg.lifter.initial_features),
-        cfg.lifter.dim,
-        cfg.lifter.dis,
-        cfg.lifter.merge_neighbors,
-        force_reload=cfg.force_reload,
+        f"data/qm9cc_{hash}",
+        lifters=list(cfg.dataset.lifters),
+        neighbor_types=list(cfg.dataset.neighbor_types),
+        connectivity=cfg.dataset.connectivity,
+        # cfg.lifter.dim,
+        # list(cfg.lifter.initial_features),
+        # merge_neighbors=cfg.model.merge_neighbors,
+        supercell=cfg.dataset.supercell,
+        force_reload=False,
     )
-
     logger.info(f"Lifted QM9 dataset generated and stored in '{dataset.root}'.")
 
 

@@ -3,7 +3,9 @@ from typing import Dict, List
 import torch
 import torch.nn as nn
 from torch import Tensor
-from torch_scatter import scatter_add
+from src.models.utils import scatter_add
+
+# from torch_scatter import scatter_add
 
 
 class EMPSNLayer(nn.Module):
@@ -36,7 +38,10 @@ class EMPSNLayer(nn.Module):
         self.message_passing = nn.ModuleDict(
             {
                 adj: SimplicialEGNNLayer(
-                    num_hidden, self.num_features_map[adj], batch_norm=batch_norm, lean=lean
+                    num_hidden,
+                    self.num_features_map[adj],
+                    batch_norm=batch_norm,
+                    lean=lean,
                 )
                 for adj in adjacencies
             }
@@ -62,7 +67,9 @@ class EMPSNLayer(nn.Module):
         # pass the different messages of all adjacency types
         mes = {
             adj_type: self.message_passing[adj_type](
-                x=(x[adj_type[0]], x[adj_type[2]]), index=adj[adj_type], edge_attr=inv[adj_type]
+                x=(x[adj_type[0]], x[adj_type[2]]),
+                index=adj[adj_type],
+                edge_attr=inv[adj_type],
             )
             for adj_type in self.adjacencies
         }
@@ -70,7 +77,8 @@ class EMPSNLayer(nn.Module):
         # find update states through concatenation, update and add residual connection
         h = {
             dim: torch.cat(
-                [feature] + [adj_mes for adj_type, adj_mes in mes.items() if adj_type[2] == dim],
+                [feature]
+                + [adj_mes for adj_type, adj_mes in mes.items() if adj_type[2] == dim],
                 dim=1,
             )
             for dim, feature in x.items()
@@ -82,7 +90,9 @@ class EMPSNLayer(nn.Module):
 
 
 class SimplicialEGNNLayer(nn.Module):
-    def __init__(self, num_hidden, num_inv, batch_norm: bool = False, lean: bool = True):
+    def __init__(
+        self, num_hidden, num_inv, batch_norm: bool = False, lean: bool = True
+    ):
         super().__init__()
         self.batch_norm = batch_norm
         self.lean = lean

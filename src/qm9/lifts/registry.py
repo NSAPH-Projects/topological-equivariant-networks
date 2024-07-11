@@ -6,7 +6,7 @@ from .molecule import supercell_lift
 from .ring import cycle_lift, ring_lift
 from .rips_vietoris_complex import rips_lift
 
-lifter_registry = {
+LIFTER_REGISTRY = {
     "atom": atom_lift,
     "bond": bond_lift,
     "clique": clique_lift,

@@ -1,5 +1,20 @@
 #!/bin/bash
+#SBATCH -c 24                # Number of cores (-c)
+#SBATCH -t 0-70:00          # Runtime in D-HH:MM, minimum of 10 minutes
+#SBATCH -p gpu              # Partition to submit to
+#SBATCH --gres=gpu:nvidia_a100-sxm4-80gb:1
+#SBATCH --mem=200000         # Memory pool for all cores (see also --mem-per-cpu)
+#SBATCH -o job_outputs/myoutput_%j.out  # File to which STDOUT will be written, %j inserts jobid
+#SBATCH -e job_outputs/myerrors_%j.err  # File to which STDERR will be written, %j inserts jobid
 
+# Load modules
+module load ncf/1.0.0-fasrc01
+module load miniconda3/py310_22.11.1-1-linux_x64-ncf
+module load cuda/12.2.0-fasrc01
+
+# Activate conda env
+source ~/.bashrc
+conda activate ten
 # Training script for {{ experiment_name }}
 
 # DEFINE EXP ARGUMENTS
@@ -13,7 +28,7 @@ CONNECTIVITY="{{ connectivity }}"
 NUM_HIDDEN={{ num_hidden }}
 
 # Constants
-EPOCHS=350
+EPOCHS=1000
 BATCH_SIZE=96
 WEIGHT_DECAY=1e-16
 MIN_LR=0
@@ -25,6 +40,10 @@ SPLITS="egnn"
 TARGET_NAMES_0=("alpha")
 TARGET_NAMES_1=("mu" "alpha" "homo" "lumo" "gap" "r2")
 TARGET_NAMES_2=("zpve" "U0" "U" "H" "G" "Cv")
+TARGET_NAMES_3=("mu" "alpha" "homo" "lumo" "gap" "r2" "zpve" "U0" "U" "H" "G" "Cv")
+TARGET_NAMES_4=("mu" "alpha" "homo" "lumo")
+TARGET_NAMES_5=("gap" "r2" "zpve" "U0")
+TARGET_NAMES_6=("U" "H" "G" "Cv")
 
 # Check if an argument is provided; if not, use 0 as the default option
 OPTION=${1:-0}
@@ -40,8 +59,20 @@ case $OPTION in
   2)
     TARGET_NAMES=("${TARGET_NAMES_2[@]}")
     ;;
+  3)
+    TARGET_NAMES=("${TARGET_NAMES_3[@]}")
+    ;;
+  4)
+    TARGET_NAMES=("${TARGET_NAMES_4[@]}")
+    ;;
+  5)
+    TARGET_NAMES=("${TARGET_NAMES_5[@]}")
+    ;;
+  6)
+    TARGET_NAMES=("${TARGET_NAMES_6[@]}")
+    ;;
   *)
-    echo "Invalid option. Please provide 0, 1, or 2."
+    echo "Invalid option. Please provide 0, 1, 2, 3, 4, 5, or 6."
     exit 1
     ;;
 esac
@@ -79,9 +110,6 @@ do
                            --run_name "${EXP_NAME} ${TARGET_NAME}" \
                           {% if triangles_only == true %} --triangles_only {% endif %} \
                           {% if use_geometry == false %} --no_geometry {% endif %} &
-    
-    # Wait for 30 minutes before moving to the next iteration
-    sleep 1800
 done
 
 # Wait for all background jobs to finish

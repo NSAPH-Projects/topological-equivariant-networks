@@ -1,0 +1,14 @@
+experiment_name: "15"
+description: "interrank: atoms + bonds + rings. triangles only"
+
+# Dataset args
+lifters: ["atom:0", "bond:1", "ring:2", "supercell:3"]
+neighbor_types: "max"
+connectivity: "all_to_all"
+visible_dims: [0, 1, 2]
+initial_features: "hetero"
+dim: 3
+triangles_only: true
+
+# Model args
+num_hidden: 70

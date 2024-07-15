@@ -1,9 +1,9 @@
-experiment_name: "10"
+experiment_name: "14"
 description: "interrank: atoms + bonds + (functional groups + rings). no VC"
 
 # Dataset args
 lifters: ["atom:0", "bond:1", "ring:2", "functional_group:2"]
-neighbor_types: ["+1", "-1", "min", "max"]
+neighbor_types: "max"
 connectivity: "all_to_all"
 visible_dims: [0, 1, 2]
 initial_features: "hetero"

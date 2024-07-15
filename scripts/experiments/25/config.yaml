@@ -1,0 +1,14 @@
+experiment_name: "25"
+description: "interrank: atoms + bonds + (functional groups + rings) with no geo features"
+
+# Dataset args
+lifters: ["atom:0", "bond:1", "ring:2", "functional_group:2", "supercell:3"]
+neighbor_types: "max"
+connectivity: "self_and_neighbors"
+visible_dims: [0, 1, 2]
+initial_features: "hetero"
+dim: 3
+
+# Model args
+num_hidden: 70
+use_geometry: false

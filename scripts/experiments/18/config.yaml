@@ -1,0 +1,13 @@
+experiment_name: "18"
+description: "interrank: atoms + bonds"
+
+# Dataset args
+lifters: ["atom:0", "bond:1", "supercell:2"]
+neighbor_types: "max"
+connectivity: "self_and_neighbors"
+visible_dims: [0, 1]
+initial_features: "hetero"
+dim: 2
+
+# Model args
+num_hidden: 100

@@ -1,0 +1,13 @@
+experiment_name: "23"
+description: "interrank: atoms + bonds + (functional groups + rings). no VC"
+
+# Dataset args
+lifters: ["atom:0", "bond:1", "ring:2", "functional_group:2"]
+neighbor_types: "max"
+connectivity: "self_and_neighbors"
+visible_dims: [0, 1, 2]
+initial_features: "hetero"
+dim: 2
+
+# Model args
+num_hidden: 70

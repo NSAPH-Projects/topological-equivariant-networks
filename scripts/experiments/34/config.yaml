@@ -1,0 +1,13 @@
+experiment_name: "34"
+description: "interrank: atoms + bonds + rings. self + neighbors. hetero neighbors"
+
+# Dataset args
+lifters: ["atom:0", "bond:1", "ring:2", "supercell:3"]
+neighbor_types: ["+1", "-1", "max"]
+connectivity: "self_and_neighbors"
+visible_dims: [0, 1, 2]
+initial_features: "hetero"
+dim: 3
+
+# Model args
+num_hidden: 70

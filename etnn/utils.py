@@ -1,17 +1,15 @@
 import os
 import random
-from argparse import Namespace
-from typing import Optional, Tuple
+from typing import Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig
-from torch import Tensor
 from torch_geometric.loader import DataLoader
 
 from models.ten import TEN
-from qm9.qm9cc import get_adjacency_types, merge_adjacencies
+from qm9.qm9cc import get_adjacency_types
 # from qm9.lifts.registry import LIFTER_REGISTRY
 # from combinatorial_data.lifter import Lifter
 from torch_geometric.data import Dataset
@@ -60,11 +58,6 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
         cfg.dataset.neighbor_types,
         # visible_dims,
     )
-
-    # if cfg.model.merge_neighbors:
-    #     processed_adjacencies = merge_adjacencies(adjacencies)
-    # else:
-    #     processed_adjacencies = adjacencies
 
     model = TEN(
         num_features_per_rank=num_features_per_rank,

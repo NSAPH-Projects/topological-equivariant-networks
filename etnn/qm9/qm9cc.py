@@ -203,27 +203,6 @@ def get_adjacency_types(
     return adj_types
 
 
-def merge_adjacencies(adjacencies: list[str]) -> list[str]:
-    """
-    Merge all adjacency types i_i_j into a single i_i.
-
-    We merge adjacencies of the form i_i_j into a single adjacency i_i. This is useful when we want
-    to represent all rank i neighbors of a cell of rank i as a single adjacency matrix.
-
-    Parameters
-    ----------
-    adjacencies : list[str]
-        A list of adjacency types.
-
-    Returns
-    -------
-    list[str]
-        A list of merged adjacency types.
-
-    """
-    return list(set(["_".join(adj_type.split("_")[:2]) for adj_type in adjacencies]))
-
-
 class QM9CC(InMemoryDataset):
     r"""
     Lift QM9 to a CombinatorialComplexData.
@@ -396,11 +375,6 @@ class QM9CC(InMemoryDataset):
             neighbor_types,
             # visible_dims,
         )
-        # If merge_neighbors is True, the adjacency types we feed to the model will be the merged ones
-        # if merge_neighbors:
-        #     processed_adjacencies = merge_adjacencies(adjacencies)
-        # else:
-        #     processed_adjacencies = adjacencies
 
         self.lifter = Lifter(self.lifters, LIFTER_REGISTRY, self.dim, **lifter_kwargs)
         # self.adjacencies = adjacencies

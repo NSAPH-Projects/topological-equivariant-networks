@@ -8,86 +8,12 @@ import torch
 from scipy.sparse import csc_matrix
 from toponetx.classes import CombinatorialComplex
 from torch import Tensor
-from torch_geometric.data import Batch, Data, InMemoryDataset
-
-# from torch_geometric.loader.dataloader import Collater
-from torch_geometric.data.collate import collate
 from torch_geometric.transforms import BaseTransform
 
-from combinatorial_data.lifter import Lifter
+from etnn.lifter import Lifter
 from qm9.lifts.common import Cell
 
-from typing import Iterable, Literal, Optional, Union
-
-
-# class CustomCollater(Collater):
-
-#     def __call__(self, batch: list[Data]) -> Batch:
-#         """
-#         Perform custom collation by pre-collating to pad tensors and using the superclass collation
-#         logic.
-
-#         Parameters
-#         ----------
-#         batch : list[Data]
-#             A list of Data objects to be collated.
-
-#         Returns
-#         -------
-#         Batch
-#             The collated list of Data objects, after pre-collation.
-#         """
-#         # Apply pre-collate logic
-#         batch = self.precollate(batch)
-
-#         # Use the original collation logic
-#         collated_batch = super().__call__(batch)
-
-#         return collated_batch
-
-#     def precollate(self, batch: list[Data]) -> list[Data]:
-#         """
-#         Pre-collate logic to pad tensors within each sample based on naming patterns.
-
-#         In particular, tensors that are named f'cell_{i}' for some integer i are padded to have the
-#         same number of columns, and tensors that are named f'inv_{i}_{j}' for some integers i, j are
-#         padded to have the same number of rows. The variable number of columns/rows can arise if
-#         cells with the same rank may consist of a variable number of nodes. The padding value is -1
-#         which results in lookups to the last row of the feature matrix, which is overridden in
-#         postcollate() to be all zeros.
-
-#         Parameters
-#         ----------
-#         batch : list[Data]
-#             A list of Data objects to be pre-collated.
-
-#         Returns
-#         -------
-#         list[Data]
-#             The batch with tensors padded according to their naming patterns.
-#         """
-#         max_cols = {}
-#         max_rows = {}
-
-#         for data in batch:
-#             for attr_name in data.keys():
-#                 if re.match(r"cell_\d+", attr_name):
-#                     tensor = getattr(data, attr_name)
-#                     max_cols[attr_name] = max(max_cols.get(attr_name, 0), tensor.size(1))
-#                 elif re.match(r"inv_\d+_\d+", attr_name):
-#                     tensor = getattr(data, attr_name)
-#                     max_rows[attr_name] = max(max_rows.get(attr_name, 0), tensor.size(0))
-
-#         for data in batch:
-#             for attr_name in data.keys():
-#                 if attr_name in max_cols:
-#                     tensor = getattr(data, attr_name)
-#                     setattr(data, attr_name, pad_tensor(tensor, max_cols[attr_name], 1))
-#                 elif attr_name in max_rows:
-#                     tensor = getattr(data, attr_name)
-#                     setattr(data, attr_name, pad_tensor(tensor, max_rows[attr_name], 0))
-
-#         return batch
+from typing import Iterable, Literal, Union
 
 
 class CombinatorialComplexData(Data):
@@ -338,59 +264,6 @@ class CombinatorialComplexData(Data):
             #     attr[key] = attr_value
 
         return cls.from_dict(attr)
-
-
-# class InMemoryCCDataset(InMemoryDataset):
-#     @staticmethod
-#     def collate(
-#         data_list: list[CombinatorialComplexData],
-#     ) -> tuple[CombinatorialComplexData, Optional[dict[str, Tensor]]]:
-#         r"""Collates a list of :class:`~torch_geometric.data.Data` or
-#         :class:`~torch_geometric.data.HeteroData` objects to the internal
-#         storage format of :class:`~torch_geometric.data.InMemoryDataset`.
-#         """
-#         if len(data_list) == 1:
-#             return data_list[0], None
-
-#         max_cols = {}
-#         # max_rows = {}
-
-#         for data in data_list:
-#             for attr_name in data.keys():
-#                 if re.match(r"cell_\d+", attr_name):
-#                     tensor = getattr(data, attr_name)
-#                     max_cols[attr_name] = max(
-#                         max_cols.get(attr_name, 0), tensor.size(1)
-#                     )
-#                 # elif re.match(r"inv_\d+_\d+", attr_name):
-#                 #     tensor = getattr(data, attr_name)
-#                 #     max_rows[attr_name] = max(
-#                 #         max_rows.get(attr_name, 0), tensor.size(0)
-#                 #     )
-
-#         for data in data_list:
-#             for attr_name in data.keys():
-#                 if attr_name in max_cols:
-#                     tensor = getattr(data, attr_name)
-#                     setattr(data, attr_name, pad_tensor(tensor, max_cols[attr_name], 1))
-#                 # elif attr_name in max_rows:
-#                 #     tensor = getattr(data, attr_name)
-#                 #     setattr(data, attr_name, pad_tensor(tensor, max_rows[attr_name], 0))
-
-#         follow_batch = []
-#         for attr_name in data_list[0].keys():
-#             if any(attr_name.startswith(s) for s in ["cell_", "slices", "x_"]):
-#                 follow_batch.append(attr_name)
-
-#         data, slices, _ = collate(
-#             data_list[0].__class__,
-#             data_list=data_list,
-#             increment=False,
-#             add_batch=False,
-#             follow_batch=follow_batch,
-#         )
-
-#         return data, slices
 
 
 class CombinatorialComplexTransform(BaseTransform):

@@ -18,8 +18,8 @@ from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
 from etnn.qm9.qm9cc import QM9CC
-from etnn.qm9.utils import calc_mean_mad
-from utils import args_to_hash
+
+from utils import args_to_hash, calc_mean_mad
 
 # from src.utils import get_loaders, get_model, set_seed
 from etnn.utils import get_model, set_seed

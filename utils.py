@@ -1,6 +1,9 @@
 import hashlib
 import json
 
+from torch import Tensor
+from torch.utils.data import DataLoader
+
 
 def args_to_hash(args: dict):
     def is_json_serializable(value):
@@ -34,3 +37,11 @@ def args_to_hash(args: dict):
     args_hash = hashlib.md5(args_str.encode()).hexdigest()
 
     return args_hash
+
+
+def calc_mean_mad(loader: DataLoader) -> tuple[Tensor, Tensor]:
+    """Return mean and mean average deviation of target in loader."""
+    values = [graph.y for graph in loader.dataset]
+    mean = sum(values) / len(values)
+    mad = sum([abs(v - mean) for v in values]) / len(values)
+    return mean, mad

@@ -1,7 +1,0 @@
-#@package _global_
-defaults:
-  - override /dataset: pm25-cc-virtual
-
-model:
-  equivariant: true
-  hausdorff: true

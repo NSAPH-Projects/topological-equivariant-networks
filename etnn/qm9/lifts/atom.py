@@ -4,8 +4,6 @@ from rdkit.Chem.rdchem import Atom
 from torch_geometric.data import Data
 from torch_geometric.utils import one_hot
 
-from qm9.molecule_utils import molecule_from_data
-
 from .common import Cell
 
 NUM_FEATURES = 15

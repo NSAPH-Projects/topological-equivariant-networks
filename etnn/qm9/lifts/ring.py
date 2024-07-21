@@ -3,8 +3,6 @@ import torch_geometric.utils as pyg_utils
 from rdkit import Chem
 from torch_geometric.data import Data
 
-from qm9.molecule_utils import molecule_from_data
-
 from .common import Cell
 
 NUM_FEATURES = 0

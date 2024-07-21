@@ -5,8 +5,6 @@ from rdkit import Chem
 from torch_geometric.data import Data
 from torch_geometric.utils import one_hot
 
-from qm9.molecule_utils import molecule_from_data
-
 from .common import Cell
 
 functional_group_patterns = {

@@ -1,11 +1,10 @@
-from argparse import Namespace
 from collections import defaultdict
 from functools import partial
 from typing import DefaultDict
 
 from torch_geometric.data import Data
 
-from qm9.lifts.common import Cell
+from etnn.combinatorial_data import Cell
 
 
 class Lifter:

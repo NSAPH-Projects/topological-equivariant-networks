@@ -3,13 +3,10 @@ import numpy as np
 import pandas as pd
 import requests
 import torch
-from combinatorial_data.combinatorial_data_utils import (
-    CombinatorialComplexData,
-    InMemoryCCDataset,
-)
+from etnn.combinatorial_data import CombinatorialComplexData
+from torch_geometric.data import InMemoryDataset
 
-
-class GeospatialCC(InMemoryCCDataset):
+class GeospatialCC(InMemoryDataset):
     def __init__(
         self,
         root,

@@ -10,9 +10,9 @@ from torch_geometric.utils import one_hot, scatter
 from tqdm import tqdm
 import yaml
 
-from etnn.combinatorial_data.lifter import Lifter
+from etnn.lifter import Lifter
 from etnn.qm9.lifts.registry import LIFTER_REGISTRY
-from etnn.combinatorial_data.combinatorial_data_utils import (
+from etnn.combinatorial_data import (
     CombinatorialComplexTransform,
 )
 

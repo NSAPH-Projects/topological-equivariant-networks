@@ -1,8 +1,10 @@
 from collections import defaultdict
 from typing import Optional
+
 import torch
 import torch.nn as nn
 from torch import Tensor
+
 
 def scatter_add(
     src: Tensor,
@@ -14,6 +16,49 @@ def scatter_add(
     src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
     aux = src.new_zeros(src_shape)
     return aux.index_add(dim, index, src)
+
+
+def scatter_mean(
+    src: Tensor,
+    index: Tensor,
+    dim: int = 0,
+    dim_size: Optional[int] = None,
+):
+    src_shape = list(src.shape)
+    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+    aux = src.new_zeros(src_shape)
+    return aux.index_reduce(dim, index, src, reduce="mean", include_self=False)
+
+
+def scatter_min(
+    src: Tensor,
+    index: Tensor,
+    dim: int = 0,
+    dim_size: Optional[int] = None,
+):
+    src_shape = list(src.shape)
+    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+    aux = src.new_zeros(src_shape)
+    return aux.index_reduce(dim, index, src, reduce="amin", include_self=False)
+
+
+def scatter_max(
+    src: Tensor,
+    index: Tensor,
+    dim: int = 0,
+    dim_size: Optional[int] = None,
+):
+    src_shape = list(src.shape)
+    src_shape[dim] = index.max().item() + 1 if dim_size is None else dim_size
+    aux = src.new_zeros(src_shape)
+    return aux.index_reduce(dim, index, src, reduce="amax", include_self=False)
+
+
+def slices_to_batch(slices: Tensor) -> Tensor:
+    n = slices.size(0) - 1
+    return torch.arange(n, device=slices.device).repeat_interleave(
+        (slices[1:] - slices[:-1]).long()
+    )
 
 
 class MessageLayer(nn.Module):
@@ -82,16 +127,26 @@ def compute_invariants_3d(feat_ind, pos, adj, inv_ind, device):
     eps = 1e-6
     angle["1_1"] = torch.arccos(cos_angle.clamp(-1 + eps, 1 - eps)).unsqueeze(1)
 
-    p1, p2, a = pos[inv_ind_int["1_2"][0]], pos[inv_ind_int["1_2"][1]], pos[inv_ind_int["1_2"][2]]
+    p1, p2, a = (
+        pos[inv_ind_int["1_2"][0]],
+        pos[inv_ind_int["1_2"][1]],
+        pos[inv_ind_int["1_2"][2]],
+    )
     v1, v2, b = p1 - a, p2 - a, p1 - p2
     v1_n, v2_n, b_n = (
         torch.linalg.norm(v1, dim=1),
         torch.linalg.norm(v2, dim=1),
         torch.linalg.norm(b, dim=1),
     )
-    v1_a = torch.arccos((torch.sum(v1 * b, dim=1) / (v1_n * b_n)).clamp(-1 + eps, 1 - eps))
-    v2_a = torch.arccos((torch.sum(v2 * b, dim=1) / (v2_n * b_n)).clamp(-1 + eps, 1 - eps))
-    b_a = torch.arccos((torch.sum(v1 * v2, dim=1) / (v1_n * v2_n)).clamp(-1 + eps, 1 - eps))
+    v1_a = torch.arccos(
+        (torch.sum(v1 * b, dim=1) / (v1_n * b_n)).clamp(-1 + eps, 1 - eps)
+    )
+    v2_a = torch.arccos(
+        (torch.sum(v2 * b, dim=1) / (v2_n * b_n)).clamp(-1 + eps, 1 - eps)
+    )
+    b_a = torch.arccos(
+        (torch.sum(v1 * v2, dim=1) / (v1_n * v2_n)).clamp(-1 + eps, 1 - eps)
+    )
 
     angle["1_2"] = torch.moveaxis(torch.vstack((v1_a + v2_a, b_a)), 0, 1)
 
@@ -116,23 +171,37 @@ def compute_invariants_3d(feat_ind, pos, adj, inv_ind, device):
     area = {k: v.to(device) for k, v in area.items()}
 
     inv = {
-        "0_0": torch.linalg.norm(pos[adj["0_0"][0]] - pos[adj["0_0"][1]], dim=1).unsqueeze(1),
+        "0_0": torch.linalg.norm(
+            pos[adj["0_0"][0]] - pos[adj["0_0"][1]], dim=1
+        ).unsqueeze(1),
         "0_1": torch.linalg.norm(
             pos[inv_ind_int["0_1"][0]] - pos[inv_ind_int["0_1"][1]], dim=1
         ).unsqueeze(1),
         "1_1": torch.stack(
             [
-                torch.linalg.norm(pos[inv_ind_int["1_1"][0]] - pos[inv_ind_int["1_1"][1]], dim=1),
-                torch.linalg.norm(pos[inv_ind_int["1_1"][0]] - pos[inv_ind_int["1_1"][2]], dim=1),
-                torch.linalg.norm(pos[inv_ind_int["1_1"][1]] - pos[inv_ind_int["1_1"][2]], dim=1),
+                torch.linalg.norm(
+                    pos[inv_ind_int["1_1"][0]] - pos[inv_ind_int["1_1"][1]], dim=1
+                ),
+                torch.linalg.norm(
+                    pos[inv_ind_int["1_1"][0]] - pos[inv_ind_int["1_1"][2]], dim=1
+                ),
+                torch.linalg.norm(
+                    pos[inv_ind_int["1_1"][1]] - pos[inv_ind_int["1_1"][2]], dim=1
+                ),
             ],
             dim=1,
         ),
         "1_2": torch.stack(
             [
-                torch.linalg.norm(pos[inv_ind_int["1_2"][0]] - pos[inv_ind_int["1_2"][2]], dim=1)
-                + torch.linalg.norm(pos[inv_ind_int["1_2"][1]] - pos[inv_ind_int["1_2"][2]], dim=1),
-                torch.linalg.norm(pos[inv_ind_int["1_2"][1]] - pos[inv_ind_int["1_2"][2]], dim=1),
+                torch.linalg.norm(
+                    pos[inv_ind_int["1_2"][0]] - pos[inv_ind_int["1_2"][2]], dim=1
+                )
+                + torch.linalg.norm(
+                    pos[inv_ind_int["1_2"][1]] - pos[inv_ind_int["1_2"][2]], dim=1
+                ),
+                torch.linalg.norm(
+                    pos[inv_ind_int["1_2"][1]] - pos[inv_ind_int["1_2"][2]], dim=1
+                ),
             ],
             dim=1,
         ),
@@ -162,7 +231,7 @@ def compute_invariants(
     feat_ind: dict[str, torch.FloatTensor],
     pos: torch.FloatTensor,
     adj: dict[str, torch.LongTensor],
-    inv_ind: dict[str, torch.FloatTensor],
+    # inv_ind: dict[str, torch.FloatTensor],
     device: torch.device,
 ) -> dict[str, torch.FloatTensor]:
     """
@@ -206,8 +275,6 @@ def compute_invariants(
         A dictionary where each key is a string in the format 'sender_rank_receiver_rank' indicating
         the ranks of cell pairs, and each value is a tensor of shape (2, num_cell_pairs) containing
         indices for sender and receiver cells.
-    inv_ind : Any
-        Currently unused. Placeholder for future use.
     device : Any
         Currently unused. Placeholder for potential device specification in future updates.
 
@@ -236,7 +303,9 @@ def compute_invariants(
             if rank not in mean_cell_positions:
                 mean_cell_positions[rank] = compute_centroids(feat_ind[rank], pos)
             if rank not in max_pairwise_distances:
-                max_pairwise_distances[rank] = compute_max_pairwise_distances(feat_ind[rank], pos)
+                max_pairwise_distances[rank] = compute_max_pairwise_distances(
+                    feat_ind[rank], pos
+                )
 
         # Compute mean distances
         indexed_sender_centroids = mean_cell_positions[sender_rank][cell_pairs[0]]
@@ -251,7 +320,9 @@ def compute_invariants(
         # Compute Hausdorff distances
         sender_cells = feat_ind[sender_rank][cell_pairs[0]]
         receiver_cells = feat_ind[receiver_rank][cell_pairs[1]]
-        hausdorff_distances = compute_hausdorff_distances(sender_cells, receiver_cells, pos)
+        hausdorff_distances = compute_hausdorff_distances(
+            sender_cells, receiver_cells, pos
+        )
 
         # Combine all features
         new_features[rank_pair] = torch.cat(
@@ -299,7 +370,9 @@ def compute_max_pairwise_distances(
 
 
 def compute_hausdorff_distances(
-    sender_cells: torch.FloatTensor, receiver_cells: torch.FloatTensor, pos: torch.FloatTensor
+    sender_cells: torch.FloatTensor,
+    receiver_cells: torch.FloatTensor,
+    pos: torch.FloatTensor,
 ) -> torch.FloatTensor:
     """
     Compute the Hausdorff distances between two sets of cells.
@@ -335,7 +408,9 @@ def compute_hausdorff_distances(
 
     receiver_mins = dist_matrix.min(dim=1)[0]
     # Cast inf to -inf to correctly compute maxima
-    receiver_mins = torch.where(receiver_mins == float("inf"), float("-inf"), receiver_mins)
+    receiver_mins = torch.where(
+        receiver_mins == float("inf"), float("-inf"), receiver_mins
+    )
     receiver_hausdorff = receiver_mins.max(dim=1)[0]
 
     hausdorff_distances = torch.stack([sender_hausdorff, receiver_hausdorff], dim=1)
@@ -344,7 +419,9 @@ def compute_hausdorff_distances(
 
 
 def compute_intercell_distances(
-    sender_cells: torch.FloatTensor, receiver_cells: torch.FloatTensor, pos: torch.FloatTensor
+    sender_cells: torch.FloatTensor,
+    receiver_cells: torch.FloatTensor,
+    pos: torch.FloatTensor,
 ) -> torch.FloatTensor:
     """
     Compute the pairwise distances between nodes within each cell.
@@ -376,7 +453,9 @@ def compute_intercell_distances(
     receiver_cells_filled = receiver_cells.nan_to_num(0).to(torch.int64)
     sender_positions = pos[sender_cells_filled]
     receiver_positions = pos[receiver_cells_filled]
-    dist_matrix = torch.norm(sender_positions.unsqueeze(2) - receiver_positions.unsqueeze(1), dim=3)
+    dist_matrix = torch.norm(
+        sender_positions.unsqueeze(2) - receiver_positions.unsqueeze(1), dim=3
+    )
 
     # Set distances for invalid combinations to nan
     sender_mask = ~torch.isnan(sender_cells)
@@ -387,7 +466,9 @@ def compute_intercell_distances(
     return dist_matrix
 
 
-def compute_centroids(cells: torch.FloatTensor, features: torch.FloatTensor) -> torch.FloatTensor:
+def compute_centroids(
+    cells: torch.FloatTensor, features: torch.FloatTensor
+) -> torch.FloatTensor:
     """
     Compute the centroids of cells based on their constituent nodes' features.
 

@@ -5,7 +5,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 
 from models.empsn import EMPSNLayer
-from models.utils import compute_centroids, compute_invariants
+from models.utils import compute_centroids, compute_invariants, slices_to_batch
 
 
 class TEN(nn.Module):
@@ -19,7 +19,7 @@ class TEN(nn.Module):
         num_hidden: int,
         num_out: int,
         num_layers: int,
-        max_dim: int,
+        # max_dim: int,
         adjacencies: list[str],
         initial_features: str,
         visible_dims: list[int] | None,
@@ -33,16 +33,24 @@ class TEN(nn.Module):
         self.initial_features = initial_features
         self.compute_invariants = compute_invariants
         self.num_inv_fts_map = self.compute_invariants.num_features_map
-        self.max_dim = max_dim
+        # self.max_dim = max_dim
         self.adjacencies = adjacencies
         self.normalize_invariants = normalize_invariants
         self.batch_norm = batch_norm
         self.lean = lean
+        max_dim = max(num_features_per_rank.keys())
 
         if visible_dims is not None:
             self.visible_dims = visible_dims
+            # keep only adjacencies that are compatible with visible_dims
+            self.adjacencies = []
+            for adj in adjacencies:
+                max_rank = max(int(rank) for rank in adj.split("_")[:2])
+                if max_rank in visible_dims:
+                    self.adjacencies.append(adj)
         else:
             self.visible_dims = list(range(max_dim + 1))
+            self.adjacencies = adjacencies
 
         # layers
         if self.normalize_invariants:
@@ -84,16 +92,17 @@ class TEN(nn.Module):
             self.pre_pool[str(dim)] = nn.Sequential(*pre_pool_layers)
 
         self.post_pool = nn.Sequential(
-            nn.Sequential(
-                nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
-                nn.SiLU(),
-                nn.Linear(num_hidden, num_out),
-            )
+            nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
+            nn.SiLU(),
+            nn.Linear(num_hidden, num_out),
         )
 
     def forward(self, graph: Data) -> Tensor:
         device = graph.pos.device
-        cell_ind = {str(i): getattr(graph, f"cell_{i}") for i in self.visible_dims}
+        # cell_ind = {str(i): getattr(graph, f"cell_{i}") for i in self.visible_dims}
+        cell_ind = {
+            str(i): graph.cell_list(i, format="padded") for i in self.visible_dims
+        }
 
         mem = {i: getattr(graph, f"mem_{i}") for i in self.visible_dims}
 
@@ -103,11 +112,11 @@ class TEN(nn.Module):
             if hasattr(graph, f"adj_{adj_type}")
         }
 
-        inv_ind = {
-            adj_type: getattr(graph, f"inv_{adj_type}")
-            for adj_type in self.adjacencies
-            if hasattr(graph, f"inv_{adj_type}")
-        }
+        # inv_ind = {
+        #     adj_type: getattr(graph, f"inv_{adj_type}")
+        #     for adj_type in self.adjacencies
+        #     if hasattr(graph, f"inv_{adj_type}")
+        # }
 
         # compute initial features
         features = {}
@@ -115,7 +124,9 @@ class TEN(nn.Module):
             features[feature_type] = {}
             for i in self.visible_dims:
                 if feature_type == "node":
-                    features[feature_type][str(i)] = compute_centroids(cell_ind[str(i)], graph.x)
+                    features[feature_type][str(i)] = compute_centroids(
+                        cell_ind[str(i)], graph.x
+                    )
                 elif feature_type == "mem":
                     features[feature_type][str(i)] = mem[i].float()
                 elif feature_type == "hetero":
@@ -123,18 +134,22 @@ class TEN(nn.Module):
 
         x = {
             str(i): torch.cat(
-                [features[feature_type][str(i)] for feature_type in self.initial_features], dim=1
+                [
+                    features[feature_type][str(i)]
+                    for feature_type in self.initial_features
+                ],
+                dim=1,
             )
             for i in self.visible_dims
         }
 
-        cell_batch = {str(i): getattr(graph, f"cell_{i}_batch") for i in self.visible_dims}
-
         # embed features and E(n) invariant information
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
-        inv = self.compute_invariants(cell_ind, graph.pos, adj, inv_ind, device)
+        inv = self.compute_invariants(cell_ind, graph.pos, adj, device)
         if self.normalize_invariants:
-            inv = {adj: self.inv_normalizer[adj](feature) for adj, feature in inv.items()}
+            inv = {
+                adj: self.inv_normalizer[adj](feature) for adj, feature in inv.items()
+            }
         # message passing
         for layer in self.layers:
             x = layer(x, adj, inv)
@@ -144,25 +159,34 @@ class TEN(nn.Module):
 
         # create one dummy node with all features equal to zero for each graph and each rank
         batch_size = graph.y.shape[0]
-        x = {
-            dim: torch.cat(
-                (feature, torch.zeros(batch_size, feature.shape[1]).to(device)),
-                dim=0,
-            )
-            for dim, feature in x.items()
-        }
-        cell_batch = {
-            dim: torch.cat((indices, torch.tensor(range(batch_size)).to(device)))
-            for dim, indices in cell_batch.items()
-        }
+        # x = {
+        #     dim: torch.cat(
+        #         (feature, torch.zeros(batch_size, feature.shape[1]).to(device)),
+        #         dim=0,
+        #     )
+        #     for dim, feature in x.items()
+        # }
+        # cell_batch = {
+        #     str(i): getattr(graph, f"slices_{i}_batch") for i in self.visible_dims
+        # }
+        # cell_batch = {
+        #     dim: torch.cat((indices, torch.tensor(range(batch_size)).to(device)))
+        #     for dim, indices in cell_batch.items()
+        # }
 
-        x = {dim: global_add_pool(x[dim], cell_batch[dim]) for dim, feature in x.items()}
+        cell_batch = {
+            str(i): slices_to_batch(graph._slice_dict[f"slices_{i}"])
+            for i in self.visible_dims
+        }
+        x = {
+            dim: global_add_pool(x[dim], cell_batch[dim]) for dim, feature in x.items()
+        }
         state = torch.cat(
             tuple([feature for dim, feature in x.items()]),
             dim=1,
         )
         out = self.post_pool(state)
-        out = torch.squeeze(out)
+        out = torch.squeeze(out, -1)
 
         return out
 

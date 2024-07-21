@@ -3,4 +3,6 @@ defaults:
   - dataset: virtual-node
 
 dataset_name: ${hydra:runtime.choices.dataset}
+task_name: geospatial
 force_reload: false
+compile: false

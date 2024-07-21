@@ -3,7 +3,7 @@ from itertools import combinations
 import networkx as nx
 import torch_geometric.utils as pyg_utils
 
-from qm9.lifts.common import Cell
+from etnn.combinatorial_data import Cell
 
 NUM_FEATURES = 0
 

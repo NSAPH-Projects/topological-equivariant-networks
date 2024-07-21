@@ -9,11 +9,14 @@ from scipy.sparse import csc_matrix
 from toponetx.classes import CombinatorialComplex
 from torch import Tensor
 from torch_geometric.transforms import BaseTransform
+from torch_geometric.data import Data
 
 from etnn.lifter import Lifter
-from qm9.lifts.common import Cell
 
 from typing import Iterable, Literal, Union
+
+# Type alias for a cell in a simplicial complex. Frozenset of node indices and a list of features.
+Cell = tuple[frozenset[int], tuple[float]]
 
 
 class CombinatorialComplexData(Data):

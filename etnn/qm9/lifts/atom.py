@@ -4,7 +4,7 @@ from rdkit.Chem.rdchem import Atom
 from torch_geometric.data import Data
 from torch_geometric.utils import one_hot
 
-from .common import Cell
+from etnn.combinatorial_data import Cell
 
 NUM_FEATURES = 15
 DUMMY_NUM_FEATURES = 0

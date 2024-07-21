@@ -5,7 +5,7 @@ from rdkit import Chem
 from torch_geometric.data import Data
 from torch_geometric.utils import one_hot
 
-from .common import Cell
+from etnn.combinatorial_data import Cell
 
 functional_group_patterns = {
     "carboxyl": "C(=O)O",

@@ -1,6 +1,6 @@
 from torch_geometric.data import Data
 
-from .common import Cell
+from etnn.combinatorial_data import Cell
 
 NUM_FEATURES = 0
 

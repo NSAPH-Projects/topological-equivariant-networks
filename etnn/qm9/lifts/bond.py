@@ -6,7 +6,7 @@ from rdkit.Chem.rdchem import BondType as BT
 from torch_geometric.data import Data
 from torch_geometric.utils import one_hot
 
-from .common import Cell
+from etnn.combinatorial_data import Cell
 
 NUM_FEATURES = 0
 

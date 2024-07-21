@@ -3,7 +3,7 @@ import torch_geometric.utils as pyg_utils
 from rdkit import Chem
 from torch_geometric.data import Data
 
-from .common import Cell
+from etnn.combinatorial_data import Cell
 
 NUM_FEATURES = 0
 

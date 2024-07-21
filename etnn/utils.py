@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 from torch_geometric.loader import DataLoader
 
 from models.ten import TEN
-from qm9.qm9cc import get_adjacency_types
+from etnn.lifter import get_adjacency_types
 # from qm9.lifts.registry import LIFTER_REGISTRY
 # from combinatorial_data.lifter import Lifter
 from torch_geometric.data import Dataset

@@ -17,12 +17,12 @@ from omegaconf import DictConfig, OmegaConf
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
-from src.qm9.qm9cc import QM9CC
-from src.qm9.utils import calc_mean_mad
+from etnn.qm9.qm9cc import QM9CC
+from etnn.qm9.utils import calc_mean_mad
 from utils import args_to_hash
 
 # from src.utils import get_loaders, get_model, set_seed
-from src.utils import get_model, set_seed
+from etnn.utils import get_model, set_seed
 
 torch.set_float32_matmul_precision("high")
 os.environ["WANDB__SERVICE_WAIT"] = "600"

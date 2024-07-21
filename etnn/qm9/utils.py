@@ -19,8 +19,8 @@ from tqdm import tqdm
 # )
 from combinatorial_data.lifter import Lifter
 from qm9.lifts.registry import LIFTER_REGISTRY
-from src.combinatorial_data.combinatorial_data_utils import CombinatorialComplexData
-from src.qm9.qm9cc import QM9CC
+from etnn.combinatorial_data.combinatorial_data_utils import CombinatorialComplexData
+from etnn.qm9.qm9cc import QM9CC
 # from utils import get_adjacency_types, merge_adjacencies
 
 

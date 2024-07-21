@@ -3,7 +3,7 @@ from typing import Dict, List
 import torch
 import torch.nn as nn
 from torch import Tensor
-from src.models.utils import scatter_add
+from etnn.models.utils import scatter_add
 
 # from torch_scatter import scatter_add
 

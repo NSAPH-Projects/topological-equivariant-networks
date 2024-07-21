@@ -1,5 +1,5 @@
 import hydra
-from src.qm9.qm9cc import QM9CC
+from etnn.qm9.qm9cc import QM9CC
 from omegaconf import DictConfig
 import logging
 

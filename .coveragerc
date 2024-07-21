@@ -1,7 +1,0 @@
-[run]
-source = .
-omit = *test*
-
-[report]
-skip_empty = True
-sort = cover

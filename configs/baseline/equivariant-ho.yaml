@@ -1,5 +1,0 @@
-#@package _global_
-model:
-  equivariant: true
-  hausdorff: true
-  diff_high_order: true

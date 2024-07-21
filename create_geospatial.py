@@ -4,7 +4,7 @@ import hydra
 from omegaconf import DictConfig
 from torch_geometric.transforms import Compose
 
-from src.pm25 import geospatialcc as pm25cc
+from etnn.pm25 import geospatialcc as pm25cc
 
 logger = logging.getLogger(__name__)
 

@@ -46,7 +46,7 @@ def squash_cc(
                 delattr(data, key)
             elif key.startswith("cell_") and key != "cell_0":
                 delattr(data, key)
-            elif key.startswith("lengths_") and key != "lengths_0":
+            elif key.startswith("slices_") and key != "slices_0":
                 delattr(data, key)
     data.x_0 = x_0
     return data
@@ -72,7 +72,7 @@ def squash_cc(
                 delattr(data, key)
             elif key.startswith("cell_") and key != "cell_0":
                 delattr(data, key)
-            elif key.startswith("lengths_") and key != "lengths_0":
+            elif key.startswith("slices_") and key != "slices_0":
                 delattr(data, key)
     data.x_0 = x_0
     return data
@@ -81,10 +81,8 @@ def squash_cc(
 def create_mask(
     data: CombinatorialComplexData, rate: float = 0.3, seed: int | None = None
 ) -> CombinatorialComplexData:
-    cell_2 = data.cell_2
-    lengths_2 = data.lengths_2
-    cell_ind_2 = torch.split(cell_2, lengths_2.tolist())
-    n = len(lengths_2)
+    cell_ind_2 = data.cell_list(rank=2)
+    n = len(cell_ind_2)
     m = int(rate * n)
     rng = np.random.default_rng(seed)
     train_mask_cells = rng.choice(range(n), m, replace=False)
@@ -106,7 +104,7 @@ def create_mask(
             val.extend(cell_ind_2[i].tolist())
 
     # create the mask
-    k = len(data.lengths_0)
+    k = len(data.slices_0)
     dev = data.pos.device
     data.training_mask = torch.zeros(k, dtype=torch.bool, device=dev)
     data.validation_mask = torch.zeros(k, dtype=torch.bool, device=dev)
@@ -126,10 +124,10 @@ def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData
     # data.cell_3 = torch.tensor([0]).to(data.pos.device)
     data.cell_3 = torch.cat(list(data.cell_0)).to(data.pos.device)
 
-    # data.lengths_3 = torch.tensor([1]).to(data.pos.device)
+    # data.slices_3 = torch.tensor([1]).to(data.pos.device)
 
     # connect every two cell
-    # num_cells_2 = len(data.lengths_2)
+    # num_cells_2 = len(data.slices_2)
     num_cells_2 = len(data.cell_2)
     adj_3_2 = torch.tensor([[0, i] for i in range(num_cells_2)])
     data.adj_3_2 = adj_3_2.T.to(data.pos.device)

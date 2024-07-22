@@ -3,21 +3,10 @@ from typing import Dict, List
 import torch
 import torch.nn as nn
 from torch import Tensor
-from etnn.models.utils import scatter_add
-
-# from torch_scatter import scatter_add
+from etnn.utils import scatter_add
 
 
-class EMPSNLayer(nn.Module):
-    """
-    Layer of E(n) Equivariant Message Passing Simplicial Network.
-
-    A message passing layer is added for each type of adjacency to the message_passing dict. For
-    each simplex, a state is found by concatening the messages sent to that simplex, e.g. we update
-    an edge by concatenating the messages from nodes, edges, and triangles. The simplex is update by
-    passing this state through an MLP as found in the update dict.
-    """
-
+class ETNNLayer(nn.Module):
     def __init__(
         self,
         adjacencies: List[str],
@@ -37,7 +26,7 @@ class EMPSNLayer(nn.Module):
         # messages
         self.message_passing = nn.ModuleDict(
             {
-                adj: SimplicialEGNNLayer(
+                adj: BaseMessagePassingLayer(
                     num_hidden,
                     self.num_features_map[adj],
                     batch_norm=batch_norm,
@@ -89,7 +78,7 @@ class EMPSNLayer(nn.Module):
         return x
 
 
-class SimplicialEGNNLayer(nn.Module):
+class BaseMessagePassingLayer(nn.Module):
     def __init__(
         self, num_hidden, num_inv, batch_norm: bool = False, lean: bool = True
     ):

@@ -4,13 +4,14 @@ from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 
-from models.empsn import EMPSNLayer
-from models.utils import compute_centroids, compute_invariants, slices_to_batch
+from etnn.layers import ETNNLayer
+from etnn.utils import slices_to_pointer
+from etnn.invariants import compute_centroids, compute_invariants
 
 
-class TEN(nn.Module):
+class ETNN(nn.Module):
     """
-    Topological E(n) Equivariant Networks (TEN)
+    The E(n)-Equivariant Topological Neural Network (ETNN) model.
     """
 
     def __init__(
@@ -71,7 +72,7 @@ class TEN(nn.Module):
 
         self.layers = nn.ModuleList(
             [
-                EMPSNLayer(
+                ETNNLayer(
                     self.adjacencies,
                     self.visible_dims,
                     num_hidden,
@@ -158,24 +159,8 @@ class TEN(nn.Module):
         x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}
 
         # create one dummy node with all features equal to zero for each graph and each rank
-        batch_size = graph.y.shape[0]
-        # x = {
-        #     dim: torch.cat(
-        #         (feature, torch.zeros(batch_size, feature.shape[1]).to(device)),
-        #         dim=0,
-        #     )
-        #     for dim, feature in x.items()
-        # }
-        # cell_batch = {
-        #     str(i): getattr(graph, f"slices_{i}_batch") for i in self.visible_dims
-        # }
-        # cell_batch = {
-        #     dim: torch.cat((indices, torch.tensor(range(batch_size)).to(device)))
-        #     for dim, indices in cell_batch.items()
-        # }
-
         cell_batch = {
-            str(i): slices_to_batch(graph._slice_dict[f"slices_{i}"])
+            str(i): slices_to_pointer(graph._slice_dict[f"slices_{i}"])
             for i in self.visible_dims
         }
         x = {
@@ -191,4 +176,4 @@ class TEN(nn.Module):
         return out
 
     def __str__(self):
-        return f"TEN ({self.type})"
+        return f"ETNN ({self.type})"

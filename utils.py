@@ -13,7 +13,7 @@ from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
 
 from etnn.lifter import get_adjacency_types
-from etnn.models.ten import TEN
+from etnn.models import ETNN
 
 
 def args_to_hash(args: dict):
@@ -102,7 +102,7 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
         # visible_dims,
     )
 
-    model = TEN(
+    model = ETNN(
         num_features_per_rank=num_features_per_rank,
         num_hidden=cfg.model.num_hidden,
         num_out=num_out,  # currently only one-dim output is supported

@@ -5,7 +5,8 @@ from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 
 from etnn.layers import ETNNLayer
-from etnn.utils import compute_centroids, compute_invariants
+from etnn.utils import slices_to_batch
+from etnn.invariants import compute_centroids, compute_invariants
 
 
 class ETNN(nn.Module):
@@ -159,7 +160,7 @@ class ETNN(nn.Module):
 
         # create one dummy node with all features equal to zero for each graph and each rank
         cell_batch = {
-            str(i): _slices_to_batch(graph._slice_dict[f"slices_{i}"])
+            str(i): slices_to_batch(graph._slice_dict[f"slices_{i}"])
             for i in self.visible_dims
         }
         x = {
@@ -176,17 +177,3 @@ class ETNN(nn.Module):
 
     def __str__(self):
         return f"ETNN ({self.type})"
-
-
-def _slices_to_batch(slices: Tensor) -> Tensor:
-    """This auxiliary function converts the the a slices object, which
-    is a property of the torch_geometric.Data object, to a batch index,
-    which is a tensor of the same length as the number of nodes/cells where
-    each element is the index of the batch to which the node/cell belongs.
-    For example, if the slices object is torch.tensor([0, 3, 5, 7]),
-    then the output of this function is torch.tensor([0, 0, 0, 1, 1, 2, 2]).
-    """
-    n = slices.size(0) - 1
-    return torch.arange(n, device=slices.device).repeat_interleave(
-        (slices[1:] - slices[:-1]).long()
-    )

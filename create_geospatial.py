@@ -1,11 +1,10 @@
 import logging
 from functools import partial
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from torch_geometric.transforms import Compose
 
 from etnn.geospatial import pm25cc, transforms
-import utils
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,8 @@
 import logging
 
 import hydra
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
-import utils
 from etnn.qm9.qm9cc import QM9CC
 
 logger = logging.getLogger(__name__)

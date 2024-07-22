@@ -14,6 +14,7 @@ dataset:
   
 # task name will make more sense when we introduce the spatial CC
 task_name: geospatial
+dataset_name: ${hydra:runtime.choices.dataset}
 experiment_name: ${hydra:runtime.choices.experiment}
 
 compile: false

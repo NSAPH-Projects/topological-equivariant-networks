@@ -31,9 +31,6 @@ def main(cfg: DictConfig):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ==== Get dataset and loader ======
-    # create a unique hash for the dataset based on the configuration
-    hash = utils.args_to_hash(OmegaConf.to_container(cfg.dataset, resolve=True))
-
     pre_transform = []
     if cfg.dataset.standardize:
         pre_transform.append(transforms.standardize_cc)
@@ -53,7 +50,7 @@ def main(cfg: DictConfig):
     )
 
     dataset = pm25cc.PM25CC(
-        f"data/geospatialcc_{hash}",
+        f"data/geospatialcc_{cfg.dataset_name}",
         pre_transform=pre_transform,
         force_reload=cfg.force_reload,
         transform=masking_transform,

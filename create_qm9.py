@@ -11,17 +11,13 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(config_path="conf/conf_qm9", config_name="config", version_base=None)
 def main(cfg: DictConfig):
-    # create a unique hash for the dataset based on the configuration
-    hash = utils.args_to_hash(OmegaConf.to_container(cfg.dataset, resolve=True))
-
     dataset = QM9CC(
-        f"data/qm9cc_{hash}",
+        f"data/qm9cc_{cfg.dataset_name}",
         lifters=list(cfg.dataset.lifters),
         neighbor_types=list(cfg.dataset.neighbor_types),
         connectivity=cfg.dataset.connectivity,
         supercell=cfg.dataset.supercell,
         force_reload=False,
-        transform=prepare_targets_transform,
     )
     logger.info(f"Lifted QM9 dataset generated and stored in '{dataset.root}'.")
 

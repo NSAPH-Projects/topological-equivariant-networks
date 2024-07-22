@@ -48,7 +48,9 @@ def main(cfg: DictConfig):
     pre_transform = Compose(pre_transform)
 
     # mask a fraction of node during prediction, needed for node-level tasks
-    masking_transform = transforms.create_mask(seed=cfg.seed, rate=cfg.mask_rate)
+    masking_transform = partial(
+        transforms.create_mask, seed=cfg.seed, rate=cfg.mask_rate
+    )
 
     dataset = pm25cc.PM25CC(
         f"data/geospatialcc_{hash}",
@@ -80,7 +82,7 @@ def main(cfg: DictConfig):
     best_loss = float("inf")
 
     # === Configure checkpoint and wandb logging ===
-    ckpt_filename = f"{cfg.experiment_name}__{cfg.target}__{cfg.seed}.pth"
+    ckpt_filename = f"{cfg.experiment_name}__{cfg.seed}.pth"
     if cfg.ckpt_prefix is not None:
         ckpt_filename = f"{cfg.ckpt_prefix}_{ckpt_filename}"
     checkpoint_path = f"{cfg.ckpt_dir}/{ckpt_filename}"

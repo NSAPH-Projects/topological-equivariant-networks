@@ -3,6 +3,7 @@
 
 ## data
 data/
+!data/input/egnn_splits.json
 !data/input/geospatialcc.json
 !data/input/coarse_pm25_bronx_tract_wei_et_al_2023.parquet
 

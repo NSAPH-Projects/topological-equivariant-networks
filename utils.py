@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import json
 import os
@@ -14,6 +15,44 @@ from torch_geometric.loader import DataLoader
 
 from etnn.lifter import get_adjacency_types
 from etnn.model import ETNN
+
+
+def load_checkpoint(checkpoint_path, model, opt, sched, force_restart):
+    best_model = copy.deepcopy(model)
+    device = next(model.parameters()).device
+    if not force_restart and os.path.isfile(checkpoint_path):
+        checkpoint = torch.load(checkpoint_path)
+        model.to("cpu")
+        best_model.to("cpu")
+        model.load_state_dict(checkpoint["model"])
+        best_model.load_state_dict(checkpoint["best_model"])
+        best_loss = checkpoint["best_loss"]
+        opt.load_state_dict(checkpoint["optimizer"])
+        sched.load_state_dict(checkpoint["scheduler"])
+        model.to(device)
+        best_model.to(device)
+        return checkpoint["epoch"], checkpoint["run_id"], best_model, best_loss
+    else:
+        return 0, None, best_model, float("inf")
+
+
+def save_checkpoint(path, model, best_model, best_loss, opt, sched, epoch, run_id):
+    device = next(model.parameters()).device
+    model.to("cpu")
+    best_model.to("cpu")
+    state = {
+        "epoch": epoch + 1,
+        "model": model.state_dict(),
+        "best_model": best_model.state_dict(),
+        "best_loss": best_loss,
+        "optimizer": opt.state_dict(),
+        "scheduler": sched.state_dict(),
+        "run_id": run_id,
+    }
+    model.to(device)
+    best_model.to(device)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    torch.save(state, path)
 
 
 def args_to_hash(args: dict):

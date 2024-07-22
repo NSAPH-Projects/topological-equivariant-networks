@@ -1,4 +1,5 @@
 from copy import deepcopy
+from dataclasses import dataclass
 import numba
 import numpy as np
 import torch
@@ -291,69 +292,125 @@ def compute_centroids(
     return centroids
 
 
+@dataclass
 class SparseInvariantComputationIndices:
     """This auxiliary class is used to compute the indices for the computation of geometric
     invariants. The agents permit to compute centroids, diameters, and Hausdorff distances between
     pairs of cells using only scatter add/min/max/mean operations in linear memory."""
 
-    @numba.jit(nopython=True)
-    def __init__(
-        self,
-        atoms_send: np.ndarray,
-        slices_send: np.ndarray,
-        atoms_recv: np.ndarray,
-        slices_recv: np.ndarray,
-    ) -> None:
-        # inputs must be equal size
-        splits_send = np.split(atoms_send, np.cumsum(slices_send)[:-1])
-        splits_recv = np.split(atoms_recv, np.cumsum(slices_recv)[:-1])
+    cell_ids: np.ndarray
+    atoms_ids_send: np.ndarray
+    atoms_ids_recv: np.ndarray
+    haus_min_recv: np.ndarray
+    haus_min_send: np.ndarray
+    haus_max_recv: np.ndarray
+    haus_max_send: np.ndarray
 
-        # must return a tuple of 6 arrays
-        n = len(slices_send)  # must be the same as len(splits_recv)
-        m = sum(slices_send * slices_recv)
-        ids_send = np.empty(m, dtype=np.int64)
-        ids_recv = np.empty(m, dtype=np.int64)
-        minindex_send = np.empty(m, dtype=np.int64)
-        minindex_recv = np.empty(m, dtype=np.int64)
-        cell = np.empty(m, dtype=np.int64)
 
-        offset_index_send = 0
-        offset_index_recv = 0
-        step = 0
-        for i in range(n):
-            n_send = len(splits_send[i])
-            n_recv = len(splits_recv[i])
-            for j, sj in enumerate(splits_send[i]):
-                for k, sk in enumerate(splits_recv[i]):
-                    ind = step + j * n_recv + k
-                    ids_send[ind] = sj
-                    ids_recv[ind] = sk
-                    minindex_send[ind] = offset_index_send + j
-                    minindex_recv[ind] = offset_index_recv + k
-                    cell[ind] = i
-            step += n_send * n_recv
-            offset_index_send += n_send
-            offset_index_recv += n_recv
+@numba.jit(nopython=True)
+def _sparse_computation_indices(
+    atoms_send: np.ndarray,
+    slices_send: np.ndarray,
+    atoms_recv: np.ndarray,
+    slices_recv: np.ndarray,
+) -> tuple[list[int], list[int], list[int], list[int], list[int], list[int]]:
+    # inputs must be equal size
+    splits_send = np.split(atoms_send, np.cumsum(slices_send)[:-1])
+    splits_recv = np.split(atoms_recv, np.cumsum(slices_recv)[:-1])
 
-        step = 0
-        maxindex_send = np.empty(sum(slices_send), dtype=np.int64)
-        for j, sj in enumerate(splits_send):
-            maxindex_send[step : step + len(sj)] = j
-            step += len(sj)
+    # must return a tuple of 6 arrays
+    n = len(slices_send)  # must be the same as len(splits_recv)
+    m = sum(slices_send * slices_recv)
+    ids_send = np.empty(m, dtype=np.int64)
+    ids_recv = np.empty(m, dtype=np.int64)
+    minindex_send = np.empty(m, dtype=np.int64)
+    minindex_recv = np.empty(m, dtype=np.int64)
+    cell_ids = np.empty(m, dtype=np.int64)
 
-        step = 0
-        maxindex_recv = np.empty(sum(slices_recv), dtype=np.int64)
-        for j, sj in enumerate(splits_recv):
-            maxindex_recv[step : step + len(sj)] = j
-            step += len(sj)
+    offset_index_send = 0
+    offset_index_recv = 0
+    step = 0
+    for i in range(n):
+        n_send = len(splits_send[i])
+        n_recv = len(splits_recv[i])
+        for j, sj in enumerate(splits_send[i]):
+            for k, sk in enumerate(splits_recv[i]):
+                ind = step + j * n_recv + k
+                ids_send[ind] = sj
+                ids_recv[ind] = sk
+                minindex_send[ind] = offset_index_send + j
+                minindex_recv[ind] = offset_index_recv + k
+                cell_ids[ind] = i
+        step += n_send * n_recv
+        offset_index_send += n_send
+        offset_index_recv += n_recv
 
-        self.atom_ids_send = list(ids_send)
-        self.atom_ids_recv = list(ids_recv)
-        self.cell_ids = list(cell)
-        self.haus_minindex_send = list(minindex_send)
-        self.haus_minindex_recv = list(minindex_recv)
-        self.haus_maxindex_send = list(maxindex_send)
-        self.haus_maxindex_recv = list(maxindex_recv)
+    step = 0
+    maxindex_send = np.empty(sum(slices_send), dtype=np.int64)
+    for j, sj in enumerate(splits_send):
+        maxindex_send[step : step + len(sj)] = j
+        step += len(sj)
+
+    step = 0
+    maxindex_recv = np.empty(sum(slices_recv), dtype=np.int64)
+    for j, sj in enumerate(splits_recv):
+        maxindex_recv[step : step + len(sj)] = j
+        step += len(sj)
+
+    return (
+        cell_ids,
+        ids_send,
+        ids_recv,
+        minindex_send,
+        minindex_recv,
+        maxindex_send,
+        maxindex_recv,
+    )
+
+
+def sparse_computation_indices_from_cc(cell_ind, adj, max_cell_size=100):
+    agg_indices = {}
+
+    # first take sub sample of the cells if larger than max size
+    cell_ind = deepcopy(cell_ind)
+    for rank, cells in cell_ind.items():
+        for j, c in enumerate(cells):
+            if len(c) > max_cell_size:
+                subsample = np.random.choice(c, max_cell_size, replace=False)
+                cell_ind[rank][j] = subsample.tolist()
+
+        # create agg indices for rank
+        # transform on the format of atoms/sizes needed by the helper functin
+        atoms = np.concatenate(cells)
+        slices = np.array([len(c) for c in cells])
+        indices = _sparse_computation_indices(atoms, slices, atoms, slices)
+        indices = SparseInvariantComputationIndices(*indices)
+        agg_indices[rank] = indices
+        # [x.tolist() for x in indices]
+
+    # for each aggregation indices for edges
+    for adj_type, edges in adj.items():
+        # get the indices of the cells
+        send_rank, recv_rank = adj_type.split("_")[:2]
+
+        # get the cells of sender and receiver
+        cells_send = [cell_ind[send_rank][i] for i in edges[0]]
+        cells_recv = [cell_ind[recv_rank][i] for i in edges[1]]
+
+        # transform on the format of atoms/sizes needed by the helper functin
+        atoms_send = np.concatenate(cells_send)
+        slices_send = np.array([len(c) for c in cells_send])
+        atoms_recv = np.concatenate(cells_recv)
+        slices_recv = np.array([len(c) for c in cells_recv])
+
+        # get the indices of the cells
+        indices = _sparse_computation_indices(
+            atoms_send, slices_send, atoms_recv, slices_recv
+        )
+        indices = SparseInvariantComputationIndices(*indices)
+        agg_indices[adj_type] = indices
+
+    return agg_indices, cell_ind
 
 
 def compute_invariants_sparse(
@@ -412,11 +469,11 @@ def compute_invariants_sparse(
         # compute diameters (max pairwise distance)
         agg = rank_agg_indices[rank]
         if diff_high_order:
-            pos_send = pos[agg.atom_ids_send]
-            pos_recv = pos[agg.atom_ids_recv]
+            pos_send = pos[agg.atoms_ids_send]
+            pos_recv = pos[agg.atoms_ids_recv]
         else:
-            pos_send = pos.detach()[agg.atom_ids_send]
-            pos_recv = pos.detach()[agg.atom_ids_recv]
+            pos_send = pos.detach()[agg.atoms_ids_send]
+            pos_recv = pos.detach()[agg.atoms_ids_recv]
         dist = torch.norm(pos_send - pos_recv, dim=-1)
         index = torch.tensor(agg.cell_ids).to(dev)
         diameters[rank] = utils.scatter_max(dist, index, dim=0, dim_size=len(cells))
@@ -451,18 +508,18 @@ def compute_invariants_sparse(
             # gather indices for positions
             agg = rank_agg_indices[rank_pair]
             if diff_high_order:
-                pos_send = pos[agg.atom_ids_send]
-                pos_recv = pos[agg.atom_ids_recv]
+                pos_send = pos[agg.atoms_ids_send]
+                pos_recv = pos[agg.atoms_ids_recv]
             else:
-                pos_send = pos.detach()[agg.atom_ids_send]
-                pos_recv = pos.detach()[agg.atom_ids_recv]
+                pos_send = pos.detach()[agg.atoms_ids_send]
+                pos_recv = pos.detach()[agg.atoms_ids_recv]
             dists = torch.norm(pos_send - pos_recv, dim=1)
 
             # move agg indices to device for scatter operations
-            minix_send = torch.tensor(agg.haus_minindex_send).to(dev)
-            minix_recv = torch.tensor(agg.haus_minindex_recv).to(dev)
-            maxix_send = torch.tensor(agg.haus_maxindex_send).to(dev)
-            maxix_recv = torch.tensor(agg.haus_maxindex_recv).to(dev)
+            minix_send = torch.tensor(agg.haus_min_send).to(dev)
+            minix_recv = torch.tensor(agg.haus_min_recv).to(dev)
+            maxix_send = torch.tensor(agg.haus_max_send).to(dev)
+            maxix_recv = torch.tensor(agg.haus_max_recv).to(dev)
 
             # compute hausdorff distances with scatter operations
             hausdorff_send = utils.scatter_max(
@@ -479,46 +536,3 @@ def compute_invariants_sparse(
     }
 
     return out
-
-
-def sparse_computation_indices_from_cc(cell_ind, adj, max_cell_size=100):
-    agg_indices = {}
-
-    # first take sub sample of the cells if larger than max size
-    cell_ind = deepcopy(cell_ind)
-    for rank, cells in cell_ind.items():
-        for j, c in enumerate(cells):
-            if len(c) > max_cell_size:
-                subsample = np.random.choice(c, max_cell_size, replace=False)
-                cell_ind[rank][j] = subsample.tolist()
-
-        # create agg indices for rank
-        # transform on the format of atoms/sizes needed by the helper functin
-        atoms = np.concatenate(cells)
-        slices = np.array([len(c) for c in cells])
-        indices = SparseInvariantComputationIndices(atoms, slices, atoms, slices)
-        agg_indices[rank] = indices
-        # [x.tolist() for x in indices]
-
-    # for each aggregation indices for edges
-    for adj_type, edges in adj.items():
-        # get the indices of the cells
-        send_rank, recv_rank = adj_type.split("_")[:2]
-
-        # get the cells of sender and receiver
-        cells_send = [cell_ind[send_rank][i] for i in edges[0]]
-        cells_recv = [cell_ind[recv_rank][i] for i in edges[1]]
-
-        # transform on the format of atoms/sizes needed by the helper functin
-        atoms_send = np.concatenate(cells_send)
-        slices_send = np.array([len(c) for c in cells_send])
-        atoms_recv = np.concatenate(cells_recv)
-        slices_recv = np.array([len(c) for c in cells_recv])
-
-        # get the indices of the cells
-        indices = SparseInvariantComputationIndices(
-            atoms_send, slices_send, atoms_recv, slices_recv
-        )
-        agg_indices[adj_type] = indices
-
-    return cell_ind, agg_indices

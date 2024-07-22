@@ -19,7 +19,8 @@ experiment_name: ${hydra:runtime.choices.experiment}
 
 compile: false
 seed: 42
-masking_rate: 0.3  # fraction of the data to mask for node-level prediction
+mask_rate: 0.3  # fraction of the data to mask for node-level prediction
+force_reload: false  # forces not using the cached dataset
 
 # checkpointing
 wandb_entity: null

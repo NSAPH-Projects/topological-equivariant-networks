@@ -1,3 +1,4 @@
+from copy import deepcopy
 import numba
 import numpy as np
 import torch
@@ -478,3 +479,46 @@ def compute_invariants_sparse(
     }
 
     return out
+
+
+def invariant_computation_indices_from_cc(cell_ind, adj, max_cell_size=100):
+    agg_indices = {}
+
+    # first take sub sample of the cells if larger than max size
+    cell_ind = deepcopy(cell_ind)
+    for rank, cells in cell_ind.items():
+        for j, c in enumerate(cells):
+            if len(c) > max_cell_size:
+                subsample = np.random.choice(c, max_cell_size, replace=False)
+                cell_ind[rank][j] = subsample.tolist()
+
+        # create agg indices for rank
+        # transform on the format of atoms/sizes needed by the helper functin
+        atoms = np.concatenate(cells)
+        slices = np.array([len(c) for c in cells])
+        indices = SparseInvariantComputationIndices(atoms, slices, atoms, slices)
+        agg_indices[rank] = indices
+        # [x.tolist() for x in indices]
+
+    # for each aggregation indices for edges
+    for adj_type, edges in adj.items():
+        # get the indices of the cells
+        send_rank, recv_rank = adj_type.split("_")[:2]
+
+        # get the cells of sender and receiver
+        cells_send = [cell_ind[send_rank][i] for i in edges[0]]
+        cells_recv = [cell_ind[recv_rank][i] for i in edges[1]]
+
+        # transform on the format of atoms/sizes needed by the helper functin
+        atoms_send = np.concatenate(cells_send)
+        slices_send = np.array([len(c) for c in cells_send])
+        atoms_recv = np.concatenate(cells_recv)
+        slices_recv = np.array([len(c) for c in cells_recv])
+
+        # get the indices of the cells
+        indices = SparseInvariantComputationIndices(
+            atoms_send, slices_send, atoms_recv, slices_recv
+        )
+        agg_indices[adj_type] = indices
+
+    return cell_ind, agg_indices

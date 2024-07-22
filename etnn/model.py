@@ -58,7 +58,7 @@ class ETNN(nn.Module):
         if sparse_invariant_computation:
             self.inv_fun = invariants.compute_invariants_sparse
         else:
-            self.compute_invariantsinv_fun = invariants.compute_invariants
+            self.inv_fun = invariants.compute_invariants
 
         # keep only adjacencies that are compatible with visible_dims
         if visible_dims is not None:

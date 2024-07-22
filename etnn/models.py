@@ -8,20 +8,6 @@ from etnn.layers import ETNNLayer
 from etnn.utils import compute_centroids, compute_invariants
 
 
-def _slices_to_batch(slices: Tensor) -> Tensor:
-    """This auxiliary function converts the the a slices object, which
-    is a property of the torch_geometric.Data object, to a batch index,
-    which is a tensor of the same length as the number of nodes/cells where
-    each element is the index of the batch to which the node/cell belongs.
-    For example, if the slices object is torch.tensor([0, 3, 5, 7]),
-    then the output of this function is torch.tensor([0, 0, 0, 1, 1, 2, 2]).
-    """
-    n = slices.size(0) - 1
-    return torch.arange(n, device=slices.device).repeat_interleave(
-        (slices[1:] - slices[:-1]).long()
-    )
-
-
 class ETNN(nn.Module):
     """
     Topological E(n) Equivariant Networks (TEN)
@@ -172,22 +158,6 @@ class ETNN(nn.Module):
         x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}
 
         # create one dummy node with all features equal to zero for each graph and each rank
-        batch_size = graph.y.shape[0]
-        # x = {
-        #     dim: torch.cat(
-        #         (feature, torch.zeros(batch_size, feature.shape[1]).to(device)),
-        #         dim=0,
-        #     )
-        #     for dim, feature in x.items()
-        # }
-        # cell_batch = {
-        #     str(i): getattr(graph, f"slices_{i}_batch") for i in self.visible_dims
-        # }
-        # cell_batch = {
-        #     dim: torch.cat((indices, torch.tensor(range(batch_size)).to(device)))
-        #     for dim, indices in cell_batch.items()
-        # }
-
         cell_batch = {
             str(i): _slices_to_batch(graph._slice_dict[f"slices_{i}"])
             for i in self.visible_dims
@@ -205,4 +175,18 @@ class ETNN(nn.Module):
         return out
 
     def __str__(self):
-        return f"TEN ({self.type})"
+        return f"ETNN ({self.type})"
+
+
+def _slices_to_batch(slices: Tensor) -> Tensor:
+    """This auxiliary function converts the the a slices object, which
+    is a property of the torch_geometric.Data object, to a batch index,
+    which is a tensor of the same length as the number of nodes/cells where
+    each element is the index of the batch to which the node/cell belongs.
+    For example, if the slices object is torch.tensor([0, 3, 5, 7]),
+    then the output of this function is torch.tensor([0, 0, 0, 1, 1, 2, 2]).
+    """
+    n = slices.size(0) - 1
+    return torch.arange(n, device=slices.device).repeat_interleave(
+        (slices[1:] - slices[:-1]).long()
+    )

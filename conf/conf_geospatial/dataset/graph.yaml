@@ -1,5 +1,2 @@
-standardize: true
-squash: true
-randomize_x0: false
+squash_to_graph: true
 virtual_node: false
-add_positions: false

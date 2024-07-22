@@ -108,45 +108,31 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
         visible_dims = cfg.model.visible_dims
 
     if cfg.task_name == "QM9":
-        # num_features_per_rank = {dim: 0 for dim in cfg.model.visible_dims}
-        # num_features_per_rank = dataset[0].num_features_per_rank
-        #     if "node" in cfg.lifter.initial_features:
-        #         num_node_features = 15
-        #         num_features_per_rank = {
-        #             k: v + num_node_features for k, v in num_features_per_rank.items()
-        #         }
         if "mem" in cfg.model.initial_features:
             num_lifters = len(cfg.lifter.lifters)
             num_features_per_rank = {
                 k: v + num_lifters for k, v in num_features_per_rank.items()
             }
-        #     if "hetero" in cfg.lifter.initial_features:
-        #         # num_hetero_features = lifter.num_features_dict
-        #         num_features_per_rank = {
-        #             k: v + num_hetero_features[k] for k, v in num_features_per_rank.items()
-        #         }
-        #     if set(cfg.lifter.initial_features).difference(set(["node", "mem", "hetero"])):
-        #         raise ValueError(
-        #             f"Do not recognize initial features {cfg.lifter.initial_features}."
-        #         )
-        #     num_out = 1
-        # else:
-        #     raise ValueError(f"Do not recognize dataset {cfg.dataset}.")
         global_pool = True
+        sparse_invariant_computation = False
+        pos_update = False
 
-    num_out = 1  # currently only one-dim output is supported
+        adjacencies = get_adjacency_types(
+            dim,
+            cfg.dataset.connectivity,
+            cfg.dataset.neighbor_types,
+        )
 
-    adjacencies = get_adjacency_types(
-        dim,
-        cfg.dataset.connectivity,
-        cfg.dataset.neighbor_types,
-        # visible_dims,
-    )
+    elif cfg.task_name == "geospatial":
+        global_pool = False
+        sparse_invariant_computation = True
+        adjacencies = ["0_0", "0_1", "1_0", "1_1", "1_2", "2_1", "2_2"]
+        pos_update = True
 
     model = ETNN(
         num_features_per_rank=num_features_per_rank,
         num_hidden=cfg.model.num_hidden,
-        num_out=num_out,  # currently only one-dim output is supported
+        num_out=1,  # currently only one-dim output is supported
         num_layers=cfg.model.num_layers,
         adjacencies=adjacencies,
         initial_features=cfg.model.initial_features,
@@ -155,6 +141,8 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
         batch_norm=cfg.model.batch_norm,
         lean=cfg.model.lean,
         global_pool=global_pool,
+        sparse_invariant_computation=sparse_invariant_computation,
+        pos_update=pos_update,
     )
     return model
 

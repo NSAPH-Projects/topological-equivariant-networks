@@ -1,8 +1,48 @@
 defaults:
   - _self_
-  - dataset: virtual-node
+  - dataset: cc
+  - model: small
+  - experiment: equivariant
 
-dataset_name: ${hydra:runtime.choices.dataset}
+dataset:
+  # these params are overwritten by the defaults folder
+  standardize: true
+  randomize_x0: false
+  squash_to_graph: false
+  virtual_node: false
+  add_positions: false
+
+  
+# task name will make more sense when we introduce the spatial CC
 task_name: geospatial
-force_reload: false
+experiment_name: ${hydra:runtime.choices.experiment}
+
 compile: false
+seed: 42
+masking_rate: 0.3  # fraction of the data to mask for node-level prediction
+
+# checkpointing
+wandb_entity: null
+ckpt_dir: checkpoints
+ckpt_prefix: null
+force_restart: false
+
+model:
+  num_hidden: ???
+  num_layers: ??? # define in defaults
+  normalize_invariants: true
+  batch_norm: true
+  lean: true
+  initial_features: ["hetero"]  # Subset of ["hetero", "mem"]
+  visible_dims: null # defaults to all dimensions in the combinatorial complex
+
+training:
+  epochs: 500
+  min_lr: 1e-5
+  num_lr_cycles: 3
+  clip_gradients: true
+  clip_amount: 1.0
+  test_interval: 10
+  weight_decay: 1e-4
+  lr: 0.01
+

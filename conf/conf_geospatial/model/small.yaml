@@ -1,0 +1,8 @@
+#@package _global_
+model:
+  num_out: 1
+  num_hidden: 4
+  num_layers: 4
+  num_readout_layers: 1
+  depth_etnn_layers: 1
+  dropout: 0.025

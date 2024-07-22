@@ -5,7 +5,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 
 from etnn.layers import ETNNLayer
-from etnn.utils import slices_to_batch
+from etnn.utils import slices_to_pointer
 from etnn.invariants import compute_centroids, compute_invariants
 
 
@@ -160,7 +160,7 @@ class ETNN(nn.Module):
 
         # create one dummy node with all features equal to zero for each graph and each rank
         cell_batch = {
-            str(i): slices_to_batch(graph._slice_dict[f"slices_{i}"])
+            str(i): slices_to_pointer(graph._slice_dict[f"slices_{i}"])
             for i in self.visible_dims
         }
         x = {

@@ -1,4 +1,3 @@
-from collections import defaultdict
 from typing import Optional
 
 import torch
@@ -53,11 +52,11 @@ def scatter_max(
     return aux.index_reduce(dim, index, src, reduce="amax", include_self=False)
 
 
-def slices_to_batch(slices: Tensor) -> Tensor:
+def slices_to_pointer(slices: Tensor) -> Tensor:
     """This auxiliary function converts the the a slices object, which
-    is a property of the torch_geometric.Data object, to a batch index,
-    which is a tensor of the same length as the number of nodes/cells where
-    each element is the index of the batch to which the node/cell belongs.
+    is a property of the torch_geometric.Data object, to a pointer index,
+    which is a tensor of the same length as the number of objects where
+    each element is the index of the pointer to which the entry belongs.
     For example, if the slices object is torch.tensor([0, 3, 5, 7]),
     then the output of this function is torch.tensor([0, 0, 0, 1, 1, 2, 2]).
     """

@@ -4,11 +4,25 @@ from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 
-from models.empsn import EMPSNLayer
-from models.utils import compute_centroids, compute_invariants, slices_to_batch
+from etnn.layers import ETNNLayer
+from etnn.utils import compute_centroids, compute_invariants
 
 
-class TEN(nn.Module):
+def _slices_to_batch(slices: Tensor) -> Tensor:
+    """This auxiliary function converts the the a slices object, which
+    is a property of the torch_geometric.Data object, to a batch index,
+    which is a tensor of the same length as the number of nodes/cells where
+    each element is the index of the batch to which the node/cell belongs.
+    For example, if the slices object is torch.tensor([0, 3, 5, 7]),
+    then the output of this function is torch.tensor([0, 0, 0, 1, 1, 2, 2]).
+    """
+    n = slices.size(0) - 1
+    return torch.arange(n, device=slices.device).repeat_interleave(
+        (slices[1:] - slices[:-1]).long()
+    )
+
+
+class ETNN(nn.Module):
     """
     Topological E(n) Equivariant Networks (TEN)
     """
@@ -71,7 +85,7 @@ class TEN(nn.Module):
 
         self.layers = nn.ModuleList(
             [
-                EMPSNLayer(
+                ETNNLayer(
                     self.adjacencies,
                     self.visible_dims,
                     num_hidden,
@@ -175,7 +189,7 @@ class TEN(nn.Module):
         # }
 
         cell_batch = {
-            str(i): slices_to_batch(graph._slice_dict[f"slices_{i}"])
+            str(i): _slices_to_batch(graph._slice_dict[f"slices_{i}"])
             for i in self.visible_dims
         }
         x = {

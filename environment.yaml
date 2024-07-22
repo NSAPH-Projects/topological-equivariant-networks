@@ -1,4 +1,4 @@
-name: ten
+name: etnn
 channels:
   - pytorch
   - nvidia

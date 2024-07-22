@@ -11,7 +11,7 @@ from etnn.invariants import compute_centroids, compute_invariants
 
 class ETNN(nn.Module):
     """
-    Topological E(n) Equivariant Networks (TEN)
+    The E(n)-Equivariant Topological Neural Network (ETNN) model.
     """
 
     def __init__(

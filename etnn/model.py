@@ -27,7 +27,7 @@ class ETNN(nn.Module):
         batch_norm: bool = False,
         lean: bool = True,
         global_pool: bool = False,  # whether or not to use global pooling
-        sparse: bool = False,  # invariant sparse computation
+        sparse_invariant_computation: bool = False,
         sparse_agg_max_cells: int = 1000,  # maximum size to consider for diameter and hausdorff dists
         pos_update: bool = False,  # performs the equivariant position update, optional
     ) -> None:
@@ -46,12 +46,12 @@ class ETNN(nn.Module):
         self.global_pool = global_pool
         self.visible_dims = visible_dims
 
-        self.sparse = sparse
+        self.sparse_invariant_computation = sparse_invariant_computation
         self.sparse_agg_max_cells = sparse_agg_max_cells
         self.hausdorff = hausdorff_dists
         self.pos_update = pos_update
 
-        if sparse:
+        if sparse_invariant_computation:
             self.inv_fun = invariants.compute_invariants_sparse
         else:
             self.compute_invariantsinv_fun = invariants.compute_invariants
@@ -175,7 +175,7 @@ class ETNN(nn.Module):
             "device": device,
             "hausdorff": self.hausdorff,
         }
-        if self.sparse:
+        if self.sparse_invariant_computation:
             agg_indices = invariants.sparse_computation_indices_from_cc(
                 cell_ind, adj, self.sparse_agg_max_cells
             )

@@ -30,7 +30,7 @@ class PM25CC(InMemoryDataset):
         return [f"geospatialcc.pt"]
 
     def download(self):
-        url = "https://raw.githubusercontent.com/NSAPH-Projects/topological-equivariant-networks/save_pt/data/input/geospatialcc.json"
+        url = "https://raw.githubusercontent.com/NSAPH-Projects/topological-equivariant-networks/main/data/input/geospatialcc.json"
         path = f"{self.raw_dir}/{self.raw_file_names[0]}"
         response = requests.get(url)
         with open(path, "wb") as f:

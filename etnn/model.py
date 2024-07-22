@@ -1,3 +1,4 @@
+from functools import partial
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -5,7 +6,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 
 from etnn.layers import ETNNLayer
-from etnn.utils import slices_to_pointer
+from etnn import utils, invariants
 from etnn.invariants import compute_centroids, compute_invariants
 
 
@@ -25,21 +26,32 @@ class ETNN(nn.Module):
         initial_features: str,
         visible_dims: list[int] | None,
         normalize_invariants: bool,
-        compute_invariants: callable = compute_invariants,
+        sparse: bool= False,  # invariant sparse computation
+                hausdorff: bool = False,
+: bool = False,
         batch_norm: bool = False,
         lean: bool = True,
     ) -> None:
         super().__init__()
 
         self.initial_features = initial_features
-        self.compute_invariants = compute_invariants
-        self.num_inv_fts_map = self.compute_invariants.num_features_map
-        # self.max_dim = max_dim
+
+        # make inv_fts_map for backward compatibility
+        self.num_invariants = 5 if hausdorff else 3
+        self.num_inv_fts_map = {k: self.num_invariants for k in adjacencies}
         self.adjacencies = adjacencies
         self.normalize_invariants = normalize_invariants
         self.batch_norm = batch_norm
         self.lean = lean
+        self.sparse = sparse
         max_dim = max(num_features_per_rank.keys())
+
+        if sparse:
+            fun = invariants.compute_invariants_sparse
+        else:
+            fun = invariants.compute_invariants
+        
+        self.compute_invariants = partial(fun, hausdorff=hausdorff)
 
         if visible_dims is not None:
             self.visible_dims = visible_dims
@@ -113,19 +125,13 @@ class ETNN(nn.Module):
             if hasattr(graph, f"adj_{adj_type}")
         }
 
-        # inv_ind = {
-        #     adj_type: getattr(graph, f"inv_{adj_type}")
-        #     for adj_type in self.adjacencies
-        #     if hasattr(graph, f"inv_{adj_type}")
-        # }
-
         # compute initial features
         features = {}
         for feature_type in self.initial_features:
             features[feature_type] = {}
             for i in self.visible_dims:
                 if feature_type == "node":
-                    features[feature_type][str(i)] = compute_centroids(
+                    features[feature_type][str(i)] = invariants.compute_centroids(
                         cell_ind[str(i)], graph.x
                     )
                 elif feature_type == "mem":
@@ -160,7 +166,7 @@ class ETNN(nn.Module):
 
         # create one dummy node with all features equal to zero for each graph and each rank
         cell_batch = {
-            str(i): slices_to_pointer(graph._slice_dict[f"slices_{i}"])
+            str(i): utils.slices_to_pointer(graph._slice_dict[f"slices_{i}"])
             for i in self.visible_dims
         }
         x = {

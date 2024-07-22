@@ -3,7 +3,8 @@ from typing import Dict, List
 import torch
 import torch.nn as nn
 from torch import Tensor
-from etnn.utils import scatter_add
+
+from etnn import utils
 
 
 class ETNNLayer(nn.Module):
@@ -111,7 +112,7 @@ class BaseMessagePassingLayer(nn.Module):
 
         messages = self.message_mlp(state)
         edge_weights = self.edge_inf_mlp(messages)
-        messages_aggr = scatter_add(
+        messages_aggr = utils.scatter_add(
             messages * edge_weights, index_rec, dim=0, dim_size=x_rec.shape[0]
         )
 

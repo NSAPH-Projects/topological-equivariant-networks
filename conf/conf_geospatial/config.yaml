@@ -1,6 +1,5 @@
 defaults:
   - _self_
-  - dataset: cc
   - model: small
   - experiment: equivariant
 

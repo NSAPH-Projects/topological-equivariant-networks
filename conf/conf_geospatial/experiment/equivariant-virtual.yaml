@@ -1,6 +1,6 @@
 #@package _global_
 defaults:
-  - override /dataset: cc-virtual
+  - /dataset: cc-virtual
 
 model:
   pos_update: true

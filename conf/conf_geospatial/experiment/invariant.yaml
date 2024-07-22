@@ -1,6 +1,6 @@
 #@package _global_
 defaults:
-  - override /dataset: cc
+  - /dataset: cc
 
 model:
   pos_update: false

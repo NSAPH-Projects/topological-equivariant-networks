@@ -1,29 +1,30 @@
-# topological-equivariant-networks
-Topological Equivariant Networks (TEN)
+# E(n) Equivariant Topological Neural Network
+
+Code for *Claudio Battiloro, Ege Karaismailoğlu, Mauricio Tec, George Dasoulas, Michelle Audirac, Francesca Dominici* "E(n) Equivariant Topological Neural Networks"
+https://arxiv.org/abs/2405.15429
+
+<img src="etnn.png" width="1000">
+
+**Abstract** Graph neural networks excel at modeling pairwise interactions, but they cannot flexibly accommodate higher-order interactions and features. Topological deep learning (TDL) has emerged recently as a promising tool for addressing this issue. TDL enables the principled modeling of arbitrary multi-way, hierarchical higher-order interactions by operating on combinatorial topological spaces, such as simplicial or cell complexes, instead of graphs. However, little is known about how to leverage geometric features such as positions and velocities for TDL. This paper introduces E(n)-Equivariant Topological Neural Networks (ETNNs), which are E(n)-equivariant message-passing networks operating on combinatorial complexes, formal objects unifying graphs, hypergraphs, simplicial, path, and cell complexes. ETNNs incorporate geometric node features while respecting rotation and translation equivariance. Moreover, ETNNs are natively ready for settings with heterogeneous interactions. We provide a theoretical analysis to show the improved expressiveness of ETNNs over architectures for geometric graphs. We also show how several E(n) equivariant variants of TDL models can be directly derived from our framework. The broad applicability of ETNNs is demonstrated through two tasks of vastly different nature: i) molecular property prediction on the QM9 benchmark and ii) land-use regression for hyper-local estimation of air pollution with multi-resolution irregular geospatial data. The experiment results indicate that ETNNs are an effective tool for learning from diverse types of richly structured data, highlighting the benefits of principled geometric inductive bias.
 
 ## Setup instructions
 ```
-git clone https://anonymous.4open.science/r/topological-equivariant-networks-853F/
+git clone <repo>
 cd topological-equivariant-networks
-chmod +x env_builder.sh
-source env_builder.sh
-```
-This will create and activate a new conda environment called "ten" that contains all the packages necessary to run the code in this repository.
-
-To reproduce EGNN within the ETNN framework, run the following command:
-
-```
-TARGET_NAME=alpha LR=5e-4 source train_egnn_like.sh
+conda env create -f environment.yaml
 ```
 
-To reproduce other target, set the corresponding `TARGET_NAME`.
+If you are running the code from a Mac use `conda env create -f environment-macos.yaml`
 
-The scripts to reproduce the reported QM9 experiments can be found under `scripts/experiments`. The experiments are named in the order of their appereance in the results table. For example, to reproduce the first row, run the following:
+This will create and activate a new conda environment called "etnn" that contains all the packages necessary to run the code in this repository.
 
-```
-source scripts/experiments/1.sh 0 # creates the preprocessed dataset
-source scripts/experiments/1.sh 1 # reproduces the results for the first 6 targets
-source scripts/experiments/1.sh 2 # reproduces the results for the last 6 targets
-```
+## Real-World Combinatorial Complexes
+To showcase the modeling power of CCs and their versatility in conjunction with ETNNs, we introduced two Real-World Combinatorial Complexes useful to model molecules and irregular multi-resolution geospatial data:
 
-The code to reproduce the spatial task is in the anonymized branch `https://anonymous.4open.science/r/topological-equivariant-networks-27DB`. The code to reproduce the synthetic tasks is in the anonymized branch `https://anonymous.4open.science/r/topological-equivariant-networks-06C9`. We plan to shortly merge these together under a single branch.
+**Molecular CC** In a Molecular CC, the set of nodes is the set of atoms, while the set of cells and the rank function are such that: atoms are rank 0 cells, bonds and functional groups made of two atoms are rank 1 cells, and rings and functional groups made of more than two atoms are rank 2 cells. A Molecular CC can jointly retain all the properties of graphs, cell complexes, and hypergraphs, thus overcoming their mutual limitations. 
+
+**Spatial CC** In a Spatial CC, the set of cells is defined by hierarchical spatial objects. Two major examples are geometric descriptions (e.g. points, polylines, and polygons) or political partitions (e.g. zipcodes, counties, states) of a region. In the latter case, the listed objects can be modeled as cells of a CC and their rank correspond to their intrinsic dimensionality. Therefore, rank 0 cells are points, e.g. where air quality monitoring units are located, rank 1 cells are polylines, e.g. traffic roads, and rank 2 cells are polygons, e.g. census tracts.
+
+<img src="benchmarks.png" width="800">
+
+The scripts [create_qm9.py](create_qm9.py) and [create_geospatial.py](create_geospatial.py) use the `InMemoryDataset` pytorch-geometric objects to create and store the `Dataset` base class that contain these CCs.

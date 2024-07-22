@@ -13,7 +13,7 @@ from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
 
 from etnn.lifter import get_adjacency_types
-from etnn.models import ETNN
+from etnn.model import ETNN
 
 
 def args_to_hash(args: dict):
@@ -81,18 +81,20 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
             num_features_per_rank = {
                 k: v + num_lifters for k, v in num_features_per_rank.items()
             }
-    #     if "hetero" in cfg.lifter.initial_features:
-    #         # num_hetero_features = lifter.num_features_dict
-    #         num_features_per_rank = {
-    #             k: v + num_hetero_features[k] for k, v in num_features_per_rank.items()
-    #         }
-    #     if set(cfg.lifter.initial_features).difference(set(["node", "mem", "hetero"])):
-    #         raise ValueError(
-    #             f"Do not recognize initial features {cfg.lifter.initial_features}."
-    #         )
-    #     num_out = 1
-    # else:
-    #     raise ValueError(f"Do not recognize dataset {cfg.dataset}.")
+        #     if "hetero" in cfg.lifter.initial_features:
+        #         # num_hetero_features = lifter.num_features_dict
+        #         num_features_per_rank = {
+        #             k: v + num_hetero_features[k] for k, v in num_features_per_rank.items()
+        #         }
+        #     if set(cfg.lifter.initial_features).difference(set(["node", "mem", "hetero"])):
+        #         raise ValueError(
+        #             f"Do not recognize initial features {cfg.lifter.initial_features}."
+        #         )
+        #     num_out = 1
+        # else:
+        #     raise ValueError(f"Do not recognize dataset {cfg.dataset}.")
+        global_pool = True
+
     num_out = 1  # currently only one-dim output is supported
 
     adjacencies = get_adjacency_types(
@@ -107,14 +109,13 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
         num_hidden=cfg.model.num_hidden,
         num_out=num_out,  # currently only one-dim output is supported
         num_layers=cfg.model.num_layers,
-        # max_dim=lifter.dim,
-        # adjacencies=processed_adjacencies,
         adjacencies=adjacencies,
         initial_features=cfg.model.initial_features,
         normalize_invariants=cfg.model.normalize_invariants,
         visible_dims=visible_dims,
         batch_norm=cfg.model.batch_norm,
         lean=cfg.model.lean,
+        global_pool=global_pool,
     )
     return model
 

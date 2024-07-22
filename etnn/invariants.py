@@ -1,14 +1,16 @@
-from collections import defaultdict
-
+import numba
+import numpy as np
 import torch
+
+from etnn import utils
 
 
 def compute_invariants(
     feat_ind: dict[str, torch.FloatTensor],
     pos: torch.FloatTensor,
     adj: dict[str, torch.LongTensor],
+    hausdorff: bool = True,
     # inv_ind: dict[str, torch.FloatTensor],
-    device: torch.device,
 ) -> dict[str, torch.FloatTensor]:
     """
     Compute geometric invariants between pairs of cells specified in `adj`.
@@ -51,8 +53,8 @@ def compute_invariants(
         A dictionary where each key is a string in the format 'sender_rank_receiver_rank' indicating
         the ranks of cell pairs, and each value is a tensor of shape (2, num_cell_pairs) containing
         indices for sender and receiver cells.
-    device : Any
-        Currently unused. Placeholder for potential device specification in future updates.
+    hausdorff : bool
+        Whether to compute the Hausdorff distances between cells. Default is True
 
     Returns
     -------
@@ -96,19 +98,22 @@ def compute_invariants(
         # Compute Hausdorff distances
         sender_cells = feat_ind[sender_rank][cell_pairs[0]]
         receiver_cells = feat_ind[receiver_rank][cell_pairs[1]]
-        hausdorff_distances = compute_hausdorff_distances(
-            sender_cells, receiver_cells, pos
-        )
+
+        new_feats = torch.cat([distances, max_dist_sender, max_dist_receiver], dim=1)
+
+        if hausdorff:
+            hausdorff_distances = compute_hausdorff_distances(
+                sender_cells, receiver_cells, pos
+            )
+            new_feats = torch.cat([new_feats, hausdorff_distances], dim=1)
 
         # Combine all features
-        new_features[rank_pair] = torch.cat(
-            [distances, max_dist_sender, max_dist_receiver, hausdorff_distances], dim=1
-        )
+        new_features[rank_pair] = new_feats
 
     return new_features
 
 
-compute_invariants.num_features_map = defaultdict(lambda: 5)
+# compute_invariants.num_features_map = defaultdict(lambda: 5)  # not needed, better to compute dynamic
 
 
 def compute_max_pairwise_distances(
@@ -283,3 +288,193 @@ def compute_centroids(
     cell_cardinalities = torch.sum(cells_int != -1, dim=1, keepdim=True)
     centroids = sum_features / cell_cardinalities
     return centroids
+
+
+class SparseInvariantComputationIndices:
+    """This auxiliary class is used to compute the indices for the computation of geometric
+    invariants. The agents permit to compute centroids, diameters, and Hausdorff distances between
+    pairs of cells using only scatter add/min/max/mean operations in linear memory."""
+
+    @numba.jit(nopython=True)
+    def __init__(
+        self,
+        atoms_send: np.ndarray,
+        slices_send: np.ndarray,
+        atoms_recv: np.ndarray,
+        slices_recv: np.ndarray,
+    ) -> None:
+        # inputs must be equal size
+        splits_send = np.split(atoms_send, np.cumsum(slices_send)[:-1])
+        splits_recv = np.split(atoms_recv, np.cumsum(slices_recv)[:-1])
+
+        # must return a tuple of 6 arrays
+        n = len(slices_send)  # must be the same as len(splits_recv)
+        m = sum(slices_send * slices_recv)
+        ids_send = np.empty(m, dtype=np.int64)
+        ids_recv = np.empty(m, dtype=np.int64)
+        minindex_send = np.empty(m, dtype=np.int64)
+        minindex_recv = np.empty(m, dtype=np.int64)
+        cell = np.empty(m, dtype=np.int64)
+
+        offset_index_send = 0
+        offset_index_recv = 0
+        step = 0
+        for i in range(n):
+            n_send = len(splits_send[i])
+            n_recv = len(splits_recv[i])
+            for j, sj in enumerate(splits_send[i]):
+                for k, sk in enumerate(splits_recv[i]):
+                    ind = step + j * n_recv + k
+                    ids_send[ind] = sj
+                    ids_recv[ind] = sk
+                    minindex_send[ind] = offset_index_send + j
+                    minindex_recv[ind] = offset_index_recv + k
+                    cell[ind] = i
+            step += n_send * n_recv
+            offset_index_send += n_send
+            offset_index_recv += n_recv
+
+        step = 0
+        maxindex_send = np.empty(sum(slices_send), dtype=np.int64)
+        for j, sj in enumerate(splits_send):
+            maxindex_send[step : step + len(sj)] = j
+            step += len(sj)
+
+        step = 0
+        maxindex_recv = np.empty(sum(slices_recv), dtype=np.int64)
+        for j, sj in enumerate(splits_recv):
+            maxindex_recv[step : step + len(sj)] = j
+            step += len(sj)
+
+        self.atom_ids_send = list(ids_send)
+        self.atom_ids_recv = list(ids_recv)
+        self.cell_ids = list(cell)
+        self.haus_minindex_send = list(minindex_send)
+        self.haus_minindex_recv = list(minindex_recv)
+        self.haus_maxindex_send = list(maxindex_send)
+        self.haus_maxindex_recv = list(maxindex_recv)
+
+
+def compute_invariants_sparse(
+    cell_ind: dict[str, list[list[int]]],
+    pos: torch.FloatTensor,
+    adj: dict[str, torch.LongTensor],
+    rank_agg_indices: dict[str, SparseInvariantComputationIndices],
+    hausdorff: bool = True,
+    diff_high_order: bool = False,
+) -> dict[str, torch.Tensor]:
+    """This function computes the geometric invariants between pairs of cells specified in `adj`
+
+    Parameters
+    ----------
+    cell_ind : dict
+        A dictionary mapping cell ranks to lists of lists of node indices for each cell.
+    pos : torch.FloatTensor
+        A 2D tensor of shape (num_nodes, num_dimensions) containing the positions of each node.
+    adj : dict
+        A dictionary where each key is a string in the format 'sender_rank_receiver_rank' indicating
+        the ranks of cell pairs, and each value is a tensor of shape (2, num_cell_pairs) containing
+        indices for sender and receiver cells.
+    rank_agg_indices : dict
+        A dictionary where each key is a rank and each value is a SparseInvariantComputationIndices
+        object that contains the indices for the computation of geometric invariants.
+    hausdorff : bool
+        Whether to compute the Hausdorff distances between cells. Default is True.
+    diff_high_order : bool
+        Whether to compute the distances between high-order nodes. Default is False.
+    """
+    # device
+    dev = pos.device
+
+    # placeholder
+    inv_list: dict[str, list[torch.Tensor]] = {}
+
+    # compute centroids and diameters
+    centroids: dict[str, torch.Tensor] = {}
+    diameters: dict[str, torch.Tensor] = {}
+    for rank, cells in cell_ind.items():
+        # compute centroids
+        ids: list[int] = []
+        for c in cells:
+            ids.extend(c)
+
+        sizes: list[int] = []
+        index: list[int] = []
+        for i, c in enumerate(cells):
+            sizes.append(len(c))
+            index.extend([i] * len(c))
+        index = torch.tensor(index).to(dev)
+        centroids[rank] = utils.scatter_mean(
+            pos[ids], index, dim=0, dim_size=len(cells)
+        )
+
+        # compute diameters (max pairwise distance)
+        agg = rank_agg_indices[rank]
+        if diff_high_order:
+            pos_send = pos[agg.atom_ids_send]
+            pos_recv = pos[agg.atom_ids_recv]
+        else:
+            pos_send = pos.detach()[agg.atom_ids_send]
+            pos_recv = pos.detach()[agg.atom_ids_recv]
+        dist = torch.norm(pos_send - pos_recv, dim=-1)
+        index = torch.tensor(agg.cell_ids).to(dev)
+        diameters[rank] = utils.scatter_max(dist, index, dim=0, dim_size=len(cells))
+
+    # compute distances
+    for rank_pair, cell_pairs in adj.items():
+        send_rank, recv_rank = rank_pair.split("_")
+
+        # check if reverse message has been computed
+        flipped_rank_pair = f"{recv_rank}_{send_rank}"
+        if flipped_rank_pair in inv_list:
+            inv_list[rank_pair] = inv_list[flipped_rank_pair]
+            continue
+
+        # centroid dist
+        centroids_send = centroids[send_rank][cell_pairs[0]]
+        centroids_recv = centroids[recv_rank][cell_pairs[1]]
+        centroids_dist = torch.norm(centroids_send - centroids_recv, dim=1)
+
+        # diameter
+        diameter_send = diameters[send_rank][cell_pairs[0]]
+        diameter_recv = diameters[recv_rank][cell_pairs[1]]
+
+        inv_list[rank_pair] = [
+            centroids_dist,
+            diameter_send,
+            diameter_recv,
+        ]
+
+        # hausdorff
+        if hausdorff:
+            # gather indices for positions
+            agg = rank_agg_indices[rank_pair]
+            if diff_high_order:
+                pos_send = pos[agg.atom_ids_send]
+                pos_recv = pos[agg.atom_ids_recv]
+            else:
+                pos_send = pos.detach()[agg.atom_ids_send]
+                pos_recv = pos.detach()[agg.atom_ids_recv]
+            dists = torch.norm(pos_send - pos_recv, dim=1)
+
+            # move agg indices to device for scatter operations
+            minix_send = torch.tensor(agg.haus_minindex_send).to(dev)
+            minix_recv = torch.tensor(agg.haus_minindex_recv).to(dev)
+            maxix_send = torch.tensor(agg.haus_maxindex_send).to(dev)
+            maxix_recv = torch.tensor(agg.haus_maxindex_recv).to(dev)
+
+            # compute hausdorff distances with scatter operations
+            hausdorff_send = utils.scatter_max(
+                utils.scatter_min(dists, minix_send), maxix_send
+            )
+            hausdorff_recv = utils.scatter_max(
+                utils.scatter_min(dists, minix_recv), maxix_recv
+            )
+
+            inv_list[rank_pair].extend([hausdorff_send, hausdorff_recv])
+
+    out: dict[str, torch.Tensor] = {
+        k: torch.stack(v, dim=1) for k, v in inv_list.items()
+    }
+
+    return out

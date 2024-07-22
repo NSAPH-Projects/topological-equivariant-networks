@@ -21,16 +21,15 @@ class ETNN(nn.Module):
         num_hidden: int,
         num_out: int,
         num_layers: int,
-        # max_dim: int,
         adjacencies: list[str],
         initial_features: str,
         visible_dims: list[int] | None,
         normalize_invariants: bool,
-        sparse: bool= False,  # invariant sparse computation
-                hausdorff: bool = False,
-: bool = False,
+        sparse: bool = False,  # invariant sparse computation
+        hausdorff: bool = False,
         batch_norm: bool = False,
         lean: bool = True,
+        global_pool: bool = False,  # whether or not to use global pooling
     ) -> None:
         super().__init__()
 
@@ -44,13 +43,14 @@ class ETNN(nn.Module):
         self.batch_norm = batch_norm
         self.lean = lean
         self.sparse = sparse
+        self.global_pool = global_pool
         max_dim = max(num_features_per_rank.keys())
 
         if sparse:
             fun = invariants.compute_invariants_sparse
         else:
             fun = invariants.compute_invariants
-        
+
         self.compute_invariants = partial(fun, hausdorff=hausdorff)
 
         if visible_dims is not None:
@@ -99,16 +99,31 @@ class ETNN(nn.Module):
         self.pre_pool = nn.ModuleDict()
 
         for dim in visible_dims:
-            pre_pool_layers = [nn.Linear(num_hidden, num_hidden), nn.SiLU()]
-            if not self.lean:
-                pre_pool_layers.append(nn.Linear(num_hidden, num_hidden))
-            self.pre_pool[str(dim)] = nn.Sequential(*pre_pool_layers)
+            if self.global_pool:
+                if not self.lean:
+                    self.pre_pool[str(dim)] = nn.Sequential(
+                        nn.Linear(num_hidden, num_hidden),
+                        nn.SiLU(),
+                        nn.Linear(num_hidden, num_hidden),
+                    )
+                else:
+                    self.pre_pool[str(dim)] = nn.Linear(num_hidden, num_hidden)
+            else:
+                if not self.lean:
+                    self.pre_pool[str(dim)] = nn.Sequential(
+                        nn.Linear(num_hidden, num_hidden),
+                        nn.SiLU(),
+                        nn.Linear(num_hidden, num_out),
+                    )
+                else:
+                    self.pre_pool[str(dim)] = nn.Linear(num_hidden, num_out)
 
-        self.post_pool = nn.Sequential(
-            nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
-            nn.SiLU(),
-            nn.Linear(num_hidden, num_out),
-        )
+        if self.global_pool:
+            self.post_pool = nn.Sequential(
+                nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
+                nn.SiLU(),
+                nn.Linear(num_hidden, num_out),
+            )
 
     def forward(self, graph: Data) -> Tensor:
         device = graph.pos.device
@@ -162,22 +177,24 @@ class ETNN(nn.Module):
             x = layer(x, adj, inv)
 
         # read out
-        x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}
+        out = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}
 
-        # create one dummy node with all features equal to zero for each graph and each rank
-        cell_batch = {
-            str(i): utils.slices_to_pointer(graph._slice_dict[f"slices_{i}"])
-            for i in self.visible_dims
-        }
-        x = {
-            dim: global_add_pool(x[dim], cell_batch[dim]) for dim, feature in x.items()
-        }
-        state = torch.cat(
-            tuple([feature for dim, feature in x.items()]),
-            dim=1,
-        )
-        out = self.post_pool(state)
-        out = torch.squeeze(out, -1)
+        if self.global_pool:
+            # create one dummy node with all features equal to zero for each graph and each rank
+            cell_batch = {
+                str(i): utils.slices_to_pointer(graph._slice_dict[f"slices_{i}"])
+                for i in self.visible_dims
+            }
+            out = {
+                dim: global_add_pool(out[dim], cell_batch[dim])
+                for dim, feature in out.items()
+            }
+            state = torch.cat(
+                tuple([feature for dim, feature in out.items()]),
+                dim=1,
+            )
+            out = self.post_pool(state)
+            out = torch.squeeze(out, -1)
 
         return out
 

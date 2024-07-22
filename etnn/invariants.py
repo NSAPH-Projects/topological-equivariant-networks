@@ -7,7 +7,7 @@ from etnn import utils
 
 
 def compute_invariants(
-    feat_ind: dict[str, torch.FloatTensor],
+    cell_ind: dict[str, torch.FloatTensor],
     pos: torch.FloatTensor,
     adj: dict[str, torch.LongTensor],
     hausdorff: bool = True,
@@ -44,7 +44,7 @@ def compute_invariants(
 
     Parameters
     ----------
-    feat_ind : dict
+    cell_ind : dict
         A dictionary mapping cell ranks to tensors of shape (num_cells, max_cardinality) containing
         indices of nodes for each cell. It is used to identify the cells for which centroids should
         be computed.
@@ -80,10 +80,10 @@ def compute_invariants(
         sender_rank, receiver_rank = rank_pair.split("_")[:2]
         for rank in [sender_rank, receiver_rank]:
             if rank not in mean_cell_positions:
-                mean_cell_positions[rank] = compute_centroids(feat_ind[rank], pos)
+                mean_cell_positions[rank] = compute_centroids(cell_ind[rank], pos)
             if rank not in max_pairwise_distances:
                 max_pairwise_distances[rank] = compute_max_pairwise_distances(
-                    feat_ind[rank], pos
+                    cell_ind[rank], pos
                 )
 
         # Compute mean distances
@@ -97,8 +97,8 @@ def compute_invariants(
         max_dist_receiver = max_pairwise_distances[receiver_rank][cell_pairs[1]]
 
         # Compute Hausdorff distances
-        sender_cells = feat_ind[sender_rank][cell_pairs[0]]
-        receiver_cells = feat_ind[receiver_rank][cell_pairs[1]]
+        sender_cells = cell_ind[sender_rank][cell_pairs[0]]
+        receiver_cells = cell_ind[receiver_rank][cell_pairs[1]]
 
         new_feats = torch.cat([distances, max_dist_sender, max_dist_receiver], dim=1)
 

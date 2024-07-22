@@ -1,16 +1,19 @@
 import logging
 from functools import partial
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch_geometric.transforms import Compose
 
 from etnn.geospatial import pm25cc, transforms
+import utils
 
 logger = logging.getLogger(__name__)
 
 
 @hydra.main(config_path="conf/conf_geospatial", config_name="config", version_base=None)
 def main(cfg: DictConfig):
+
+    hash = utils.args_to_hash(OmegaConf.to_container(cfg.dataset, resolve=True))
 
     pre_transform = []
     if cfg.dataset.standardize:
@@ -26,7 +29,7 @@ def main(cfg: DictConfig):
     pre_transform = Compose(pre_transform)
 
     dataset = pm25cc.PM25CC(
-        f"data/geospatialcc_{cfg.dataset_name}",
+        f"data/geospatialcc_{hash}",
         pre_transform=pre_transform,
         force_reload=cfg.force_reload,
     )

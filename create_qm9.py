@@ -1,24 +1,27 @@
-import hydra
-from etnn.qm9.qm9cc import QM9CC
-from omegaconf import DictConfig
 import logging
+
+import hydra
+from omegaconf import DictConfig, OmegaConf
+
+import utils
+from etnn.qm9.qm9cc import QM9CC
 
 logger = logging.getLogger(__name__)
 
 
 @hydra.main(config_path="conf/conf_qm9", config_name="config", version_base=None)
 def main(cfg: DictConfig):
-    # Lift the QM9 dataset to CombinatorialComplexData format
+    # create a unique hash for the dataset based on the configuration
+    hash = utils.args_to_hash(OmegaConf.to_container(cfg.dataset, resolve=True))
+
     dataset = QM9CC(
         f"data/qm9cc_{hash}",
         lifters=list(cfg.dataset.lifters),
         neighbor_types=list(cfg.dataset.neighbor_types),
         connectivity=cfg.dataset.connectivity,
-        # cfg.lifter.dim,
-        # list(cfg.lifter.initial_features),
-        # merge_neighbors=cfg.model.merge_neighbors,
         supercell=cfg.dataset.supercell,
         force_reload=False,
+        transform=prepare_targets_transform,
     )
     logger.info(f"Lifted QM9 dataset generated and stored in '{dataset.root}'.")
 

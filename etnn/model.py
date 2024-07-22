@@ -1,4 +1,3 @@
-from functools import partial
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -7,7 +6,6 @@ from torch_geometric.nn import global_add_pool
 
 from etnn.layers import ETNNLayer
 from etnn import utils, invariants
-from etnn.invariants import compute_centroids, compute_invariants
 
 
 class ETNN(nn.Module):
@@ -25,37 +23,41 @@ class ETNN(nn.Module):
         initial_features: str,
         visible_dims: list[int] | None,
         normalize_invariants: bool,
-        sparse: bool = False,  # invariant sparse computation
-        hausdorff: bool = False,
+        hausdorff_dists: bool = True,
         batch_norm: bool = False,
         lean: bool = True,
         global_pool: bool = False,  # whether or not to use global pooling
+        sparse: bool = False,  # invariant sparse computation
+        sparse_agg_max_cells: int = 1000,  # maximum size to consider for diameter and hausdorff dists
+        pos_update: bool = False,  # performs the equivariant position update, optional
     ) -> None:
         super().__init__()
 
         self.initial_features = initial_features
 
         # make inv_fts_map for backward compatibility
-        self.num_invariants = 5 if hausdorff else 3
+        self.num_invariants = 5 if hausdorff_dists else 3
         self.num_inv_fts_map = {k: self.num_invariants for k in adjacencies}
         self.adjacencies = adjacencies
         self.normalize_invariants = normalize_invariants
         self.batch_norm = batch_norm
         self.lean = lean
-        self.sparse = sparse
-        self.global_pool = global_pool
         max_dim = max(num_features_per_rank.keys())
+        self.global_pool = global_pool
+        self.visible_dims = visible_dims
+
+        self.sparse = sparse
+        self.sparse_agg_max_cells = sparse_agg_max_cells
+        self.hausdorff = hausdorff_dists
+        self.pos_update = pos_update
 
         if sparse:
-            fun = invariants.compute_invariants_sparse
+            self.inv_fun = invariants.compute_invariants_sparse
         else:
-            fun = invariants.compute_invariants
+            self.compute_invariantsinv_fun = invariants.compute_invariants
 
-        self.compute_invariants = partial(fun, hausdorff=hausdorff)
-
+        # keep only adjacencies that are compatible with visible_dims
         if visible_dims is not None:
-            self.visible_dims = visible_dims
-            # keep only adjacencies that are compatible with visible_dims
             self.adjacencies = []
             for adj in adjacencies:
                 max_rank = max(int(rank) for rank in adj.split("_")[:2])
@@ -91,6 +93,7 @@ class ETNN(nn.Module):
                     self.num_inv_fts_map,
                     self.batch_norm,
                     self.lean,
+                    self.pos_update,
                 )
                 for _ in range(num_layers)
             ]
@@ -165,16 +168,39 @@ class ETNN(nn.Module):
             for i in self.visible_dims
         }
 
+        # if using sparse invariant computation, obtain indces
+        inv_comp_kwargs = {
+            "cell_ind": cell_ind,
+            "adj": adj,
+            "device": device,
+            "hausdorff": self.hausdorff,
+        }
+        if self.sparse:
+            agg_indices = invariants.sparse_computation_indices_from_cc(
+                cell_ind, adj, self.sparse_agg_max_cells
+            )
+            inv_comp_kwargs["rank_agg_indices"] = agg_indices
+
         # embed features and E(n) invariant information
+        pos = graph.pos
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
-        inv = self.compute_invariants(cell_ind, graph.pos, adj, device)
+        inv = self.inv_fun(pos, **inv_comp_kwargs)
+
         if self.normalize_invariants:
             inv = {
                 adj: self.inv_normalizer[adj](feature) for adj, feature in inv.items()
             }
+
         # message passing
         for layer in self.layers:
-            x = layer(x, adj, inv)
+            x, pos = layer(x, adj, inv, pos)
+            if self.pos_update:
+                inv = self.inv_fun(pos, **inv_comp_kwargs)
+                if self.normalize_invariants:
+                    inv = {
+                        adj: self.inv_normalizer[adj](feature)
+                        for adj, feature in inv.items()
+                    }
 
         # read out
         out = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}

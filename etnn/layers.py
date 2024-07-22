@@ -16,6 +16,7 @@ class ETNNLayer(nn.Module):
         num_features_map: dict[str, int],
         batch_norm: bool = False,
         lean: bool = True,
+        pos_update: bool = False,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
@@ -23,6 +24,7 @@ class ETNNLayer(nn.Module):
         self.visible_dims = visible_dims
         self.batch_norm = batch_norm
         self.lean = lean
+        self.pos_update = pos_update
 
         # messages
         self.message_passing = nn.ModuleDict(
@@ -37,7 +39,7 @@ class ETNNLayer(nn.Module):
             }
         )
 
-        # updates
+        # state update
         self.update = nn.ModuleDict()
         for dim in self.visible_dims:
             factor = 1 + sum([adj_type[2] == str(dim) for adj_type in adjacencies])
@@ -51,8 +53,32 @@ class ETNNLayer(nn.Module):
                 update_layers.extend(extra_layers)
             self.update[str(dim)] = nn.Sequential(*update_layers)
 
+        # position update
+        if pos_update:
+            self.pos_update_wts = nn.Linear(num_hidden, 1, bias=False)
+            nn.init.trunc_normal_(self.pos_update_wts.weight, std=0.02)
+
+    def radial_pos_update(
+        self, pos: Tensor, mes: dict[str, Tensor], adj: dict[str, Tensor]
+    ) -> Tensor:
+        # find the key corresponding to the 0_0_x adjacency
+        key = [k for k in adj if adj[0] == "0" and adj[2] == "0"][0]
+        send, recv = adj[key]
+        wts = self.pos_update_wts(mes[key][recv])
+
+        # collect the pos_delta for each node: going from
+        # [num_edges, num_hidden] to [num_nodes, num_hidden]
+        delta = utils.scatter_add(
+            (pos[send] - pos[recv]) * wts, send, dim=0, dim_size=pos.size(0)
+        )
+        return pos + 0.1 * delta
+
     def forward(
-        self, x: Dict[str, Tensor], adj: Dict[str, Tensor], inv: Dict[str, Tensor]
+        self,
+        x: Dict[str, Tensor],
+        adj: Dict[str, Tensor],
+        inv: Dict[str, Tensor],
+        pos: Tensor,
     ) -> Dict[str, Tensor]:
         # pass the different messages of all adjacency types
         mes = {
@@ -76,7 +102,10 @@ class ETNNLayer(nn.Module):
         h = {dim: self.update[dim](feature) for dim, feature in h.items()}
         x = {dim: feature + h[dim] for dim, feature in x.items()}
 
-        return x
+        if self.pos_update:
+            pos = self.radial_pos_update(pos, mes, adj)
+
+        return x, pos
 
 
 class BaseMessagePassingLayer(nn.Module):

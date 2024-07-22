@@ -7,8 +7,8 @@ from etnn import utils
 
 
 def compute_invariants(
-    cell_ind: dict[str, torch.FloatTensor],
     pos: torch.FloatTensor,
+    cell_ind: dict[str, torch.FloatTensor],
     adj: dict[str, torch.LongTensor],
     hausdorff: bool = True,
     # inv_ind: dict[str, torch.FloatTensor],
@@ -44,12 +44,12 @@ def compute_invariants(
 
     Parameters
     ----------
+    pos : torch.FloatTensor
+        A 2D tensor of shape (num_nodes, num_dimensions) containing the positions of each node.
     cell_ind : dict
         A dictionary mapping cell ranks to tensors of shape (num_cells, max_cardinality) containing
         indices of nodes for each cell. It is used to identify the cells for which centroids should
         be computed.
-    pos : torch.FloatTensor
-        A 2D tensor of shape (num_nodes, num_dimensions) containing the positions of each node.
     adj : dict
         A dictionary where each key is a string in the format 'sender_rank_receiver_rank' indicating
         the ranks of cell pairs, and each value is a tensor of shape (2, num_cell_pairs) containing
@@ -357,8 +357,8 @@ class SparseInvariantComputationIndices:
 
 
 def compute_invariants_sparse(
-    cell_ind: dict[str, list[list[int]]],
     pos: torch.FloatTensor,
+    cell_ind: dict[str, list[list[int]]],
     adj: dict[str, torch.LongTensor],
     rank_agg_indices: dict[str, SparseInvariantComputationIndices],
     hausdorff: bool = True,
@@ -368,10 +368,10 @@ def compute_invariants_sparse(
 
     Parameters
     ----------
-    cell_ind : dict
-        A dictionary mapping cell ranks to lists of lists of node indices for each cell.
     pos : torch.FloatTensor
         A 2D tensor of shape (num_nodes, num_dimensions) containing the positions of each node.
+    cell_ind : dict
+        A dictionary mapping cell ranks to lists of lists of node indices for each cell.
     adj : dict
         A dictionary where each key is a string in the format 'sender_rank_receiver_rank' indicating
         the ranks of cell pairs, and each value is a tensor of shape (2, num_cell_pairs) containing
@@ -481,7 +481,7 @@ def compute_invariants_sparse(
     return out
 
 
-def invariant_computation_indices_from_cc(cell_ind, adj, max_cell_size=100):
+def sparse_computation_indices_from_cc(cell_ind, adj, max_cell_size=100):
     agg_indices = {}
 
     # first take sub sample of the cells if larger than max size

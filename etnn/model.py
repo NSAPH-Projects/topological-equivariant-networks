@@ -5,8 +5,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import global_add_pool
 
 from etnn.layers import ETNNLayer
-from etnn.utils import slices_to_pointer
-from etnn.invariants import compute_centroids, compute_invariants
+from etnn import utils, invariants
 
 
 class ETNN(nn.Module):
@@ -20,30 +19,45 @@ class ETNN(nn.Module):
         num_hidden: int,
         num_out: int,
         num_layers: int,
-        # max_dim: int,
         adjacencies: list[str],
         initial_features: str,
         visible_dims: list[int] | None,
         normalize_invariants: bool,
-        compute_invariants: callable = compute_invariants,
+        hausdorff_dists: bool = True,
         batch_norm: bool = False,
         lean: bool = True,
+        global_pool: bool = False,  # whether or not to use global pooling
+        sparse_invariant_computation: bool = False,
+        sparse_agg_max_cells: int = 1000,  # maximum size to consider for diameter and hausdorff dists
+        pos_update: bool = False,  # performs the equivariant position update, optional
     ) -> None:
         super().__init__()
 
         self.initial_features = initial_features
-        self.compute_invariants = compute_invariants
-        self.num_inv_fts_map = self.compute_invariants.num_features_map
-        # self.max_dim = max_dim
+
+        # make inv_fts_map for backward compatibility
+        self.num_invariants = 5 if hausdorff_dists else 3
+        self.num_inv_fts_map = {k: self.num_invariants for k in adjacencies}
         self.adjacencies = adjacencies
         self.normalize_invariants = normalize_invariants
         self.batch_norm = batch_norm
         self.lean = lean
         max_dim = max(num_features_per_rank.keys())
+        self.global_pool = global_pool
+        self.visible_dims = visible_dims
 
+        self.sparse_invariant_computation = sparse_invariant_computation
+        self.sparse_agg_max_cells = sparse_agg_max_cells
+        self.hausdorff = hausdorff_dists
+        self.pos_update = pos_update
+
+        if sparse_invariant_computation:
+            self.inv_fun = invariants.compute_invariants_sparse
+        else:
+            self.compute_invariantsinv_fun = invariants.compute_invariants
+
+        # keep only adjacencies that are compatible with visible_dims
         if visible_dims is not None:
-            self.visible_dims = visible_dims
-            # keep only adjacencies that are compatible with visible_dims
             self.adjacencies = []
             for adj in adjacencies:
                 max_rank = max(int(rank) for rank in adj.split("_")[:2])
@@ -79,6 +93,7 @@ class ETNN(nn.Module):
                     self.num_inv_fts_map,
                     self.batch_norm,
                     self.lean,
+                    self.pos_update,
                 )
                 for _ in range(num_layers)
             ]
@@ -87,16 +102,31 @@ class ETNN(nn.Module):
         self.pre_pool = nn.ModuleDict()
 
         for dim in visible_dims:
-            pre_pool_layers = [nn.Linear(num_hidden, num_hidden), nn.SiLU()]
-            if not self.lean:
-                pre_pool_layers.append(nn.Linear(num_hidden, num_hidden))
-            self.pre_pool[str(dim)] = nn.Sequential(*pre_pool_layers)
+            if self.global_pool:
+                if not self.lean:
+                    self.pre_pool[str(dim)] = nn.Sequential(
+                        nn.Linear(num_hidden, num_hidden),
+                        nn.SiLU(),
+                        nn.Linear(num_hidden, num_hidden),
+                    )
+                else:
+                    self.pre_pool[str(dim)] = nn.Linear(num_hidden, num_hidden)
+            else:
+                if not self.lean:
+                    self.pre_pool[str(dim)] = nn.Sequential(
+                        nn.Linear(num_hidden, num_hidden),
+                        nn.SiLU(),
+                        nn.Linear(num_hidden, num_out),
+                    )
+                else:
+                    self.pre_pool[str(dim)] = nn.Linear(num_hidden, num_out)
 
-        self.post_pool = nn.Sequential(
-            nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
-            nn.SiLU(),
-            nn.Linear(num_hidden, num_out),
-        )
+        if self.global_pool:
+            self.post_pool = nn.Sequential(
+                nn.Linear(len(self.visible_dims) * num_hidden, num_hidden),
+                nn.SiLU(),
+                nn.Linear(num_hidden, num_out),
+            )
 
     def forward(self, graph: Data) -> Tensor:
         device = graph.pos.device
@@ -113,19 +143,13 @@ class ETNN(nn.Module):
             if hasattr(graph, f"adj_{adj_type}")
         }
 
-        # inv_ind = {
-        #     adj_type: getattr(graph, f"inv_{adj_type}")
-        #     for adj_type in self.adjacencies
-        #     if hasattr(graph, f"inv_{adj_type}")
-        # }
-
         # compute initial features
         features = {}
         for feature_type in self.initial_features:
             features[feature_type] = {}
             for i in self.visible_dims:
                 if feature_type == "node":
-                    features[feature_type][str(i)] = compute_centroids(
+                    features[feature_type][str(i)] = invariants.compute_centroids(
                         cell_ind[str(i)], graph.x
                     )
                 elif feature_type == "mem":
@@ -144,34 +168,59 @@ class ETNN(nn.Module):
             for i in self.visible_dims
         }
 
+        # if using sparse invariant computation, obtain indces
+        inv_comp_kwargs = {
+            "cell_ind": cell_ind,
+            "adj": adj,
+            "device": device,
+            "hausdorff": self.hausdorff,
+        }
+        if self.sparse_invariant_computation:
+            agg_indices = invariants.sparse_computation_indices_from_cc(
+                cell_ind, adj, self.sparse_agg_max_cells
+            )
+            inv_comp_kwargs["rank_agg_indices"] = agg_indices
+
         # embed features and E(n) invariant information
+        pos = graph.pos
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
-        inv = self.compute_invariants(cell_ind, graph.pos, adj, device)
+        inv = self.inv_fun(pos, **inv_comp_kwargs)
+
         if self.normalize_invariants:
             inv = {
                 adj: self.inv_normalizer[adj](feature) for adj, feature in inv.items()
             }
+
         # message passing
         for layer in self.layers:
-            x = layer(x, adj, inv)
+            x, pos = layer(x, adj, inv, pos)
+            if self.pos_update:
+                inv = self.inv_fun(pos, **inv_comp_kwargs)
+                if self.normalize_invariants:
+                    inv = {
+                        adj: self.inv_normalizer[adj](feature)
+                        for adj, feature in inv.items()
+                    }
 
         # read out
-        x = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}
+        out = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}
 
-        # create one dummy node with all features equal to zero for each graph and each rank
-        cell_batch = {
-            str(i): slices_to_pointer(graph._slice_dict[f"slices_{i}"])
-            for i in self.visible_dims
-        }
-        x = {
-            dim: global_add_pool(x[dim], cell_batch[dim]) for dim, feature in x.items()
-        }
-        state = torch.cat(
-            tuple([feature for dim, feature in x.items()]),
-            dim=1,
-        )
-        out = self.post_pool(state)
-        out = torch.squeeze(out, -1)
+        if self.global_pool:
+            # create one dummy node with all features equal to zero for each graph and each rank
+            cell_batch = {
+                str(i): utils.slices_to_pointer(graph._slice_dict[f"slices_{i}"])
+                for i in self.visible_dims
+            }
+            out = {
+                dim: global_add_pool(out[dim], cell_batch[dim])
+                for dim, feature in out.items()
+            }
+            state = torch.cat(
+                tuple([feature for dim, feature in out.items()]),
+                dim=1,
+            )
+            out = self.post_pool(state)
+            out = torch.squeeze(out, -1)
 
         return out
 

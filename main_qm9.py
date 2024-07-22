@@ -7,63 +7,25 @@ import time
 
 import hydra
 import torch
-import wandb
 from omegaconf import DictConfig, OmegaConf
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
+import utils
+import wandb
 from etnn.qm9.qm9cc import QM9CC
-from utils import args_to_hash, calc_mean_mad, get_model, set_seed
 
-torch.set_float32_matmul_precision("high")
+# torch.set_float32_matmul_precision("high")  # Use high precision for matmul
 os.environ["WANDB__SERVICE_WAIT"] = "600"
 
 
 logger = logging.getLogger(__name__)
 
 
-def load_checkpoint(checkpoint_path, model, opt, sched, force_restart):
-    best_model = copy.deepcopy(model)
-    device = next(model.parameters()).device
-    if not force_restart and os.path.isfile(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path)
-        model.to("cpu")
-        best_model.to("cpu")
-        model.load_state_dict(checkpoint["model"])
-        best_model.load_state_dict(checkpoint["best_model"])
-        best_loss = checkpoint["best_loss"]
-        opt.load_state_dict(checkpoint["optimizer"])
-        sched.load_state_dict(checkpoint["scheduler"])
-        model.to(device)
-        best_model.to(device)
-        return checkpoint["epoch"], checkpoint["run_id"], best_model, best_loss
-    else:
-        return 0, None, best_model, float("inf")
-
-
-def save_checkpoint(path, model, best_model, best_loss, opt, sched, epoch, run_id):
-    device = next(model.parameters()).device
-    model.to("cpu")
-    best_model.to("cpu")
-    state = {
-        "epoch": epoch + 1,
-        "model": model.state_dict(),
-        "best_model": best_model.state_dict(),
-        "best_loss": best_loss,
-        "optimizer": opt.state_dict(),
-        "scheduler": sched.state_dict(),
-        "run_id": run_id,
-    }
-    model.to(device)
-    best_model.to(device)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    torch.save(state, path)
-
-
 @hydra.main(config_path="conf/conf_qm9", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     # ==== Initial setup =====
-    set_seed(cfg.seed)
+    utils.set_seed(cfg.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # ==== Get dataset and loader ======
@@ -72,8 +34,9 @@ def main(cfg: DictConfig):
         data.y = data.y[:, col_ix]
         return data
 
-    hash = args_to_hash(OmegaConf.to_container(cfg.dataset, resolve=True))
-    # hash = "_".join(cfg.dataset.lifters) + ("_sc" if cfg.dataset.supercell else "")
+    # create a unique hash for the dataset based on the configuration
+    hash = utils.args_to_hash(OmegaConf.to_container(cfg.dataset, resolve=True))
+
     dataset = QM9CC(
         f"data/qm9cc_{hash}",
         lifters=list(cfg.dataset.lifters),
@@ -88,7 +51,7 @@ def main(cfg: DictConfig):
     )
 
     # ==== Get model =====
-    model = get_model(cfg, dataset)
+    model = utils.get_model(cfg, dataset)
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"Number of parameters: {num_params:}")
@@ -126,7 +89,7 @@ def main(cfg: DictConfig):
     }
 
     # Precompute average deviation of target in loader
-    mean, mad = calc_mean_mad(loaders["train"])
+    mean, mad = utils.calc_mean_mad(loaders["train"])
     mean, mad = mean.to(device), mad.to(device)
 
     # ==== Get optimization objects =====
@@ -145,7 +108,7 @@ def main(cfg: DictConfig):
         ckpt_filename = f"{cfg.ckpt_prefix}_{ckpt_filename}"
     checkpoint_path = f"{cfg.ckpt_dir}/{ckpt_filename}"
 
-    start_epoch, run_id, best_model, best_loss = load_checkpoint(
+    start_epoch, run_id, best_model, best_loss = utils.load_checkpoint(
         checkpoint_path, model, opt, sched, cfg.force_restart
     )
 
@@ -178,8 +141,6 @@ def main(cfg: DictConfig):
 
         model.train()
         for _, batch in enumerate(loaders["train"]):
-            # if _ > 50:
-            #     break
             opt.zero_grad()
             batch = batch.to(device)
 
@@ -199,8 +160,6 @@ def main(cfg: DictConfig):
         sched.step()
         model.eval()
         for _, batch in enumerate(loaders["valid"]):
-            # if _ > 50:
-            #     break
             batch = batch.to(device)
             pred = model(batch)
             mae = crit(pred * mad + mean, batch.y)
@@ -215,7 +174,7 @@ def main(cfg: DictConfig):
             best_model = copy.deepcopy(model)
 
         # Save checkpoint
-        save_checkpoint(
+        utils.save_checkpoint(
             path=checkpoint_path,
             model=model,
             best_model=best_model,
@@ -244,8 +203,6 @@ def main(cfg: DictConfig):
             test_mae = 0
             best_model.eval()
             for _, batch in enumerate(loaders["test"]):
-                # if _ > 50:
-                #     break
                 batch = batch.to(device)
                 pred = best_model(batch)
                 mae = crit(pred * mad + mean, batch.y)

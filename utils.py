@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import json
 import os
@@ -13,7 +14,45 @@ from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
 
 from etnn.lifter import get_adjacency_types
-from etnn.models import ETNN
+from etnn.model import ETNN
+
+
+def load_checkpoint(checkpoint_path, model, opt, sched, force_restart):
+    best_model = copy.deepcopy(model)
+    device = next(model.parameters()).device
+    if not force_restart and os.path.isfile(checkpoint_path):
+        checkpoint = torch.load(checkpoint_path)
+        model.to("cpu")
+        best_model.to("cpu")
+        model.load_state_dict(checkpoint["model"])
+        best_model.load_state_dict(checkpoint["best_model"])
+        best_loss = checkpoint["best_loss"]
+        opt.load_state_dict(checkpoint["optimizer"])
+        sched.load_state_dict(checkpoint["scheduler"])
+        model.to(device)
+        best_model.to(device)
+        return checkpoint["epoch"], checkpoint["run_id"], best_model, best_loss
+    else:
+        return 0, None, best_model, float("inf")
+
+
+def save_checkpoint(path, model, best_model, best_loss, opt, sched, epoch, run_id):
+    device = next(model.parameters()).device
+    model.to("cpu")
+    best_model.to("cpu")
+    state = {
+        "epoch": epoch + 1,
+        "model": model.state_dict(),
+        "best_model": best_model.state_dict(),
+        "best_loss": best_loss,
+        "optimizer": opt.state_dict(),
+        "scheduler": sched.state_dict(),
+        "run_id": run_id,
+    }
+    model.to(device)
+    best_model.to(device)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    torch.save(state, path)
 
 
 def args_to_hash(args: dict):
@@ -81,18 +120,20 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
             num_features_per_rank = {
                 k: v + num_lifters for k, v in num_features_per_rank.items()
             }
-    #     if "hetero" in cfg.lifter.initial_features:
-    #         # num_hetero_features = lifter.num_features_dict
-    #         num_features_per_rank = {
-    #             k: v + num_hetero_features[k] for k, v in num_features_per_rank.items()
-    #         }
-    #     if set(cfg.lifter.initial_features).difference(set(["node", "mem", "hetero"])):
-    #         raise ValueError(
-    #             f"Do not recognize initial features {cfg.lifter.initial_features}."
-    #         )
-    #     num_out = 1
-    # else:
-    #     raise ValueError(f"Do not recognize dataset {cfg.dataset}.")
+        #     if "hetero" in cfg.lifter.initial_features:
+        #         # num_hetero_features = lifter.num_features_dict
+        #         num_features_per_rank = {
+        #             k: v + num_hetero_features[k] for k, v in num_features_per_rank.items()
+        #         }
+        #     if set(cfg.lifter.initial_features).difference(set(["node", "mem", "hetero"])):
+        #         raise ValueError(
+        #             f"Do not recognize initial features {cfg.lifter.initial_features}."
+        #         )
+        #     num_out = 1
+        # else:
+        #     raise ValueError(f"Do not recognize dataset {cfg.dataset}.")
+        global_pool = True
+
     num_out = 1  # currently only one-dim output is supported
 
     adjacencies = get_adjacency_types(
@@ -107,14 +148,13 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
         num_hidden=cfg.model.num_hidden,
         num_out=num_out,  # currently only one-dim output is supported
         num_layers=cfg.model.num_layers,
-        # max_dim=lifter.dim,
-        # adjacencies=processed_adjacencies,
         adjacencies=adjacencies,
         initial_features=cfg.model.initial_features,
         normalize_invariants=cfg.model.normalize_invariants,
         visible_dims=visible_dims,
         batch_norm=cfg.model.batch_norm,
         lean=cfg.model.lean,
+        global_pool=global_pool,
     )
     return model
 

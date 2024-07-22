@@ -1,12 +1,15 @@
 import json
+
 import numpy as np
 import pandas as pd
 import requests
 import torch
-from etnn.combinatorial_data import CombinatorialComplexData
 from torch_geometric.data import InMemoryDataset
 
-class GeospatialCC(InMemoryDataset):
+from etnn.combinatorial_data import CombinatorialComplexData
+
+
+class PM25CC(InMemoryDataset):
     def __init__(
         self,
         root,
@@ -186,7 +189,7 @@ def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData
     num_cells_2 = len(data.cell_2)
     adj_3_2 = torch.tensor([[0, i] for i in range(num_cells_2)])
     data.adj_3_2 = adj_3_2.T.to(data.pos.device)
-    data.adj_2_3 = data.adj_3_2.flip(0)    
+    data.adj_2_3 = data.adj_3_2.flip(0)
 
     return data
 

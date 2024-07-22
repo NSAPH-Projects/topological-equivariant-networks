@@ -1,127 +1,122 @@
-import os
+import copy
 import json
+import logging
+import os
+import random
+import time
+
 import hydra
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-import wandb
 import torch
-from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
-from collections import defaultdict
+from torch_geometric.loader import DataLoader
+from tqdm import tqdm
 
-from torch import nn
-from tqdm.auto import tqdm, trange
-from torch.utils.data import DataLoader, Dataset
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LRScheduler
-
-from etnn_spatial.models import ETNN
-from etnn_spatial.utils import set_seed
-
-# change matplotlib backend to avoid conflicts with vscode
-# matplotlib.use("TkAgg")
+import utils
+import wandb
+from etnn.geospatial.pm25cc import PM25CC
 
 
-def save_checkpoint(epoch, model, optimizer, scheduler, run_id, filepath):
-    current_device = next(model.parameters()).device
-    torch.save(
-        {
-            "epoch": epoch + 1,
-            "model_state_dict": model.to("cpu").state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "scheduler_state_dict": scheduler.state_dict(),
-            "run_id": run_id,
-        },
-        filepath,
-    )
-    model.to(current_device)
+# torch.set_float32_matmul_precision("high")  # Use high precision for matmul
+os.environ["WANDB__SERVICE_WAIT"] = "600"
 
 
-def load_checkpoint(filepath, model, optimizer, scheduler):
-    if os.path.isfile(filepath):
-        curr_dev = next(model.parameters()).device
-        model = model.to("cpu")
-        # try loading in cpu and if it fails try cuda
-        try:
-            checkpoint = torch.load(filepath)
-            model.load_state_dict(checkpoint["model_state_dict"])
-        except RuntimeError:
-            checkpoint = torch.load(filepath, map_location="cuda")
-            model.load_state_dict(checkpoint["model_state_dict"])
-        model = model.to(curr_dev)
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-        return checkpoint["epoch"], checkpoint["run_id"]
-    else:
-        return 0, None
+logger = logging.getLogger(__name__)
 
 
-@hydra.main(config_path="configs", config_name="config", version_base=None)
+@hydra.main(config_path="conf/conf_geospatial", config_name="config", version_base=None)
 def main(cfg: DictConfig):
-    # seed everything
-    set_seed(cfg.seed)
+    # ==== Initial setup =====
+    utils.set_seed(cfg.seed)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # get device
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    # ==== Get dataset and loader ======
+    # create a unique hash for the dataset based on the configuration
+    hash = utils.args_to_hash(OmegaConf.to_container(cfg.dataset, resolve=True))
 
-    # == instantiate dataset, loader, model, optimizer, scheduler ==
-    dataset: Dataset = instantiate(cfg.dataset)
-    collate_fn: callable = instantiate(cfg.collate_fn, dataset)
-    loader: DataLoader = instantiate(cfg.loader, dataset, collate_fn=collate_fn)
+    dataset = PM25CC(
+        f"data/qm9cc_{hash}",
+        lifters=list(cfg.dataset.lifters),
+        neighbor_types=list(cfg.dataset.neighbor_types),
+        connectivity=cfg.dataset.connectivity,
+        # cfg.lifter.dim,
+        # list(cfg.lifter.initial_features),
+        # merge_neighbors=cfg.model.merge_neighbors,
+        supercell=cfg.dataset.supercell,
+        force_reload=False,
+        transform=prepare_targets_transform,
+    )
 
-    # determine number of features per rank
-    batch = next(iter(loader))  # get the first element to compute number of features
-    # to create the model
-    num_feats = {
-        k.split("_")[1]: v.shape[1] for k, v in batch.items() if k.startswith("x_")
+    # ==== Get model =====
+    model = utils.get_model(cfg, dataset)
+
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.info(f"Number of parameters: {num_params:}")
+    logger.info(model)
+
+    # Get train/test splits using the original egnn splits for reference
+    with open("data/input/egnn_splits.json", "r") as io:
+        egnn_splits = json.load(io)
+    if cfg.train_test_splits == "egnn":
+        split_indices = egnn_splits
+
+    elif cfg.train_test_splits == "random":
+        num_samples = len(dataset)
+        indices = list(range(num_samples))
+        random.shuffle(indices)
+        train_end_idx = len(egnn_splits["train"])
+        val_end_idx = train_end_idx + len(egnn_splits["valid"])
+        test_end_idx = val_end_idx + len(egnn_splits["test"])
+        split_indices = {
+            "train": indices[:train_end_idx],
+            "valid": indices[train_end_idx:val_end_idx],
+            "test": indices[val_end_idx:test_end_idx],
+        }
+    else:
+        raise ValueError(f"Unknown split type: {cfg.train_test_splits}")
+
+    # Get dataloaders
+    loaders = {
+        key: DataLoader(
+            dataset[indices],
+            batch_size=cfg.training.batch_size,
+            shuffle=True,
+        )
+        for key, indices in split_indices.items()
     }
 
-    # get adjacencies orther then in reverse order
-    adjacencies = [k[4:] for k in batch.keys() if k.startswith("adj_")]
-    adjacencies = list(sorted(adjacencies, reverse=True))
+    # Precompute average deviation of target in loader
+    mean, mad = utils.calc_mean_mad(loaders["train"])
+    mean, mad = mean.to(device), mad.to(device)
 
-    # instantiate model, optimizer, learning rate scheduler, loss fn
-    has_virtual_node = "virtual" in cfg.dataset_name
-    model: ETNN = instantiate(
-        cfg.model,
-        num_features_per_rank=num_feats,
-        adjacencies=adjacencies,
-        has_virtual_node=has_virtual_node,
+    # ==== Get optimization objects =====
+    crit = torch.nn.L1Loss(reduction="mean")
+    opt_kwargs = dict(lr=cfg.training.lr, weight_decay=cfg.training.weight_decay)
+    opt = torch.optim.Adam(model.parameters(), **opt_kwargs)
+    T_max = cfg.training.epochs // cfg.training.num_lr_cycles
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+        opt, T_max, eta_min=cfg.training.min_lr
     )
-    opt: Optimizer = instantiate(cfg.optimizer, model.parameters())
-    sched: LRScheduler = instantiate(cfg.lr_scheduler, opt)
-    loss_fn: callable = instantiate(cfg.loss_fn, reduction="none")
+    best_loss = float("inf")
 
-    # == checkpointing ==
-    checkpoint_dir = "checkpoints"
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_filename = f"{cfg.baseline_name}_{cfg.seed}.pth"
+    # === Configure checkpoint and wandb logging ===
+    ckpt_filename = f"{cfg.experiment_name}__{cfg.target}__{cfg.seed}.pth"
     if cfg.ckpt_prefix is not None:
-        checkpoint_filename = f"{cfg.ckpt_prefix}_{checkpoint_filename}"
-    checkpoint_path = os.path.join(checkpoint_dir, checkpoint_filename)
+        ckpt_filename = f"{cfg.ckpt_prefix}_{ckpt_filename}"
+    checkpoint_path = f"{cfg.ckpt_dir}/{ckpt_filename}"
 
-    # Check for force restart flag
-    if not cfg.force_restart:
-        (
-            start_epoch,
-            run_id,
-        ) = load_checkpoint(checkpoint_path, model, opt, sched)
-    else:
-        start_epoch, run_id = 0, None
+    start_epoch, run_id, best_model, best_loss = utils.load_checkpoint(
+        checkpoint_path, model, opt, sched, cfg.force_restart
+    )
 
-    if start_epoch >= cfg.training.max_epochs:
-        print("Training already completed. Exiting.")
+    if start_epoch >= cfg.training.epochs:
+        logger.info("Training already completed. Exiting.")
         return
 
-    # == init wandb logger ==
+    # init wandb logger
     if run_id is None:
-        run_id = "_".join([cfg.baseline_name, str(cfg.seed), wandb.util.generate_id()])
+        run_id = ckpt_filename.split(".")[0] + "__" + wandb.util.generate_id()
         if cfg.ckpt_prefix is not None:
-            run_id = "_".join([cfg.ckpt_prefix, run_id])
-        resume = False
-    else:
-        resume = True
+            run_id = "__".join([cfg.ckpt_prefix, run_id])
 
     # create wandb config and add number of parameters
     wandb_config = OmegaConf.to_container(cfg, resolve=True)
@@ -129,129 +124,109 @@ def main(cfg: DictConfig):
     wandb_config["num_params"] = num_params
 
     wandb.init(
-        project=cfg.wandb.project,
-        entity=cfg.wandb.entity,
+        project=f"{cfg.task_name}-experiments",
+        entity=os.environ.get("WANDB_ENTITY"),
         config=wandb_config,
         id=run_id,
-        resume=resume,
+        resume="allow",
     )
 
-    # == training loop ==
+    # === Training loop ===
+    for epoch in tqdm(range(start_epoch, cfg.training.epochs)):
+        epoch_start_time, epoch_mae_train, epoch_mae_val = time.time(), 0, 0
 
-    # move params to device
-    model = model.to(dev)
-    for state in opt.state.values():
-        for k, v in state.items():
-            if isinstance(v, torch.Tensor):
-                state[k] = v.to(dev)
-
-    # since only one batch is used, move it to the device
-    batch = batch.to(dev)  # TODO: remove
-
-    best_val_r2 = float("-inf")
-    best_model_test_r2 = float("-inf")
-
-    # get training params from config
-    pbar = trange(start_epoch, cfg.training.max_epochs, desc="", leave=True)
-    epochs_without_improvement = 0
-    for epoch in pbar:
         model.train()
-        epoch_metrics = defaultdict(list)
-        # for batch in loader:
-        # batch = batch.to(dev)
+        for _, batch in enumerate(loaders["train"]):
+            opt.zero_grad()
+            batch = batch.to(device)
 
-        # == training step ==
-        opt.zero_grad()
-        outputs = model(batch)
-        training_mask = batch.training_mask  # 1-0 mask of nodes used for training
-        pred_train = outputs["0"].squeeze()[training_mask]
-        target_train = batch.y.squeeze()[training_mask]
-        loss_terms = loss_fn(pred_train, target_train)
-        train_loss = loss_terms.mean()
-        train_loss.backward()  # backpropagate
-        if cfg.training.clip is not None:
-            torch.nn.utils.clip_grad_value_(model.parameters(), cfg.training.clip)
-        opt.step()
+            pred = model(batch)
+            loss = crit(pred, (batch.y - mean) / mad)
+            mae = crit(pred * mad + mean, batch.y)
+            loss.backward()
 
-        if dev == "cuda":
-            # not really helping, but this should free up unused GPU memory
-            torch.cuda.empty_cache()
-
-        # == end training step ==
-
-        # == eval step ===
-        model.eval()
-        if model.dropout > 0:
-            with torch.no_grad():
-                pred_eval = model(batch)["0"].squeeze()
-        else:
-            pred_eval = outputs["0"].squeeze().detach()
-        pred_test = pred_eval[batch.test_mask]
-        pred_val = pred_eval[batch.validation_mask]
-        target_test = batch.y.squeeze()[batch.test_mask]
-        target_val = batch.y.squeeze()[batch.validation_mask]
-
-        val_r2 = 1 - (pred_val - target_val).var() / target_val.var()
-        test_r2 = 1 - (pred_test - target_test).var() / target_test.var()
-        test_mse = (pred_test - target_test).pow(2).mean()
-
-        epoch_metrics["train_loss"].append(train_loss.item())
-        epoch_metrics["val_r2"].append(val_r2.item())
-        epoch_metrics["test_r2"].append(test_r2.item())
-        epoch_metrics["lr"].append(opt.param_groups[0]["lr"])
-
-        # update lr scheduler
-        sched.step()
-
-        # save checkpoint
-        save_checkpoint(epoch, model, opt, sched, run_id, checkpoint_path)
-
-        # log metrics to wandb and to a file
-        mean_metrics = {k: np.mean(v) for k, v in epoch_metrics.items()}
-        wandb.log(mean_metrics, step=epoch)
-        logline = json.dumps({"epoch": epoch, **mean_metrics})
-        with open(f"checkpoints/{cfg.baseline_name}_{cfg.seed}.jsonl", "a") as f:
-            f.write(logline + "\n")
-
-        # save checkpoint if validation R2 improves
-        if val_r2 > best_val_r2:
-            best_val_r2 = val_r2
-            best_model_test_r2 = test_r2
-            wandb.run.summary["best_val_r2"] = val_r2
-            wandb.run.summary["best_model_test_r2"] = test_r2
-            wandb.run.summary["best_model_test_mse"] = test_mse
-            epochs_without_improvement = 0
-        else:
-            epochs_without_improvement += 1
-            if epochs_without_improvement > cfg.training.patience:
-                print(
-                    f"Early stopping at epoch {epoch}. Best model test R2: {best_model_test_r2:.4f}"
+            if cfg.training.clip_gradients:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), cfg.training.clip_amount
                 )
-                break
 
-        # update progress bar
-        msg = [
-            f"Train loss: {train_loss.item():.4f}",
-            f"Val R2: {val_r2:.4f}",
-            f"Best Model Test R2: {best_model_test_r2:.4f}",
-        ]
-        msg = ", ".join(msg)
-        pbar.set_description(msg)
-        pbar.refresh()
+            opt.step()
+            epoch_mae_train += mae.item()
 
-        # if epoch % (cfg.training.max_epochs // 3) == 0:
-        #     fig, ax = plt.subplots(1, 2, figsize=(8, 4))
-        #     ax[0].scatter(target_train, pred_train.detach(), alpha=0.1)
-        #     ax[0].set_title("Train")
-        #     ax[0].set_ylabel("Predicted")
-        #     ax[0].set_xlabel("Real")
-        #     ax[1].scatter(target_val, pred_val, alpha=0.5)
-        #     ax[1].set_title("Eval")
-        #     ax[1].set_ylabel("Predicted")
-        #     ax[1].set_xlabel("Real")
-        #     wandb.log({"scatter": wandb.Image(fig)}, step=epoch)
-        #     plt.close(fig)
+        sched.step()
+        model.eval()
+        for _, batch in enumerate(loaders["valid"]):
+            batch = batch.to(device)
+            pred = model(batch)
+            mae = crit(pred * mad + mean, batch.y)
 
+            epoch_mae_val += mae.item()
+
+        epoch_mae_train /= len(loaders["train"])
+        epoch_mae_val /= len(loaders["valid"])
+
+        if epoch_mae_val < best_loss:
+            best_loss = epoch_mae_val
+            best_model = copy.deepcopy(model)
+
+        # Save checkpoint
+        utils.save_checkpoint(
+            path=checkpoint_path,
+            model=model,
+            best_model=best_model,
+            best_loss=best_loss,
+            opt=opt,
+            sched=sched,
+            epoch=epoch,
+            run_id=run_id,
+        )
+
+        epoch_end_time = time.time()
+        epoch_duration = epoch_end_time - epoch_start_time
+
+        wandb.log(
+            {
+                "Train MAE": epoch_mae_train,
+                "Validation MAE": epoch_mae_val,
+                "Epoch Duration": epoch_duration,
+                "Learning Rate": sched.get_last_lr()[0],
+            },
+            step=epoch,
+        )
+
+        # Compute and log test error every test_interval epochs
+        if (epoch + 1) % cfg.training.test_interval == 0:
+            test_mae = 0
+            best_model.eval()
+            for _, batch in enumerate(loaders["test"]):
+                batch = batch.to(device)
+                pred = best_model(batch)
+                mae = crit(pred * mad + mean, batch.y)
+                test_mae += mae.item()
+
+            test_mae /= len(loaders["test"])
+            print(f"Epoch {epoch + 1} Test MAE: {test_mae}")
+
+            wandb.log(
+                {
+                    "Interval Test MAE": test_mae,
+                    "Epoch": epoch + 1,
+                },
+                step=epoch,
+            )
+
+    test_mae = 0
+    best_model.eval()
+    for _, batch in enumerate(loaders["test"]):
+        batch = batch.to(device)
+        pred = best_model(batch)
+        mae = crit(pred * mad + mean, batch.y)
+        test_mae += mae.item()
+
+    test_mae /= len(loaders["test"])
+    print(f"Test MAE: {test_mae}")
+
+    wandb.log({"Test MAE": test_mae})
 
 
 if __name__ == "__main__":

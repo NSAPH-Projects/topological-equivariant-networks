@@ -4,7 +4,7 @@ import hydra
 from omegaconf import DictConfig
 from torch_geometric.transforms import Compose
 
-from etnn.pm25 import geospatialcc as pm25cc
+from etnn.geospatial import pm25cc as pm25cc
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def main(cfg: DictConfig):
         pre_transform.append(pm25cc.add_pos_to_cc)
     pre_transform = Compose(pre_transform)
 
-    dataset = pm25cc.GeospatialCC(
+    dataset = pm25cc.PM25CC(
         f"data/geospatialcc_{cfg.dataset_name}",
         pre_transform=pre_transform,
         force_reload=cfg.force_reload,

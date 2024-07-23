@@ -14,8 +14,6 @@ cd topological-equivariant-networks
 conda env create -f environment.yaml
 ```
 
-If you are running the code from a Mac use `conda env create -f environment-macos.yaml`
-
 This will create and activate a new conda environment called "etnn" that contains all the packages necessary to run the code in this repository.
 
 ## Real-World Combinatorial Complexes

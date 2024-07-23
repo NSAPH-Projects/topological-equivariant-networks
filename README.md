@@ -1,6 +1,6 @@
 # E(n) Equivariant Topological Neural Network
 
-Code for *Claudio Battiloro, Ege Karaismailoğlu, Mauricio Tec, George Dasoulas, Michelle Audirac, Francesca Dominici* "E(n) Equivariant Topological Neural Networks"
+Code for *Claudio Battiloro, Ege Karaismailoğlu, Mauricio Tec, George Dasoulas, Michelle Audirac, and Francesca Dominici* "E(n) Equivariant Topological Neural Networks"
 https://arxiv.org/abs/2405.15429
 
 <img src="assets/etnn.png" width="1000">

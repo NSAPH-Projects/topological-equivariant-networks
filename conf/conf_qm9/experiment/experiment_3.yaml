@@ -1,10 +1,6 @@
 # @package _global_
 defaults:
-  - /dataset/lifters: atom_bond_ring_func
-
-dataset:
-  supercell: true
-  connectivity: all_to_all
+  - /dataset: atom_bond_ring_func__super__max__all
 
 model:
   num_hidden: 104

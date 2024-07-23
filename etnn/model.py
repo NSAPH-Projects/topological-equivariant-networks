@@ -25,10 +25,11 @@ class ETNN(nn.Module):
         normalize_invariants: bool,
         hausdorff_dists: bool = True,
         batch_norm: bool = False,
+        dropout: float = 0.0,
         lean: bool = True,
         global_pool: bool = False,  # whether or not to use global pooling
         sparse_invariant_computation: bool = False,
-        sparse_agg_max_cells: int = 1000,  # maximum size to consider for diameter and hausdorff dists
+        sparse_agg_max_cells: int = 100,  # maximum size to consider for diameter and hausdorff dists
         pos_update: bool = False,  # performs the equivariant position update, optional
     ) -> None:
         super().__init__()
@@ -45,16 +46,19 @@ class ETNN(nn.Module):
         max_dim = max(num_features_per_rank.keys())
         self.global_pool = global_pool
         self.visible_dims = visible_dims
+        self.pos_update = pos_update
+        self.dropout = dropout
 
+        # params for invariant computation
         self.sparse_invariant_computation = sparse_invariant_computation
         self.sparse_agg_max_cells = sparse_agg_max_cells
         self.hausdorff = hausdorff_dists
-        self.pos_update = pos_update
+        self.cell_list_fmt = "list" if sparse_invariant_computation else "padded"
 
         if sparse_invariant_computation:
             self.inv_fun = invariants.compute_invariants_sparse
         else:
-            self.compute_invariantsinv_fun = invariants.compute_invariants
+            self.inv_fun = invariants.compute_invariants
 
         # keep only adjacencies that are compatible with visible_dims
         if visible_dims is not None:
@@ -130,12 +134,11 @@ class ETNN(nn.Module):
 
     def forward(self, graph: Data) -> Tensor:
         device = graph.pos.device
-        # cell_ind = {str(i): getattr(graph, f"cell_{i}") for i in self.visible_dims}
-        cell_ind = {
-            str(i): graph.cell_list(i, format="padded") for i in self.visible_dims
-        }
 
-        mem = {i: getattr(graph, f"mem_{i}") for i in self.visible_dims}
+        cell_ind = {
+            str(i): graph.cell_list(i, format=self.cell_list_fmt)
+            for i in self.visible_dims
+        }
 
         adj = {
             adj_type: getattr(graph, f"adj_{adj_type}")
@@ -153,6 +156,7 @@ class ETNN(nn.Module):
                         cell_ind[str(i)], graph.x
                     )
                 elif feature_type == "mem":
+                    mem = {i: getattr(graph, f"mem_{i}") for i in self.visible_dims}
                     features[feature_type][str(i)] = mem[i].float()
                 elif feature_type == "hetero":
                     features[feature_type][str(i)] = getattr(graph, f"x_{i}")
@@ -172,11 +176,10 @@ class ETNN(nn.Module):
         inv_comp_kwargs = {
             "cell_ind": cell_ind,
             "adj": adj,
-            "device": device,
             "hausdorff": self.hausdorff,
         }
         if self.sparse_invariant_computation:
-            agg_indices = invariants.sparse_computation_indices_from_cc(
+            agg_indices, _ = invariants.sparse_computation_indices_from_cc(
                 cell_ind, adj, self.sparse_agg_max_cells
             )
             inv_comp_kwargs["rank_agg_indices"] = agg_indices
@@ -201,6 +204,12 @@ class ETNN(nn.Module):
                         adj: self.inv_normalizer[adj](feature)
                         for adj, feature in inv.items()
                     }
+            # apply dropout if needed
+            if self.dropout > 0:
+                x = {
+                    dim: nn.functional.dropout(feature, p=self.dropout)
+                    for dim, feature in x.items()
+                }
 
         # read out
         out = {dim: self.pre_pool[dim](feature) for dim, feature in x.items()}

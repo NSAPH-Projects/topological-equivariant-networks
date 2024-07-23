@@ -12,9 +12,7 @@ import yaml
 
 from etnn.lifter import Lifter, get_adjacency_types
 from etnn.qm9.lifts.registry import LIFTER_REGISTRY
-from etnn.combinatorial_data import (
-    CombinatorialComplexTransform,
-)
+from etnn.lifter import CombinatorialComplexTransform
 
 HAR2EV = 27.211386246
 KCALMOL2EV = 0.04336414

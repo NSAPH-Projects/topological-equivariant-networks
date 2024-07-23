@@ -34,17 +34,11 @@ def main(cfg: DictConfig):
         data.y = data.y[:, col_ix]
         return data
 
-    # create a unique hash for the dataset based on the configuration
-    hash = utils.args_to_hash(OmegaConf.to_container(cfg.dataset, resolve=True))
-
     dataset = QM9CC(
-        f"data/qm9cc_{hash}",
+        f"data/qm9cc_{cfg.dataset_name}",
         lifters=list(cfg.dataset.lifters),
         neighbor_types=list(cfg.dataset.neighbor_types),
         connectivity=cfg.dataset.connectivity,
-        # cfg.lifter.dim,
-        # list(cfg.lifter.initial_features),
-        # merge_neighbors=cfg.model.merge_neighbors,
         supercell=cfg.dataset.supercell,
         force_reload=False,
         transform=prepare_targets_transform,

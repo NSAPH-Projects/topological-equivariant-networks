@@ -4,25 +4,24 @@ import hydra
 from omegaconf import DictConfig
 from torch_geometric.transforms import Compose
 
-from etnn.geospatial import pm25cc as pm25cc
+from etnn.geospatial import pm25cc, transforms
 
 logger = logging.getLogger(__name__)
 
 
 @hydra.main(config_path="conf/conf_geospatial", config_name="config", version_base=None)
 def main(cfg: DictConfig):
-
     pre_transform = []
     if cfg.dataset.standardize:
-        pre_transform.append(pm25cc.standardize_cc)
+        pre_transform.append(transforms.standardize_cc)
     if cfg.dataset.randomize_x0:
-        pre_transform.append(partial(pm25cc.randomize, keys=["x_0"]))
+        pre_transform.append(partial(transforms.randomize, keys=["x_0"]))
     if cfg.dataset.virtual_node:
-        pre_transform.append(pm25cc.add_virtual_node)
-    if cfg.dataset.squash:
-        pre_transform.append(pm25cc.squash_cc)
+        pre_transform.append(transforms.add_virtual_node)
+    if cfg.dataset.squash_to_graph:
+        pre_transform.append(transforms.squash_cc)
     if cfg.dataset.add_positions:
-        pre_transform.append(pm25cc.add_pos_to_cc)
+        pre_transform.append(transforms.add_pos_to_cc)
     pre_transform = Compose(pre_transform)
 
     dataset = pm25cc.PM25CC(
@@ -31,7 +30,7 @@ def main(cfg: DictConfig):
         force_reload=cfg.force_reload,
     )
     logger.info(
-        f"Lifted GeospatialCC dataset generated and stored in '{dataset.root}'."
+        f"Created GeospatialCC dataset generated and stored in '{dataset.root}'."
     )
 
 

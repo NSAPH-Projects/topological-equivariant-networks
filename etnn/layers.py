@@ -62,7 +62,7 @@ class ETNNLayer(nn.Module):
         self, pos: Tensor, mes: dict[str, Tensor], adj: dict[str, Tensor]
     ) -> Tensor:
         # find the key corresponding to the 0_0_x adjacency
-        key = [k for k in adj if adj[0] == "0" and adj[2] == "0"][0]
+        key = [k for k in adj if k[0] == "0" and k[2] == "0"][0]
         send, recv = adj[key]
         wts = self.pos_update_wts(mes[key][recv])
 

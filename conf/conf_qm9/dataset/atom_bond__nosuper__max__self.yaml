@@ -1,0 +1,6 @@
+lifters:
+  - "atom:0"
+  - "bond:1"
+supercell: false
+neighbor_types: ["max"]  # Subset of ["+1", "-1", "min", "max"]
+connectivity: "self"  # Choice in [self, all_to_all]

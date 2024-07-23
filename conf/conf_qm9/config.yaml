@@ -1,8 +1,9 @@
 defaults:
   - _self_
-  - experiment: experiment_4
+  - experiment: experiment_1
 
 dataset:
+  # these values can be overwritten by the experiments
   lifters: []
   supercell: false
   neighbor_types: ["max"]  # Subset of ["+1", "-1", "min", "max"]
@@ -10,6 +11,7 @@ dataset:
 
 # task name will make more sense when we introduce the spatial CC
 task_name: QM9
+dataset_name: ${hydra:runtime.choices.dataset}
 experiment_name: ${hydra:runtime.choices.experiment}
 target: alpha  # Options: targets = ["mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "U0_atom", "U_atom", "H_atom", "G_atom", "A", "B", "C"]
 train_test_splits: egnn  # Options: [egnn, random]

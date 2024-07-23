@@ -49,13 +49,13 @@ for the Geospatial CC task
 The experiments are in the `conf/<cc_name>/<experiment>`. Each experiment consists of a configuration for the dataset, model, and learning parameters. All parameters of the config can be overridden from the command line. For example, to train a model with a different learning rate. See the Hydra documentation for more details.
 
 
-## Dataset caching
+## Pre-save datasets for faster loading during training
 
-The scripts [create_qm9.py](create_qm9.py) and [create_geospatial.py](create_geospatial.py) use the `InMemoryDataset` [pytorch-geometric](https://pytorch-geometric.readthedocs.io/en/latest/modules/data.html#torch_geometric.data.InMemoryDataset) class to create and cache the combinatorial complex as a pytorch geometric `Dataset` class. To cache a dataset, use the commands
+The scripts [create_qm9.py](create_qm9.py) and [create_geospatial.py](create_geospatial.py) use the `InMemoryDataset` [pytorch-geometric](https://pytorch-geometric.readthedocs.io/en/latest/modules/data.html#torch_geometric.data.InMemoryDataset) class to create and save the combinatorial complex as a `.pt` file. To save a dataset, use the commands.
 
 ```bash
 python create_qm9.py dataset=<dataset_name>
 python create_geospatial.py dataset=<dataset_name>
 ```
-where the dataset must be one of the datasets listed in the `conf/<cc_name>/datasets/` directory. This will result in a created cached dataset in the `data/<cc_name>_<dataset_name>` directory. This dataset is also cached when training a model. However, pre-caching is useful when running multiple experiments on the same dataset. In particular, the lifting of the QM9 dataset to a Molecular CC can take about 30 minutes. 
+where the dataset must be one of the datasets listed in the `conf/<cc_name>/datasets/` directory. This will save the dataset in the `data/<cc_name>_<dataset_name>` directory. This dataset is also cached when training a model. However, pre-caching is useful when running multiple experiments on the same dataset. In particular, lifting the QM9 dataset to a Molecular CC can take about 30 minutes. 
 

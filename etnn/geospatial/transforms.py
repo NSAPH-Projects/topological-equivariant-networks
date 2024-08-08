@@ -120,11 +120,10 @@ def create_mask(
 def add_virtual_node(data: CombinatorialComplexData) -> CombinatorialComplexData:
     # add a rank 3 tensor to x_0 with a single one dimension feature vector 0.0
     data.x_3 = torch.tensor([[0.0]]).to(data.pos.device)
-    # add the 0-cell with 2 atoms
-    # data.cell_3 = torch.tensor([0]).to(data.pos.device)
-    data.cell_3 = torch.cat(list(data.cell_0)).to(data.pos.device)
 
-    # data.slices_3 = torch.tensor([1]).to(data.pos.device)
+    # add the cell 3 representation consisting of 
+    data.cell_3 = torch.cat(list(data.cell_0)).to(data.pos.device)
+    data.slices_3 = torch.tensor([len(data.cell_3)]).to(data.pos.device)
 
     # connect every two cell
     # num_cells_2 = len(data.slices_2)

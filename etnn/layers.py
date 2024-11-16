@@ -17,6 +17,7 @@ class ETNNLayer(nn.Module):
         batch_norm: bool = False,
         lean: bool = True,
         pos_update: bool = False,
+        has_virtual_node: bool = False,
     ) -> None:
         super().__init__()
         self.adjacencies = adjacencies
@@ -41,14 +42,15 @@ class ETNNLayer(nn.Module):
 
         # state update
         self.update = nn.ModuleDict()
+        max_dim = max(visible_dims)
         for dim in self.visible_dims:
             factor = 1 + sum([adj_type[2] == str(dim) for adj_type in adjacencies])
             update_layers = [nn.Linear(factor * num_hidden, num_hidden)]
-            if self.batch_norm:
+            if self.batch_norm and (not has_virtual_node or dim != max_dim):
                 update_layers.append(nn.BatchNorm1d(num_hidden))
             if not self.lean:
                 extra_layers = [nn.SiLU(), nn.Linear(num_hidden, num_hidden)]
-                if self.batch_norm:
+                if self.batch_norm and (not has_virtual_node or dim != max_dim):
                     extra_layers.append(nn.BatchNorm1d(num_hidden))
                 update_layers.extend(extra_layers)
             self.update[str(dim)] = nn.Sequential(*update_layers)
@@ -77,15 +79,15 @@ class ETNNLayer(nn.Module):
         self,
         x: Dict[str, Tensor],
         adj: Dict[str, Tensor],
-        inv: Dict[str, Tensor],
-        pos: Tensor,
+        inv: Dict[str, Tensor] | None = None,
+        pos: Tensor | None = None,
     ) -> Dict[str, Tensor]:
         # pass the different messages of all adjacency types
         mes = {
             adj_type: self.message_passing[adj_type](
                 x=(x[adj_type[0]], x[adj_type[2]]),
                 index=adj[adj_type],
-                edge_attr=inv[adj_type],
+                edge_attr=inv[adj_type] if inv is not None else None,
             )
             for adj_type in self.adjacencies
         }
@@ -137,7 +139,10 @@ class BaseMessagePassingLayer(nn.Module):
         index_send, index_rec = index
         x_send, x_rec = x
         sim_send, sim_rec = x_send[index_send], x_rec[index_rec]
-        state = torch.cat((sim_send, sim_rec, edge_attr), dim=1)
+        if edge_attr is not None:
+            state = torch.cat((sim_send, sim_rec, edge_attr), dim=1)
+        else:
+            state = torch.cat((sim_send, sim_rec), dim=1)
 
         messages = self.message_mlp(state)
         edge_weights = self.edge_inf_mlp(messages)

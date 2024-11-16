@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: small
+  - model: large
   - experiment: equivariant
 
 dataset:
@@ -36,6 +36,7 @@ model:
   lean: true
   initial_features: ["hetero"]  # Subset of ["hetero", "mem"]
   visible_dims: null # defaults to all dimensions in the combinatorial complex
+  geometric_features: true
 
 training:
   epochs: 500

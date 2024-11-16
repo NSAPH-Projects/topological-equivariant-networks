@@ -1,0 +1,12 @@
+#@package _global_
+defaults:
+  - /dataset: graph
+
+model:
+  pos_update: false
+  hausdorff: false
+  geometric_features: false
+  normalize_invariants: false
+  num_layers: 0
+  num_readout_layers: 5
+  num_hidden: 128

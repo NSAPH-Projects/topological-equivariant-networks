@@ -31,13 +31,21 @@ class ETNN(nn.Module):
         sparse_invariant_computation: bool = False,
         sparse_agg_max_cells: int = 100,  # maximum size to consider for diameter and hausdorff dists
         pos_update: bool = False,  # performs the equivariant position update, optional
+        has_virtual_node: bool = False,  # whether or not the input data has a virtual node, used to remove batch norm from the top cell
+        geometric_features: bool = False,  # whether or not to use geometric features
     ) -> None:
         super().__init__()
 
         self.initial_features = initial_features
 
         # make inv_fts_map for backward compatibility
-        self.num_invariants = 5 if hausdorff_dists else 3
+        self.geometric_features = geometric_features
+        if self.geometric_features and hausdorff_dists:
+            self.num_invariants = 5
+        elif self.geometric_features:
+            self.num_invariants = 3
+        else:
+            self.num_invariants = 0
         self.num_inv_fts_map = {k: self.num_invariants for k in adjacencies}
         self.adjacencies = adjacencies
         self.normalize_invariants = normalize_invariants
@@ -72,7 +80,7 @@ class ETNN(nn.Module):
             self.adjacencies = adjacencies
 
         # layers
-        if self.normalize_invariants:
+        if geometric_features and self.normalize_invariants:
             self.inv_normalizer = nn.ModuleDict(
                 {
                     adj: nn.BatchNorm1d(self.num_inv_fts_map[adj], affine=False)
@@ -83,7 +91,7 @@ class ETNN(nn.Module):
         embedders = {}
         for dim in self.visible_dims:
             embedder_layers = [nn.Linear(num_features_per_rank[dim], num_hidden)]
-            if self.batch_norm:
+            if self.batch_norm and (not has_virtual_node or dim != max_dim):
                 embedder_layers.append(nn.BatchNorm1d(num_hidden))
             embedders[str(dim)] = nn.Sequential(*embedder_layers)
         self.feature_embedding = nn.ModuleDict(embedders)
@@ -98,6 +106,7 @@ class ETNN(nn.Module):
                     self.batch_norm,
                     self.lean,
                     self.pos_update,
+                    has_virtual_node,
                 )
                 for _ in range(num_layers)
             ]
@@ -186,8 +195,12 @@ class ETNN(nn.Module):
 
         # embed features and E(n) invariant information
         pos = graph.pos
+        if self.geometric_features:
+            inv = self.inv_fun(pos, **inv_comp_kwargs)
+        else:
+            inv = None
+
         x = {dim: self.feature_embedding[dim](feature) for dim, feature in x.items()}
-        inv = self.inv_fun(pos, **inv_comp_kwargs)
 
         if self.normalize_invariants:
             inv = {

@@ -1,0 +1,9 @@
+#@package _global_
+defaults:
+  - /dataset: cc
+
+model:
+  pos_update: false
+  hausdorff: false
+  geometric_features: false
+  normalize_invariants: false

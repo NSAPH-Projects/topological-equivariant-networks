@@ -25,16 +25,23 @@ def load_checkpoint(checkpoint_path, model, opt, sched, force_restart):
         model.load_state_dict(checkpoint["model"])
         best_model.load_state_dict(checkpoint["best_model"])
         best_loss = checkpoint["best_loss"]
+        best_test_loss = checkpoint["best_test_loss"]
         opt.load_state_dict(checkpoint["optimizer"])
         sched.load_state_dict(checkpoint["scheduler"])
         model.to(device)
         best_model.to(device)
-        return checkpoint["epoch"], checkpoint["run_id"], best_model, best_loss
+        return (
+            checkpoint["epoch"],
+            checkpoint["run_id"],
+            best_model,
+            best_loss,
+            best_test_loss,
+        )
     else:
-        return 0, None, best_model, float("inf")
+        return 0, None, best_model, float("inf"), float("inf")
 
 
-def save_checkpoint(path, model, best_model, best_loss, opt, sched, epoch, run_id):
+def save_checkpoint(path, model, best_model, best_loss, best_test_loss, opt, sched, epoch, run_id):
     device = next(model.parameters()).device
     model.to("cpu")
     best_model.to("cpu")
@@ -43,6 +50,7 @@ def save_checkpoint(path, model, best_model, best_loss, opt, sched, epoch, run_i
         "model": model.state_dict(),
         "best_model": best_model.state_dict(),
         "best_loss": best_loss,
+        "best_test_loss": best_test_loss,
         "optimizer": opt.state_dict(),
         "scheduler": sched.state_dict(),
         "run_id": run_id,
@@ -79,7 +87,6 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
             }
         global_pool = True
         sparse_invariant_computation = False
-        pos_update = False
 
         adjacencies = get_adjacency_types(
             dim,
@@ -91,7 +98,10 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
         global_pool = False
         sparse_invariant_computation = True
         adjacencies = ["0_0", "0_1", "1_0", "1_1", "1_2", "2_1", "2_2"]
-        pos_update = True
+
+        if cfg.dataset.virtual_node:
+            adjacencies.extend(["3_2", "2_3"])
+
 
     model = ETNN(
         num_features_per_rank=num_features_per_rank,
@@ -106,7 +116,10 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
         lean=cfg.model.lean,
         global_pool=global_pool,
         sparse_invariant_computation=sparse_invariant_computation,
-        pos_update=pos_update,
+        pos_update=cfg.model.pos_update,
+        has_virtual_node=cfg.dataset.virtual_node,
+        geometric_features=cfg.model.geometric_features,
+        dropout=cfg.model.dropout,
     )
     return model
 

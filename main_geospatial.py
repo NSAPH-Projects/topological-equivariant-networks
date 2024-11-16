@@ -42,18 +42,19 @@ def main(cfg: DictConfig):
         pre_transform.append(transforms.squash_cc)
     if cfg.dataset.add_positions:
         pre_transform.append(transforms.add_pos_to_cc)
-    pre_transform = Compose(pre_transform)
 
     # mask a fraction of node during prediction, needed for node-level tasks
     masking_transform = partial(
         transforms.create_mask, seed=cfg.seed, rate=cfg.mask_rate
     )
+    pre_transform.append(masking_transform)
+    pre_transform = Compose(pre_transform)
 
     dataset = pm25cc.PM25CC(
         f"data/geospatialcc_{cfg.dataset_name}",
         pre_transform=pre_transform,
         force_reload=cfg.force_reload,
-        transform=masking_transform,
+        # transform=masking_transform,
     )
     logger.info(
         f"Created GeospatialCC dataset generated and stored in '{dataset.root}'."
@@ -77,6 +78,7 @@ def main(cfg: DictConfig):
         opt, T_max, eta_min=cfg.training.min_lr
     )
     best_loss = float("inf")
+    best_test_loss = float("inf")
 
     # === Configure checkpoint and wandb logging ===
     ckpt_filename = f"{cfg.experiment_name}__{cfg.seed}.pth"
@@ -84,7 +86,7 @@ def main(cfg: DictConfig):
         ckpt_filename = f"{cfg.ckpt_prefix}_{ckpt_filename}"
     checkpoint_path = f"{cfg.ckpt_dir}/{ckpt_filename}"
 
-    start_epoch, run_id, best_model, best_loss = utils.load_checkpoint(
+    start_epoch, run_id, best_model, best_loss, best_test_loss = utils.load_checkpoint(
         checkpoint_path, model, opt, sched, cfg.force_restart
     )
 
@@ -117,8 +119,8 @@ def main(cfg: DictConfig):
 
         epoch_metrics = defaultdict(list)
 
-        model.train()
         for _, batch in enumerate(loader):
+            model.train()
             opt.zero_grad()
             batch = batch.to(device)
 
@@ -167,9 +169,11 @@ def main(cfg: DictConfig):
         sched.step()
 
         epoch_loss_val = np.mean(epoch_metrics["val_mse"])
+        epoch_loss_test = np.mean(epoch_metrics["test_mse"])
 
         if epoch_loss_val < best_loss:
             best_loss = epoch_loss_val
+            best_test_loss = epoch_loss_test
             best_model = copy.deepcopy(model)
 
         # Save checkpoint
@@ -178,6 +182,7 @@ def main(cfg: DictConfig):
             model=model,
             best_model=best_model,
             best_loss=best_loss,
+            best_test_loss=best_test_loss,
             opt=opt,
             sched=sched,
             epoch=epoch,
@@ -194,6 +199,8 @@ def main(cfg: DictConfig):
                 "Epoch Duration": epoch_duration,
                 "Learning Rate": sched.get_last_lr()[0],
                 "Epoch": epoch + 1,
+                "Best Val MSE": best_loss,
+                "Best Test MSE": best_test_loss,
                 **epoch_metrics,
             },
             step=epoch,

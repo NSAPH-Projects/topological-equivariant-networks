@@ -30,14 +30,16 @@ def add_pos_to_cc(data: CombinatorialComplexData) -> CombinatorialComplexData:
 
 
 def squash_cc(
-    data: CombinatorialComplexData, soft: bool = False
+    data: CombinatorialComplexData, soft: bool = True
 ) -> CombinatorialComplexData:
     x_0 = data.x_0
     for key, tensor in data.items():
         if key.startswith("x_") and key != "x_0":
             # extract i from key
             i = key.split("_")[1]
-            x_0 = torch.cat((x_0, tensor[getattr(data, "index_" + i)]), dim=1)
+            map_means = [tensor[u].mean(axis=0) for u in getattr(data, "index_" + i)]
+            map_means = torch.stack(map_means)
+            x_0 = torch.cat([x_0, map_means], dim=1)
             # remove the original tensor
         if not soft:
             if key.startswith("x_") and key != "x_0":
@@ -61,7 +63,7 @@ def create_mask(
     rng = np.random.default_rng(seed)
     train_mask_cells = rng.choice(range(n), m, replace=False)
     remaining_cells = list(set(range(n)) - set(train_mask_cells))
-    remaining_cells = np.random.permutation(remaining_cells)
+    remaining_cells = rng.permutation(remaining_cells)
     num_remaining_cells = len(remaining_cells)
     val_mask_cells = remaining_cells[:(num_remaining_cells // 2)]
     test_mask_cells = remaining_cells[(num_remaining_cells // 2):]
@@ -77,6 +79,9 @@ def create_mask(
             test.extend(cell_ind_2[i].tolist())
         elif i in val_mask_cells:
             val.extend(cell_ind_2[i].tolist())
+
+    test = list(set(test) - set(train))
+    val = list(set(val) - set(train) - set(test))
 
     # create the mask
     k = len(data.slices_0)

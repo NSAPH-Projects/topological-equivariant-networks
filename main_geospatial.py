@@ -42,19 +42,18 @@ def main(cfg: DictConfig):
         pre_transform.append(transforms.squash_cc)
     if cfg.dataset.add_positions:
         pre_transform.append(transforms.add_pos_to_cc)
+    pre_transform = Compose(pre_transform)
 
     # mask a fraction of node during prediction, needed for node-level tasks
     masking_transform = partial(
         transforms.create_mask, seed=cfg.seed, rate=cfg.mask_rate
     )
-    pre_transform.append(masking_transform)
-    pre_transform = Compose(pre_transform)
 
     dataset = pm25cc.PM25CC(
         f"data/geospatialcc_{cfg.dataset_name}",
         pre_transform=pre_transform,
         force_reload=cfg.force_reload,
-        # transform=masking_transform,
+        transform=masking_transform,
     )
     logger.info(
         f"Created GeospatialCC dataset generated and stored in '{dataset.root}'."

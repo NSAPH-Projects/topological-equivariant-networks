@@ -8,5 +8,6 @@ model:
   geometric_features: false
   normalize_invariants: false
   num_layers: 0
-  num_readout_layers: 5
+  num_prepool_layers: 5
   num_hidden: 128
+  lean: false

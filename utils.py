@@ -97,10 +97,14 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
     elif cfg.task_name == "geospatial":
         global_pool = False
         sparse_invariant_computation = True
-        adjacencies = ["0_0", "0_1", "1_0", "1_1", "1_2", "2_1", "2_2"]
 
-        if cfg.dataset.virtual_node:
-            adjacencies.extend(["3_2", "2_3"])
+        if cfg.dataset_name.startswith("graph"):
+            adjacencies = ["0_0"]
+            visible_dims = [0]
+        else:
+            adjacencies = ["0_0", "0_1", "1_0", "1_1", "1_2", "2_1", "2_2"]
+            if cfg.dataset.virtual_node:
+                adjacencies.extend(["3_2", "2_3"])
 
 
     model = ETNN(
@@ -120,6 +124,8 @@ def get_model(cfg: DictConfig, dataset: Dataset) -> nn.Module:
         has_virtual_node=cfg.dataset.virtual_node,
         geometric_features=cfg.model.geometric_features,
         dropout=cfg.model.dropout,
+        num_prepool_layers=cfg.model.num_prepool_layers,
+        linear=cfg.model.linear,
     )
     return model
 

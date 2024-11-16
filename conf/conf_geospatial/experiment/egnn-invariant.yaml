@@ -5,8 +5,3 @@ defaults:
 model:
   pos_update: false
   hausdorff: false
-  geometric_features: false
-  normalize_invariants: false
-  num_layers: 0
-  linear: true
-

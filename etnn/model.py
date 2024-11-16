@@ -33,6 +33,8 @@ class ETNN(nn.Module):
         pos_update: bool = False,  # performs the equivariant position update, optional
         has_virtual_node: bool = False,  # whether or not the input data has a virtual node, used to remove batch norm from the top cell
         geometric_features: bool = False,  # whether or not to use geometric features
+        num_prepool_layers: int  = 2,  # specify prepool layers, ignored if lean is True
+        linear: bool = False,  # whether or not to use linear layers
     ) -> None:
         super().__init__()
 
@@ -51,6 +53,7 @@ class ETNN(nn.Module):
         self.normalize_invariants = normalize_invariants
         self.batch_norm = batch_norm
         self.lean = lean
+        self.linear = linear
         max_dim = max(num_features_per_rank.keys())
         self.global_pool = global_pool
         self.visible_dims = visible_dims
@@ -89,10 +92,11 @@ class ETNN(nn.Module):
             )
 
         embedders = {}
+        num_embed_out = num_hidden if not self.linear else num_out
         for dim in self.visible_dims:
-            embedder_layers = [nn.Linear(num_features_per_rank[dim], num_hidden)]
+            embedder_layers = [nn.Linear(num_features_per_rank[dim], num_embed_out)]
             if self.batch_norm and (not has_virtual_node or dim != max_dim):
-                embedder_layers.append(nn.BatchNorm1d(num_hidden))
+                embedder_layers.append(nn.BatchNorm1d(num_embed_out))
             embedders[str(dim)] = nn.Sequential(*embedder_layers)
         self.feature_embedding = nn.ModuleDict(embedders)
 
@@ -114,25 +118,25 @@ class ETNN(nn.Module):
 
         self.pre_pool = nn.ModuleDict()
 
+        num_pre_pool_out = num_hidden if self.global_pool else num_out
         for dim in visible_dims:
-            if self.global_pool:
-                if not self.lean:
-                    self.pre_pool[str(dim)] = nn.Sequential(
-                        nn.Linear(num_hidden, num_hidden),
-                        nn.SiLU(),
-                        nn.Linear(num_hidden, num_hidden),
-                    )
-                else:
-                    self.pre_pool[str(dim)] = nn.Linear(num_hidden, num_hidden)
+            if self.linear:
+                self.pre_pool[str(dim)] = nn.Identity()
+                continue
+
+            if not self.lean:
+                self.pre_pool[str(dim)] = nn.Sequential(
+                    *[
+                        nn.Sequential(
+                            nn.Linear(num_hidden, num_hidden),
+                            nn.SiLU(),
+                        )
+                        for _ in range(num_prepool_layers - 1)
+                    ],
+                    nn.Linear(num_hidden, num_pre_pool_out),
+                )
             else:
-                if not self.lean:
-                    self.pre_pool[str(dim)] = nn.Sequential(
-                        nn.Linear(num_hidden, num_hidden),
-                        nn.SiLU(),
-                        nn.Linear(num_hidden, num_out),
-                    )
-                else:
-                    self.pre_pool[str(dim)] = nn.Linear(num_hidden, num_out)
+                self.pre_pool[str(dim)] = nn.Linear(num_hidden, num_pre_pool_out)
 
         if self.global_pool:
             self.post_pool = nn.Sequential(

@@ -34,6 +34,9 @@ model:
   initial_features: ["hetero"]  # Subset of ["hetero", "mem"]
   visible_dims: null # defaults to all dimensions in the combinatorial complex
   # merge_neighbors: false
+  geometric_features: true
+  num_prepool_layers: 1
+  linear: false
 
 training:
   epochs: 350

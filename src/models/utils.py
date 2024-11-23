@@ -162,6 +162,7 @@ def compute_invariants(
     feat_ind: dict[str, torch.FloatTensor],
     pos: torch.FloatTensor,
     adj: dict[str, torch.LongTensor],
+    choose_invariants: torch.FloatTensor,
     inv_ind: dict[str, torch.FloatTensor],
     device: torch.device,
 ) -> dict[str, torch.FloatTensor]:
@@ -258,11 +259,21 @@ def compute_invariants(
             [distances, max_dist_sender, max_dist_receiver, hausdorff_distances], dim=1
         )
 
+        # Combine all features with element-wise multiplication by choose_invariants
+
+        new_features[rank_pair] = torch.cat(
+            [
+                choose_invariants[0] * distances,
+                choose_invariants[1] * max_dist_sender,
+                choose_invariants[2] * max_dist_receiver,
+                choose_invariants[3] * hausdorff_distances
+            ], dim=1
+        )
+
     return new_features
 
 
 compute_invariants.num_features_map = defaultdict(lambda: 5)
-
 
 def compute_max_pairwise_distances(
     cells: torch.FloatTensor, pos: torch.FloatTensor

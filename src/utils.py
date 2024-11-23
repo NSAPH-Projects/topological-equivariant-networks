@@ -211,6 +211,7 @@ def get_model(args: Namespace) -> nn.Module:
         adjacencies=args.processed_adjacencies,
         initial_features=args.initial_features,
         normalize_invariants=args.normalize_invariants,
+        choose_invariants=args.choose_invariants,
         visible_dims=args.visible_dims,
         batch_norm=args.batch_norm,
         lean=args.lean,

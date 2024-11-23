@@ -1,19 +1,19 @@
-# #!/bin/bash
-# #SBATCH -c 24                # Number of cores (-c)
-# #SBATCH -t 0-70:00          # Runtime in D-HH:MM, minimum of 10 minutes
-# #SBATCH -p gpu              # Partition to submit to
-# #SBATCH --gres=gpu:nvidia_a100-sxm4-80gb:1
-# #SBATCH --mem=200000         # Memory pool for all cores (see also --mem-per-cpu)
-# #SBATCH -o job_outputs/myoutput_%j.out  # File to which STDOUT will be written, %j inserts jobid
-# #SBATCH -e job_outputs/myerrors_%j.err  # File to which STDERR will be written, %j inserts jobid
+#!/bin/bash
+#SBATCH -c 24                # Number of cores (-c)
+#SBATCH -t 0-70:00          # Runtime in D-HH:MM, minimum of 10 minutes
+#SBATCH -p gpu              # Partition to submit to
+#SBATCH --gres=gpu:nvidia_a100-sxm4-80gb:1
+#SBATCH --mem=200000         # Memory pool for all cores (see also --mem-per-cpu)
+#SBATCH -o job_outputs/myoutput_%j.out  # File to which STDOUT will be written, %j inserts jobid
+#SBATCH -e job_outputs/myerrors_%j.err  # File to which STDERR will be written, %j inserts jobid
 
-# # Load modules
-# module load ncf/1.0.0-fasrc01
-# module load miniconda3/py310_22.11.1-1-linux_x64-ncf
-# module load cuda/12.2.0-fasrc01
+# Load modules
+module load ncf/1.0.0-fasrc01
+module load miniconda3/py310_22.11.1-1-linux_x64-ncf
+module load cuda/12.2.0-fasrc01
 
-# # Activate conda env
-# source ~/.bashrc
+# Activate conda env
+source ~/.bashrc
 conda activate etnn
 # Training script for 1
 
@@ -22,7 +22,7 @@ EXP_NAME=1
 LIFTERS=(atom:0 bond:1 supercell:2)
 DIM=2
 VISIBLE_DIMS=(0 1)
-CHOOSE_INVARIANTS="1,0,0,0"
+CHOOSE_INVARIANTS=${2:-"1,0,0,0"}
 INITIAL_FEATURES="hetero"
 NEIGHBOR_TYPES="max"
 CONNECTIVITY="self"
@@ -109,7 +109,7 @@ do
                            --model_name "$MODEL_NAME" \
                            --splits "$SPLITS" \
                            --normalize_invariants \
-                           --choose_invariants "${CHOOSE_INVARIANTS[@]}" \
+                           --choose_invariants "$CHOOSE_INVARIANTS" \
                            --clip_gradient \
                            --run_name "${EXP_NAME} ${TARGET_NAME}" \
 

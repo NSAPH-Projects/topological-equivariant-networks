@@ -22,6 +22,9 @@ if not os.getenv("STORAGE_PATH"):
 torch.set_float32_matmul_precision("high")
 os.environ["WANDB__SERVICE_WAIT"] = "600"
 
+def parse_invariants(value):
+    values = value.split(',')
+    return [int(v) for v in values]
 
 def save_checkpoint(state, checkpoint_path):
     # Create the checkpoint directory if it doesn't exist
@@ -84,6 +87,7 @@ def args_to_hash(args):
 
 
 def main(args):
+
     # Generate model
     model = get_model(args).to(args.device)
     if args.compile:
@@ -248,6 +252,13 @@ if __name__ == "__main__":
     parser.add_argument("--num_hidden", type=int, default=77, help="hidden features")
     parser.add_argument("--num_layers", type=int, default=7, help="number of layers")
     parser.add_argument("--act_fn", type=str, default="silu", help="activation function")
+
+    parser.add_argument(
+        "--choose_invariants",
+        type=parse_invariants,
+        default=[1,1,1,1],
+        help="which invariant features should be choosed (among mean distances, maximum pairwise distance (sender), maximum pairwise distance (receiver), and hausdorff distances)",
+    )
 
     parser.add_argument(
         "--normalize_invariants",

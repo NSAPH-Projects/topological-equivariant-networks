@@ -26,7 +26,7 @@ fi
 # Activate or create Conda environment
 echo "Creating environment 'etnn'"
 conda env create --experimental-solver=libmamba -f environment.yaml
-conda activate ten
+conda activate etnn
 
 # Install pre-commit hooks
 pre-commit install

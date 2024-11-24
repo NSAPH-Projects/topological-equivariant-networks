@@ -24,7 +24,7 @@ then
 fi
 
 # Activate or create Conda environment
-echo "Creating environment 'ten'"
+echo "Creating environment 'etnn'"
 conda env create --experimental-solver=libmamba -f environment.yaml
 conda activate ten
 

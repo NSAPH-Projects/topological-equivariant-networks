@@ -15,18 +15,18 @@ module load cuda/12.2.0-fasrc01
 # Activate conda env
 source ~/.bashrc
 conda activate etnn
-# Training script for 1
+# Training script for 2
 
 # DEFINE EXP ARGUMENTS
-EXP_NAME=1
-LIFTERS=(atom:0 bond:1 supercell:2)
-DIM=2
-VISIBLE_DIMS=(0 1)
+EXP_NAME=2
+LIFTERS=(atom:0 bond:1 functional_group:2 supercell:3)
+DIM=3
+VISIBLE_DIMS=(0 1 2)
 CHOOSE_INVARIANTS=${2:-"1,0,0,0"}
 INITIAL_FEATURES="hetero"
 NEIGHBOR_TYPES="max"
 CONNECTIVITY="self"
-NUM_HIDDEN=128
+NUM_HIDDEN=104
 
 # Constants
 EPOCHS=1000
@@ -110,7 +110,8 @@ do
                            --choose_invariants "$CHOOSE_INVARIANTS" \
                            --clip_gradient \
                            --run_name "${EXP_NAME} ${TARGET_NAME}" \
-
+                           \
+                           &
 done
 
 # Wait for all background jobs to finish

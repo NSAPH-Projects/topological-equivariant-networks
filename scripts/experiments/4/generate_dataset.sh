@@ -6,7 +6,7 @@
 #SBATCH -o job_outputs/myoutput_%j.out  # File to which STDOUT will be written, %j inserts jobid
 #SBATCH -e job_outputs/myerrors_%j.err  # File to which STDERR will be written, %j inserts jobid
 
-# Dataset generation script for 1
+# Dataset generation script for 4
 mkdir -p job_outputs
 
 # Load modules
@@ -19,12 +19,12 @@ source ~/.bashrc
 conda activate etnn
 
 # DEFINE EXP ARGUMENTS
-LIFTERS=(atom:0 bond:1 supercell:2)
+LIFTERS=(atom:0 bond:1 ring:2 functional_group:2 supercell:3)
 NEIGHBOR_TYPES="max"
 CONNECTIVITY="self"
-VISIBLE_DIMS=(0 1)
+VISIBLE_DIMS=(0 1 2)
 INITIAL_FEATURES="hetero"
-DIM=2
+DIM=3
 
 # Command to generate dataset
 python src/create_dataset.py --lifters "${LIFTERS[@]}" \

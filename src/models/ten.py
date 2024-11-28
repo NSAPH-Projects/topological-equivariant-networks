@@ -141,7 +141,9 @@ class TEN(nn.Module):
             graph.pos = torch.zeros_like(graph.pos, dtype=torch.float)
         inv = self.compute_invariants(cell_ind, graph.pos, adj, self.choose_invariants, inv_ind, device)
         if self.normalize_invariants:
-            inv = {adj: self.inv_normalizer[adj](feature) for adj, feature in inv.items()}
+            # check if we use any invariants, otherwise we should not normalize, due to batchnorm instabilities to zero vectors
+            if sum(self.choose_invariants) > 0:
+                inv = {adj: self.inv_normalizer[adj](feature) for adj, feature in inv.items()}
         # message passing
         for layer in self.layers:
             x = layer(x, adj, inv)
